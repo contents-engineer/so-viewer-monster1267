@@ -1,0 +1,43 @@
+{
+  "index": "0002",
+  "title": "FaceArch",
+  "category": "건물",
+  "note": "랩 문서 건축물. 텍스처까지 포함한 원본입니다. 이름은 작업명입니다.",
+  "model": "assets/facearch.glb",
+  "bytes": 3493780,
+  "levels": "parts",
+  "partLabels": {
+    "leg_shd": "다리",
+    "body_shd": "몸체",
+    "eyeball_shd": "눈"
+  },
+  "explodeStep": 4,
+  "nightGlow": {
+    "match": "eyeball",
+    "color": "#cfe6ff",
+    "even": true,
+    "level": 1.1
+  },
+  "facts": [
+    [
+      "규모",
+      "22 × 18 m, 높이 31 m"
+    ],
+    [
+      "구성",
+      "둥근 삼각 매스, 필로티 다리, 계단 2개, 두 면의 눈"
+    ],
+    [
+      "원본",
+      "FaceArch_all_bld.fbx (Blender 5.2.2, 2026-10-14) + 텍스처 8장"
+    ],
+    [
+      "제공",
+      "뉴프로젝트파트"
+    ],
+    [
+      "최적화",
+      "FBX 24.5 MB + 텍스처 약 208 MB → 3.5 MB, 삼각형 73.7만 → 26만"
+    ]
+  ]
+}

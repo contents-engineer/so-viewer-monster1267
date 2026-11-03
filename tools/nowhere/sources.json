@@ -1,0 +1,53 @@
+{
+  "textures": [
+    {"id": "clean_asphalt", "res": "2k", "use": "차도: 회색 아스팔트"},
+    {"id": "road_damaged", "res": "2k", "use": "차도: 보수 패치"},
+    {"id": "concrete_tiles_02", "res": "2k", "use": "보도: 서울 회색 보도블록"},
+    {"id": "concrete_pavers_02", "res": "2k", "use": "보도: 서울 회색 보도블록"},
+    {"id": "concrete_slab_wall_02", "res": "2k", "use": "경계석·콘크리트: 경계석"},
+    {"id": "concrete_floor_worn_001", "res": "2k", "use": "경계석·콘크리트: 고가 교각"},
+    {"id": "brick_wall_001", "res": "2k", "use": "붉은 벽돌: 성수 창고 외벽"},
+    {"id": "church_bricks_02", "res": "2k", "use": "붉은 벽돌: 성수 창고 외벽"},
+    {"id": "brick_moss_001", "res": "2k", "use": "붉은 벽돌: 이끼 낀 하단"},
+    {"id": "concrete_moss", "res": "2k", "use": "이끼·흙: 빈터, 틈"},
+    {"id": "mossy_cobblestone", "res": "2k", "use": "이끼·흙: 빈터, 틈"},
+    {"id": "coast_sand_rocks_02", "res": "2k", "use": "이끼·흙: 빈터, 틈"},
+    {"id": "dark_rock", "res": "2k", "use": "현무암·바위: 데스 스트랜딩 포켓"},
+    {"id": "lichen_rock", "res": "2k", "use": "현무암·바위: 데스 스트랜딩 포켓"},
+    {"id": "dark_rock_02", "res": "2k", "use": "현무암·바위: 데스 스트랜딩 포켓"},
+    {"id": "painted_metal_shutter", "res": "1k", "use": "금속: 셔터"},
+    {"id": "corrugated_iron_03", "res": "1k", "use": "금속: 창고 지붕"}
+  ],
+  "hdris": [
+    {"id": "urban_street_03", "res": "1k", "use": "HDRI(조명만): 낮 거리 조명, 하늘은 셰이더로 그린다"},
+    {"id": "urban_street_03", "res": "2k", "use": "HDRI(조명만): 낮 거리 조명, 하늘은 셰이더로 그린다"},
+    {"id": "modern_buildings_night", "res": "1k", "use": "HDRI(조명만): 밤용, 하늘은 셰이더로 그린다"}
+  ],
+  "models": [
+    {"id": "modular_factory_facade", "res": "1k", "use": "모델 — 거리: hidden_alley 컬렉션"},
+    {"id": "modular_fire_escape", "res": "1k", "use": "모델 — 거리: hidden_alley 컬렉션"},
+    {"id": "exterior_aircon_unit", "res": "1k", "use": "모델 — 거리: hidden_alley 컬렉션"},
+    {"id": "utility_box_01", "res": "1k", "use": "모델 — 거리: hidden_alley 컬렉션"},
+    {"id": "utility_box_02", "res": "1k", "use": "모델 — 거리: hidden_alley 컬렉션"},
+    {"id": "korean_public_payphone_01", "res": "1k", "use": "모델 — 거리: hidden_alley 컬렉션"},
+    {"id": "korean_fire_extinguisher_01", "res": "1k", "use": "모델 — 거리: hidden_alley 컬렉션"},
+    {"id": "water_manhole_cover", "res": "1k", "use": "모델 — 거리: hidden_alley 컬렉션"},
+    {"id": "security_camera_01", "res": "1k", "use": "모델 — 거리: hidden_alley 컬렉션"},
+    {"id": "rollershutter_door", "res": "1k", "use": "모델 — 거리: hidden_alley 컬렉션"},
+    {"id": "rollershutter_window_01", "res": "1k", "use": "모델 — 거리: hidden_alley 컬렉션"},
+    {"id": "metal_trash_can", "res": "1k", "use": "모델 — 거리: hidden_alley 컬렉션"},
+    {"id": "covered_car", "res": "1k", "use": "모델 — 거리: hidden_alley 컬렉션"},
+    {"id": "concrete_road_barrier", "res": "1k", "use": "모델 — 거리: hidden_alley 컬렉션"},
+    {"id": "modular_metal_gutter", "res": "1k", "use": "모델 — 거리: hidden_alley 컬렉션"},
+    {"id": "rock_moss_set_01", "res": "1k", "use": "모델 — 자연: 바위 3단 스케일의 대·중형"},
+    {"id": "rock_moss_set_02", "res": "1k", "use": "모델 — 자연: 바위 3단 스케일의 대·중형"},
+    {"id": "boulder_01", "res": "1k", "use": "모델 — 자연: 바위 3단 스케일의 대·중형"},
+    {"id": "rock_face_01", "res": "1k", "use": "모델 — 자연: 바위 3단 스케일의 대·중형"},
+    {"id": "moss_01", "res": "1k", "use": "모델 — 자연: 바위 3단 스케일의 대·중형"},
+    {"id": "grass_medium_01", "res": "1k", "use": "모델 — 자연: 바위 3단 스케일의 대·중형"},
+    {"id": "shrub_02", "res": "1k", "use": "모델 — 자연: 바위 3단 스케일의 대·중형"}
+  ],
+  "fonts": [
+    {"id": "noto_sans_kr_bold", "file": "NotoSansKR-Bold.otf", "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/SubsetOTF/KR/NotoSansKR-Bold.otf", "sha256": "5a6ceb287ed2fc6cfc6213144ebea68cbd94b20fc9eb873d8486493bf02d9bda", "licence": "OFL-1.1", "licence_file": "LICENSE-noto-cjk.txt", "licence_url": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/LICENSE", "licence_sha256": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2", "use": "간판 한글(정적 Bold, present.py 가 Blender 텍스트 → 메시로 넣는다. 글꼴 파일은 출하하지 않음)"}
+  ]
+}

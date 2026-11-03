@@ -1,0 +1,420 @@
+{
+  "haus_podium": {
+    "layer": "building",
+    "kicker": "BUILDING · HAUS NOWHERE",
+    "title": "HAUS NOWHERE — 포디움(1–5F)",
+    "summary": "50×52 m · 1–5F",
+    "priority": 100,
+    "render": "assets/nowhere/renders/hero-street.webp",
+    "facts": [
+      ["구간", "포디움 1–5F (캔틸레버 처마)"],
+      ["전체 규모", "50 × 52 m, 최고 높이 81 m"],
+      ["메시·재질", "105 메시 · 13 재질 (128,452 tri)"]
+    ],
+    "lore": "비 잦은 2041년 성수에서도 1–5층 노출 콘크리트 포디움과 깊은 캔틸레버 처마는 연무장길과 뚝섬로 보행자의 비가림 회랑으로 작동한다.",
+    "sources": [
+      { "label": "record.json", "url": "assets/record.json" },
+      { "label": "성수 블록 리서치", "url": "docs/nowhere/research/seongsu.md" }
+    ]
+  },
+  "haus_tower": {
+    "layer": "building",
+    "kicker": "BUILDING · HAUS NOWHERE",
+    "title": "HAUS NOWHERE — 타워(6–11F)",
+    "summary": "6–11F · 2.4 MB",
+    "priority": 92,
+    "render": "assets/nowhere/renders/hero-street.webp",
+    "facts": [
+      ["구간", "중층 타워 6–11F"],
+      ["원본 파일", "GM_building_temp.fbx (Blender 5.2.2)"],
+      ["최적화", "121.5 MB → 2.4 MB (meshopt + WebP)"]
+    ],
+    "lore": "저층 적벽돌 창고 지대 위로 솟은 수직 루버와 유리 커튼월 매스가 강변 안개 속에서 블록 전체의 방위 기준점이 된다.",
+    "sources": [
+      { "label": "record.json", "url": "assets/record.json" }
+    ]
+  },
+  "haus_crown": {
+    "layer": "building",
+    "kicker": "BUILDING · HAUS NOWHERE",
+    "title": "HAUS NOWHERE — 크라운(11–14F)",
+    "summary": "정상 81 m · 11–14F",
+    "priority": 96,
+    "render": "assets/nowhere/renders/hero-aerial.webp",
+    "facts": [
+      ["구간", "상부 크라운 11–14F"],
+      ["최고 높이", "지상 81.0 m"],
+      ["정점 수", "124,995 vertices"]
+    ],
+    "lore": "해발 81m 상부 돌출 크라운은 한강에서 밀려오는 낮은 층운과 맞닿으며, 밤에는 절제된 간접광으로 수평 매스의 윤곽만 드러낸다.",
+    "sources": [
+      { "label": "record.json", "url": "assets/record.json" }
+    ]
+  },
+  "haus_garden": {
+    "layer": "building",
+    "kicker": "BUILDING · FORECOURT",
+    "title": "HAUS 전정 — 흰 자갈·화단",
+    "summary": "y −25…−31 m · 집수 화단",
+    "priority": 76,
+    "render": "assets/nowhere/renders/hero-street.webp",
+    "facts": [
+      ["구성", "보도블록 마당 · 흰 자갈 낙수선 · 식재 플랜터 2기"],
+      ["배치", "포디움 남측 y −25…−31 m"],
+      ["소재", "concrete_pavers_02 · shrub_02 · CC0"]
+    ],
+    "lore": "캔틸레버 처마 낙수선을 따라 깔린 흰 자갈 띠가 거센 빗물을 완충해 도로 측구 배수로로 흘려보낸다.",
+    "sources": [
+      { "label": "성수 블록 리서치", "url": "docs/nowhere/research/seongsu.md" },
+      { "label": "Poly Haven CC0", "url": "https://polyhaven.com/a/concrete_pavers_02" }
+    ]
+  },
+  "facearch_eyes": {
+    "layer": "building",
+    "kicker": "BUILDING · FACEARCH",
+    "title": "FaceArch — 두 면의 눈",
+    "summary": "eyeball_shd · 야간 발광",
+    "priority": 95,
+    "render": "assets/nowhere/renders/hero-aerial.webp",
+    "facts": [
+      ["부위", "두 정면의 조형 안구 (eyeball_shd)"],
+      ["텍스처", "eyeball_diff · roughness · normal"],
+      ["야간 연출", "#CFE6FF 창백한 청백색 발광"]
+    ],
+    "lore": "동쪽 일방 골목 건너편에서 뚝섬로와 HAUS 사이를 응시하는 두 눈 매스는 황혼과 밤마다 은은한 창백한 빛을 띤다.",
+    "sources": [
+      { "label": "facearch.json", "url": "assets/facearch.json" }
+    ]
+  },
+  "facearch_legs": {
+    "layer": "building",
+    "kicker": "BUILDING · FACEARCH",
+    "title": "FaceArch — 필로티 다리",
+    "summary": "22×18 m · 필로티",
+    "priority": 82,
+    "render": "assets/nowhere/renders/hero-aerial.webp",
+    "facts": [
+      ["부위", "필로티 다리 (leg_shd) 및 진입 계단 2개"],
+      ["평면 규모", "약 22 × 18 m, 높이 31 m"],
+      ["배치 각도", "남서쪽 도로를 향해 27° 회전"]
+    ],
+    "lore": "지면에서 들어 올려진 다리 기둥 아래 열린 필로티 공간으로 소나기를 피한 보행자와 소형 자율 배송체의 동선이 교차한다.",
+    "sources": [
+      { "label": "facearch.json", "url": "assets/facearch.json" }
+    ]
+  },
+  "facearch_body": {
+    "layer": "building",
+    "kicker": "BUILDING · FACEARCH",
+    "title": "FaceArch — 둥근 삼각 매스",
+    "summary": "높이 31 m · 3.5 MB",
+    "priority": 88,
+    "render": "assets/nowhere/renders/hero-aerial.webp",
+    "facts": [
+      ["부위", "곡면 삼각 본체 (body_shd, 6 UDIM)"],
+      ["원본 변환", "FBX 24.5 MB + 텍스처 208 MB → GLB 3.5 MB"],
+      ["삼각형 수", "260,308 triangles (79 메시)"]
+    ],
+    "lore": "성수의 직각 적벽돌 공업 건축 문법과 선명한 대비를 이루는 유기적 곡면 매스가 동쪽 골목 어귀의 조형적 표지가 된다.",
+    "sources": [
+      { "label": "facearch.json", "url": "assets/facearch.json" }
+    ]
+  },
+  "viaduct": {
+    "layer": "present",
+    "kicker": "PRESENT · INFRASTRUCTURE",
+    "title": "2호선 성수 고가 — 아치 교각과 충전벽",
+    "summary": "경간 22 m · 레일 9 m",
+    "priority": 94,
+    "render": "assets/nowhere/renders/hero-viaduct.webp",
+    "facts": [
+      ["구조", "콘크리트 아치 교각 + 적벽돌 충전벽, 경간 22 m"],
+      ["높이", "레일면 9.0 m, 성수역형 녹색 지붕 구간 포함"],
+      ["소재", "concrete_slab_wall_02 · brick_wall_001 · CC0"]
+    ],
+    "lore": "1980년대 건설된 2호선 고가교는 2041년에도 철거되지 않고 아치 하부를 자재 창고·이륜차 주차장으로 품은 채 블록 북쪽을 가로지른다.",
+    "sources": [
+      { "label": "성수 블록 리서치", "url": "docs/nowhere/research/seongsu.md" },
+      { "label": "Poly Haven CC0", "url": "https://polyhaven.com/a/concrete_slab_wall_02" }
+    ]
+  },
+  "brick_belt": {
+    "layer": "present",
+    "kicker": "PRESENT · INDUSTRIAL BELT",
+    "title": "붉은 벽돌 공장·창고 띠",
+    "summary": "2–4F · church_bricks_02",
+    "priority": 90,
+    "render": "assets/nowhere/renders/hero-viaduct.webp",
+    "facts": [
+      ["규모", "2–4F, 30–65 × 12–25 m 직사각 동 열주 배치"],
+      ["지붕 형태", "박공 지붕 · 평지붕 혼용, 하단 1m 빗물 오염"],
+      ["소재", "church_bricks_02 · brick_moss_001 · CC0"]
+    ],
+    "lore": "1970–80년대 준공업지역 적벽돌 공장과 창고들이 헐리지 않은 채 공방·로스터리·작업실로 겹겹이 고쳐 쓰이며 성수의 바탕 결을 유지한다.",
+    "sources": [
+      { "label": "성수 블록 리서치", "url": "docs/nowhere/research/seongsu.md" },
+      { "label": "Poly Haven CC0", "url": "https://polyhaven.com/a/church_bricks_02" }
+    ]
+  },
+  "cafe_canopy": {
+    "layer": "present",
+    "kicker": "PRESENT · RENOVATION",
+    "title": "개조 카페 — 흑색 강판 캐노피",
+    "summary": "흑색 강판 · 통유리 개조",
+    "priority": 74,
+    "render": "assets/nowhere/renders/hero-night.webp",
+    "facts": [
+      ["유형", "적벽돌 창고 1층 개조 카페 + 무광 흑색 강판 캐노피"],
+      ["부품", "modular_factory_facade 창호 · 외부 실외기"],
+      ["소재", "brick_wall_001 · modular_factory_facade · CC0"]
+    ],
+    "lore": "낡은 조적조 벽체 1층을 터서 강철 프레임 통유리와 무광 흑색 캐노피를 끼워 넣은 성수동 특유의 리노베이션 어휘가 그대로 남아 있다.",
+    "sources": [
+      { "label": "성수 블록 리서치", "url": "docs/nowhere/research/seongsu.md" },
+      { "label": "Poly Haven CC0", "url": "https://polyhaven.com/a/modular_factory_facade" }
+    ]
+  },
+  "wires": {
+    "layer": "present",
+    "kicker": "PRESENT · STREETSCAPE",
+    "title": "전신주와 처진 전선 다발",
+    "summary": "12 m 전주 · 배전선 다발",
+    "priority": 70,
+    "render": "assets/nowhere/renders/hero-viaduct.webp",
+    "facts": [
+      ["구성", "12 m 콘크리트 전주 · 주상변압기 · 처진 전선 3–6가닥"],
+      ["하단 보호대", "황흑 사선 안전 표지 (#F2C200 / #1A1A1A)"],
+      ["구현", "현수선(catenary) 곡선 메시 + 인스턴스 전주"]
+    ],
+    "lore": "간선도로와 달리 지중화되지 못한 이면도로의 가공 배전선과 통신선 다발이 흐린 하늘을 가로지르며 골목의 밀도를 만든다.",
+    "sources": [
+      { "label": "성수 블록 리서치", "url": "docs/nowhere/research/seongsu.md" }
+    ]
+  },
+  "workshop": {
+    "layer": "present",
+    "kicker": "PRESENT · WORKSHOP",
+    "title": "골함석 공방과 롤러셔터",
+    "summary": "corrugated_iron_03 · CC0",
+    "priority": 68,
+    "render": "assets/nowhere/renders/hero-viaduct.webp",
+    "facts": [
+      ["유형", "1–2F 골함석 지붕·외벽 소규모 금속·수제화 작업동"],
+      ["부품", "rollershutter_door · painted_metal_shutter"],
+      ["소재", "corrugated_iron_03 · CC0"]
+    ],
+    "lore": "녹슨 골함석 외벽과 반쯤 내려진 철제 셔터 너머로 소규모 금속 가공과 수제화 공방의 백열 작업등이 새어 나온다.",
+    "sources": [
+      { "label": "성수 블록 리서치", "url": "docs/nowhere/research/seongsu.md" },
+      { "label": "Poly Haven CC0", "url": "https://polyhaven.com/a/corrugated_iron_03" }
+    ]
+  },
+  "villas": {
+    "layer": "present",
+    "kicker": "PRESENT · RESIDENTIAL",
+    "title": "노후 연립·상가주택과 외부 계단",
+    "summary": "4–5F · 옥상 물탱크",
+    "priority": 66,
+    "render": "assets/nowhere/renders/hero-aerial.webp",
+    "facts": [
+      ["규모", "4–5F 다세대·연립주택, 1층 필로티 주차 및 근린상가"],
+      ["특징", "외부 철제 계단 · 녹색 우레탄 방수 옥상 · 청색 물탱크"],
+      ["부품", "modular_fire_escape · exterior_aircon_unit · CC0"]
+    ],
+    "lore": "공장 지대와 맞닿은 1990년대 적벽돌 연립주택들이 녹색 방수 옥상과 원통형 물탱크를 이고 중층 주거 결을 지킨다.",
+    "sources": [
+      { "label": "성수 블록 리서치", "url": "docs/nowhere/research/seongsu.md" },
+      { "label": "Poly Haven CC0", "url": "https://polyhaven.com/a/modular_fire_escape" }
+    ]
+  },
+  "apartments": {
+    "layer": "present",
+    "kicker": "PRESENT · SOUTH BLOCK",
+    "title": "길 건너 12~13F 판상형 아파트",
+    "summary": "12–13F · 높이 36–39 m",
+    "priority": 72,
+    "render": "assets/nowhere/renders/hero-street.webp",
+    "facts": [
+      ["규모", "12–13F 판상형 아파트 3동 (높이 36–39 m) + 9F 복합동"],
+      ["외벽 배색", "크림 도장 #D9D3B8 · 회백색 측벽 띠 #BFC3C6"],
+      ["배치", "뚝섬로 남측 y −70…−150 m"]
+    ],
+    "lore": "뚝섬로 건너편을 따라 나란히 서 있는 한국형 판상 아파트 단지가 성수 저층 블록 남쪽의 수평 장벽과 야간 생활광을 이룬다.",
+    "sources": [
+      { "label": "성수 블록 리서치", "url": "docs/nowhere/research/seongsu.md" }
+    ]
+  },
+  "lot_moss": {
+    "layer": "nature",
+    "kicker": "NATURE · VACANT LOT",
+    "title": "방치된 빈터 — 이끼 군락",
+    "summary": "concrete_moss · CC0",
+    "priority": 89,
+    "render": "assets/nowhere/renders/hero-lot.webp",
+    "facts": [
+      ["분포 규칙", "윗면 법선 · 오목한 틈새 · 물가 가장자리에만 집중 분포"],
+      ["색상 범위", "차분한 올리브 #3A461C ~ #5C652D"],
+      ["소재", "concrete_moss · moss_01 · CC0"]
+    ],
+    "lore": "철거 후 멈춰 선 공사 부지의 노출 콘크리트 기초와 현무암 틈새마다 잦은 강우로 짙은 올리브빛 이끼 군락이 자라났다.",
+    "sources": [
+      { "label": "자연·대기 리서치", "url": "docs/nowhere/research/ds.md" },
+      { "label": "Poly Haven CC0", "url": "https://polyhaven.com/a/concrete_moss" }
+    ]
+  },
+  "lot_water": {
+    "layer": "nature",
+    "kicker": "NATURE · HYDROLOGY",
+    "title": "빈터 고인 물과 얕은 물길",
+    "summary": "roughness 0.04 · 빗물 파문",
+    "priority": 85,
+    "render": "assets/nowhere/renders/hero-lot.webp",
+    "facts": [
+      ["구현", "±0.6 m 지형 기복 + 수평 수면 절단 + 2048 마스크 A채널"],
+      ["반사 특성", "웅덩이 거칠기 0.035 + 강우 시 동심원 파문 노멀"],
+      ["소재", "coast_sand_rocks_02 · nowhere-ground-mask.webp"]
+    ],
+    "lore": "낮은 물길과 옛 지하 기초 자리를 따라 고인 얕은 웅덩이가 흐린 하늘과 HAUS NOWHERE의 매스를 거울처럼 비춘다.",
+    "sources": [
+      { "label": "자연·대기 리서치", "url": "docs/nowhere/research/ds.md" },
+      { "label": "Poly Haven CC0", "url": "https://polyhaven.com/a/coast_sand_rocks_02" }
+    ]
+  },
+  "lot_rocks": {
+    "layer": "nature",
+    "kicker": "NATURE · LITHOLOGY",
+    "title": "바위·깨진 콘크리트 3단 스케일",
+    "summary": "대 1 : 중 5–8 : 소 다수",
+    "priority": 84,
+    "render": "assets/nowhere/renders/hero-lot.webp",
+    "facts": [
+      ["군집 비율", "대형 슬래브 1 : 중형 바위 5–8 : 소형 잔돌 다수"],
+      ["구성", "기울어진 철근 콘크리트 슬래브 4기 + 어두운 현무암 군집"],
+      ["소재", "dark_rock · boulder_01 · rock_moss_set_01 · CC0"]
+    ],
+    "lore": "3단 암석 군집 규칙을 따라 깨진 콘크리트 바닥판과 각진 현무암 덩어리가 물길 둘레에 자연스러운 침식 지형을 이룬다.",
+    "sources": [
+      { "label": "자연·대기 리서치", "url": "docs/nowhere/research/ds.md" },
+      { "label": "Poly Haven CC0", "url": "https://polyhaven.com/a/rock_moss_set_01" }
+    ]
+  },
+  "ginkgo": {
+    "layer": "nature",
+    "kicker": "NATURE · STREET TREES",
+    "title": "은행나무 가로수 띠",
+    "summary": "8 m 간격 · 주철 보호판",
+    "priority": 75,
+    "render": "assets/nowhere/renders/hero-street.webp",
+    "facts": [
+      ["배치", "뚝섬로 남측 보도 8 m 간격 가로수 구덩이 8기"],
+      ["구현", "저폴리 교차 수관 카드 메시 + 1.2 m 주철 보호판"],
+      ["수종", "서울 가로수 대표 수종 은행나무 (황록~황갈 잎)"]
+    ],
+    "lore": "젖은 회색 보도블록과 차가운 근미래 안내광 사이로 은행나무 가로수 띠가 계절감 있는 수관 실루엣을 드리운다.",
+    "sources": [
+      { "label": "성수 블록 리서치", "url": "docs/nowhere/research/seongsu.md" }
+    ]
+  },
+  "led_line": {
+    "layer": "future",
+    "kicker": "FUTURE 2041 · MOTIF #1",
+    "title": "고가 하부 청색 LED 라인",
+    "summary": "#3E8AD0 · 자율교통 유도",
+    "priority": 93,
+    "render": "assets/nowhere/renders/hero-night.webp",
+    "facts": [
+      ["설계 모티프", "근미래 모티프 #1 — 기존 고가 상판 하부 연속 발광선"],
+      ["색상·파장", "청색 #3E8AD0 (주간 은은한 유도광 / 야간 고휘도)"],
+      ["연장 구간", "블록 내부 고가 양측 모서리 전 구간"]
+    ],
+    "lore": "1980년대 콘크리트 고가 상판 하부 모서리에 덧대어진 파란 자율교통 유도선이 젖은 노면 위에 긴 반사 띠를 만든다.",
+    "sources": [
+      { "label": "근미래 도시·UI 리서치", "url": "docs/nowhere/research/dbh.md" }
+    ]
+  },
+  "led_screen": {
+    "layer": "future",
+    "kicker": "FUTURE 2041 · MOTIF #2",
+    "title": "벽돌 창고 위 비계 LED 스크린",
+    "summary": "12.0×6.75 m · 기상 전광판",
+    "priority": 87,
+    "render": "assets/nowhere/renders/hero-night.webp",
+    "facts": [
+      ["설계 모티프", "근미래 모티프 #2 — 적벽돌 지붕 위 철골 비계 스크린"],
+      ["규모", "12.0 × 6.75 m (아연도금 파이프 트러스 프레임)"],
+      ["표시 정보", "성수 구역 기상 · 강우 지수 · 대기 안내"]
+    ],
+    "lore": "옛 적벽돌 창고 지붕을 헐지 않고 철제 비계 구조물로 얹은 대형 상태 스크린이 구역 강우 예보와 보행 안내를 송출한다.",
+    "sources": [
+      { "label": "근미래 도시·UI 리서치", "url": "docs/nowhere/research/dbh.md" }
+    ]
+  },
+  "smart_crossing": {
+    "layer": "future",
+    "kicker": "FUTURE 2041 · MOTIF #3",
+    "title": "스마트 횡단보도와 발광 연석",
+    "summary": "#43ABA7 · 노면 매립 LED",
+    "priority": 86,
+    "render": "assets/nowhere/renders/hero-street.webp",
+    "facts": [
+      ["설계 모티프", "근미래 모티프 #3 — 노면 매립 발광 횡단보도·연석"],
+      ["색상", "청록 #43ABA7 · 백색 #E4EEF5"],
+      ["위치", "뚝섬로 중앙 횡단보도 (x ≈ −14 m) 및 정류장 연석"]
+    ],
+    "lore": "마모된 백색 도색 옆에 매립된 방수 바닥 LED 바가 비에 젖은 아스팔트 위에서 자율주행 차량과 보행자의 우선권을 나눈다.",
+    "sources": [
+      { "label": "근미래 도시·UI 리서치", "url": "docs/nowhere/research/dbh.md" }
+    ]
+  },
+  "bus_kiosk": {
+    "layer": "future",
+    "kicker": "FUTURE 2041 · MOTIF #4",
+    "title": "스마트 정류장 쉘터와 키오스크",
+    "summary": "#2A2D31 · 투명 정보 패널",
+    "priority": 83,
+    "render": "assets/nowhere/renders/hero-street.webp",
+    "facts": [
+      ["설계 모티프", "근미래 모티프 #4 — 유리 캐노피 정류장 & 투명 키오스크"],
+      ["프레임", "다크 알루미늄 #2A2D31 · 6200K 주백색 천장 라인"],
+      ["배치", "북측 보도 정류장 및 블록 주요 교차점 5기"]
+    ],
+    "lore": "기존 보도블록 위에 설치된 얇은 알루미늄 유리 쉘터와 투명 정보 키오스크가 무인 셔틀 배차 간격과 침수 우회로를 표시한다.",
+    "sources": [
+      { "label": "근미래 도시·UI 리서치", "url": "docs/nowhere/research/dbh.md" }
+    ]
+  },
+  "robotaxi": {
+    "layer": "future",
+    "kicker": "FUTURE 2041 · MOTIF #5",
+    "title": "상태창 자율주행 택시",
+    "summary": "무인 캡슐 · 측면 상태창",
+    "priority": 81,
+    "render": "assets/nowhere/renders/hero-street.webp",
+    "facts": [
+      ["설계 모티프", "근미래 모티프 #5 — 측면 상태창 자율주행 로보택시"],
+      ["배치", "뚝섬로 정류장 승하차 베이 대기 및 주행 3대"],
+      ["외장", "무광 펄 그레이 #C9CDD0 · 시안 상태 디스플레이"]
+    ],
+    "lore": "운전석 없이 대칭 캡슐 형태로 다듬어진 자율주행 택시가 측면 유리창에 탑승 가능 상태와 목적지 구역 코드를 띄운 채 정차해 있다.",
+    "sources": [
+      { "label": "근미래 도시·UI 리서치", "url": "docs/nowhere/research/dbh.md" }
+    ]
+  },
+  "drone_patrol": {
+    "layer": "future",
+    "kicker": "FUTURE 2041 · MOTIF #6",
+    "title": "서치라이트 보안 드론과 배송 드론",
+    "summary": "고도 18–46 m · 4대 순회",
+    "priority": 80,
+    "render": "assets/nowhere/renders/hero-night.webp",
+    "facts": [
+      ["설계 모티프", "근미래 모티프 #6 — 탐조등 보안 드론 1기 + 배송 드론 3기"],
+      ["비행 고도", "보안 순찰 18–25 m, 경량 물류 배송 28–46 m"],
+      ["경로", "Catmull-Rom 폐곡선 궤도 실시간 비행"]
+    ],
+    "lore": "고가 하부와 적벽돌 골목 상공을 순회하는 쿼드로터 드론이 안개 낀 공기 속으로 옅은 원뿔형 탐조등 빛줄기를 드리운다.",
+    "sources": [
+      { "label": "근미래 도시·UI 리서치", "url": "docs/nowhere/research/dbh.md" }
+    ]
+  }
+}

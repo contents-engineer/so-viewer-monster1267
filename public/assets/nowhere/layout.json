@@ -1,0 +1,828 @@
+{
+  "buildings": {
+    "haus": {
+      "pos": [
+        0.0,
+        0.0,
+        -0.0
+      ],
+      "rotY": 0.0
+    },
+    "facearch": {
+      "pos": [
+        105.0,
+        0.0,
+        -15.0
+      ],
+      "rotY": 27.0
+    }
+  },
+  "cameras": [
+    {
+      "id": "street",
+      "label": "거리 시점 — 연무장길",
+      "pos": [
+        -105.0,
+        1.7,
+        50.2
+      ],
+      "target": [
+        -30.0,
+        5.0,
+        31.0
+      ],
+      "fov": 39.76,
+      "mood": "overcast",
+      "render": "assets/nowhere/renders/hero-street.webp"
+    },
+    {
+      "id": "aerial",
+      "label": "조감 — 성수 블록과 4겹 능선",
+      "pos": [
+        148.0,
+        92.0,
+        138.0
+      ],
+      "target": [
+        -18.0,
+        26.0,
+        -68.0
+      ],
+      "fov": 45.75,
+      "mood": "overcast",
+      "render": "assets/nowhere/renders/hero-aerial.webp"
+    },
+    {
+      "id": "viaduct",
+      "label": "2호선 고가 하부",
+      "pos": [
+        13.0,
+        1.65,
+        -159.2
+      ],
+      "target": [
+        13.0,
+        26.5,
+        -0.0
+      ],
+      "fov": 53.7,
+      "mood": "overcast",
+      "render": "assets/nowhere/renders/hero-viaduct.webp"
+    },
+    {
+      "id": "night",
+      "label": "밤거리 — 젖은 노면과 네온",
+      "pos": [
+        56.0,
+        1.5,
+        -145.6
+      ],
+      "target": [
+        -4.0,
+        14.8,
+        -102.0
+      ],
+      "fov": 56.11,
+      "mood": "night",
+      "render": "assets/nowhere/renders/hero-night.webp"
+    },
+    {
+      "id": "ground",
+      "label": "노면 근접 — 연석·웅덩이",
+      "pos": [
+        -26.4,
+        3.0,
+        39.6
+      ],
+      "target": [
+        -21.4,
+        0.0,
+        34.6
+      ],
+      "fov": 35.12,
+      "mood": "overcast",
+      "render": "assets/nowhere/renders/hero-ground.webp"
+    },
+    {
+      "id": "lot",
+      "label": "빈터 자연 포켓",
+      "pos": [
+        44.5,
+        1.7,
+        24.5
+      ],
+      "target": [
+        43.0,
+        -0.6,
+        -2.0
+      ],
+      "fov": 45.75,
+      "mood": "overcast",
+      "render": "assets/nowhere/renders/hero-lot.webp"
+    }
+  ],
+  "anchors": [
+    {
+      "id": "apartments",
+      "layer": "present",
+      "pos": [
+        -43.5,
+        30.0,
+        71.5
+      ],
+      "title": "길 건너 12~13F 아파트",
+      "facts": [
+        [
+          "규모",
+          "12–13F 판상형 아파트 3동 (높이 36–39 m)"
+        ],
+        [
+          "외벽",
+          "크림 도장 #D9D3B8 · 회백 띠 #BFC3C6"
+        ]
+      ],
+      "lore": "뚝섬로 남측을 따라 늘어선 판상형 아파트 단지가 블록 남쪽의 수평 스카이라인을 형성한다.",
+      "source": "docs/nowhere/research/seongsu.md",
+      "render": "assets/nowhere/renders/hero-street.webp"
+    },
+    {
+      "id": "brick_belt",
+      "layer": "present",
+      "pos": [
+        5.0,
+        9.0,
+        -97.5
+      ],
+      "title": "붉은 벽돌 공장·창고 띠",
+      "facts": [
+        [
+          "규모",
+          "2–4F, 30–65 × 12–25 m 직사각 동"
+        ],
+        [
+          "소재",
+          "church_bricks_02 · brick_wall_001 (CC0)"
+        ]
+      ],
+      "lore": "1970–80년대 준공업지역 적벽돌 공장과 창고들이 헐리지 않은 채 공방·스튜디오·카페로 겹겹이 고쳐 쓰인다.",
+      "source": "docs/nowhere/research/seongsu.md",
+      "render": "assets/nowhere/renders/hero-viaduct.webp"
+    },
+    {
+      "id": "bus_kiosk",
+      "layer": "future",
+      "pos": [
+        -46.0,
+        2.4,
+        34.1
+      ],
+      "title": "스마트 정류장과 키오스크",
+      "facts": [
+        [
+          "모티프",
+          "근미래 모티프 #4 — 스마트 정류장 쉘터와 키오스크"
+        ],
+        [
+          "색상",
+          "다크 알루미늄 #2A2D31 · 6200K"
+        ]
+      ],
+      "lore": "기존 보도 위에 설치된 유리 쉘터와 투명 정보 패널이 무인 셔틀 도착 시간과 침수 우회 경로를 띄운다.",
+      "source": "docs/nowhere/research/dbh.md",
+      "render": "assets/nowhere/renders/hero-street.webp"
+    },
+    {
+      "id": "cafe_canopy",
+      "layer": "present",
+      "pos": [
+        27.0,
+        4.4,
+        -129.5
+      ],
+      "title": "벽돌 개조 카페 — 흑색 강판 캐노피",
+      "facts": [
+        [
+          "유형",
+          "적벽돌 개조 카페 + 흑색 강판 캐노피"
+        ],
+        [
+          "소재",
+          "modular_factory_facade (CC0)"
+        ]
+      ],
+      "lore": "옛 공장 1층 벽을 터서 통유리와 무광 흑색 철판 캐노피를 끼워 넣은 성수 특유의 리노베이션 문법이다.",
+      "source": "docs/nowhere/research/seongsu.md",
+      "render": "assets/nowhere/renders/hero-night.webp"
+    },
+    {
+      "id": "drone_patrol",
+      "layer": "future",
+      "pos": [
+        10.0,
+        17.0,
+        -142.0
+      ],
+      "title": "보안 드론의 서치라이트 순찰",
+      "facts": [
+        [
+          "모티프",
+          "근미래 모티프 #6 — 서치라이트 보안 드론 · 배송 드론"
+        ],
+        [
+          "비행 고도",
+          "보안 18–25 m, 배송 28–46 m"
+        ]
+      ],
+      "lore": "고가 하부와 공장 골목 상공을 순회하는 쿼드로터 드론이 비안개 속으로 원뿔형 탐조등을 드리운다.",
+      "source": "docs/nowhere/research/dbh.md",
+      "render": "assets/nowhere/renders/hero-night.webp"
+    },
+    {
+      "id": "facearch_body",
+      "layer": "building",
+      "pos": [
+        105.0,
+        25.0,
+        -15.0
+      ],
+      "title": "FaceArch 둥근 삼각 매스",
+      "facts": [
+        [
+          "부위",
+          "둥근 삼각 매스 (body_shd)"
+        ],
+        [
+          "최적화",
+          "24.5 MB + 텍스처 208 MB → 3.5 MB (26만 tri)"
+        ]
+      ],
+      "lore": "성수의 직각 벽돌 창고와 대비되는 곡면 매스가 골목 어귀의 조형적 랜드마크를 이룬다.",
+      "source": "public/assets/facearch.json",
+      "render": "assets/nowhere/renders/hero-aerial.webp"
+    },
+    {
+      "id": "facearch_eyes",
+      "layer": "building",
+      "pos": [
+        103.741,
+        16.584,
+        -5.914
+      ],
+      "title": "FaceArch 두 면의 눈",
+      "facts": [
+        [
+          "부위",
+          "두 면의 눈 (eyeball_shd)"
+        ],
+        [
+          "야간 발광",
+          "#CFE6FF, 강도 1.1"
+        ]
+      ],
+      "lore": "동쪽 일방 골목 건너편에서 뚝섬로와 HAUS 사이를 응시하는 두 눈 매스는 밤마다 창백한 푸른 빛을 띤다.",
+      "source": "public/assets/facearch.json",
+      "render": "assets/nowhere/renders/hero-aerial.webp"
+    },
+    {
+      "id": "facearch_legs",
+      "layer": "building",
+      "pos": [
+        108.0,
+        4.5,
+        -14.0
+      ],
+      "title": "FaceArch 필로티 다리",
+      "facts": [
+        [
+          "부위",
+          "필로티 다리 (leg_shd) · 계단 2개"
+        ],
+        [
+          "규모",
+          "22 × 18 m, 높이 31 m"
+        ]
+      ],
+      "lore": "지면에서 들어 올려진 필로티 다리 아래로 빗물에서 피신한 보행자와 배송 로봇의 동선이 이어진다.",
+      "source": "public/assets/facearch.json",
+      "render": "assets/nowhere/renders/hero-aerial.webp"
+    },
+    {
+      "id": "ginkgo",
+      "layer": "nature",
+      "pos": [
+        -2.0,
+        7.0,
+        49.7
+      ],
+      "title": "은행나무 가로수",
+      "facts": [
+        [
+          "배치",
+          "뚝섬로 남측 보도 8 m 간격 가로수 구덩이"
+        ],
+        [
+          "구현",
+          "저폴리 교차 수관 카드 + 주철 보호판"
+        ]
+      ],
+      "lore": "늦가을 은행나무 가로수 띠가 젖은 회색 보도블록과 차가운 근미래 LED 사이에 따뜻한 황록색 숨통을 틔운다.",
+      "source": "docs/nowhere/research/seongsu.md",
+      "render": "assets/nowhere/renders/hero-street.webp"
+    },
+    {
+      "id": "haus_crown",
+      "layer": "building",
+      "pos": [
+        0.0,
+        70.0,
+        26.0
+      ],
+      "title": "크라운 11–14F",
+      "facts": [
+        [
+          "구간",
+          "크라운 11–14F, 정상 81 m"
+        ],
+        [
+          "최적화",
+          "121.5 MB → 2.4 MB (12.8만 tri)"
+        ]
+      ],
+      "lore": "해발 81m 상부 크라운은 강변 안개층과 맞닿으며 야간에는 절제된 간접 세척광으로 윤곽만 드러낸다.",
+      "source": "public/assets/record.json",
+      "render": "assets/nowhere/renders/hero-aerial.webp"
+    },
+    {
+      "id": "haus_garden",
+      "layer": "building",
+      "pos": [
+        -12.0,
+        0.8,
+        28.0
+      ],
+      "title": "전정 — 흰 자갈 화단과 꽃",
+      "facts": [
+        [
+          "구성",
+          "전정 흰 자갈 화단 · 식재 플랜터 · 벤치"
+        ],
+        [
+          "배치",
+          "포디움 남측 y −25…−31 m"
+        ]
+      ],
+      "lore": "캔틸레버 낙수선을 따라 깔린 흰 자갈 화단이 처마에서 떨어지는 빗물을 집수해 배수로로 흘려보낸다.",
+      "source": "docs/nowhere/research/seongsu.md",
+      "render": "assets/nowhere/renders/hero-street.webp"
+    },
+    {
+      "id": "haus_podium",
+      "layer": "building",
+      "pos": [
+        0.0,
+        11.0,
+        26.0
+      ],
+      "title": "포디움 1–5F",
+      "facts": [
+        [
+          "구간",
+          "포디움 1–5F"
+        ],
+        [
+          "전체 규모",
+          "50 × 52 m, 높이 81 m"
+        ]
+      ],
+      "lore": "비 잦은 2041년에도 1–5층 노출 콘크리트 포디움과 깊은 캔틸레버 처마는 연무장길 보행자의 비가림 쉼터로 작동한다.",
+      "source": "public/assets/record.json",
+      "render": "assets/nowhere/renders/hero-street.webp"
+    },
+    {
+      "id": "haus_tower",
+      "layer": "building",
+      "pos": [
+        0.0,
+        42.0,
+        20.0
+      ],
+      "title": "타워 6–11F",
+      "facts": [
+        [
+          "구간",
+          "타워 6–11F"
+        ],
+        [
+          "원본",
+          "GM_building_temp.fbx (Blender 5.2.2)"
+        ]
+      ],
+      "lore": "성수 저층 벽돌 창고 띠 위로 솟은 중층 매스가 주변 산능선 안개 속에서 블록의 방위 기준점이 된다.",
+      "source": "public/assets/record.json",
+      "render": "assets/nowhere/renders/hero-street.webp"
+    },
+    {
+      "id": "led_line",
+      "layer": "future",
+      "pos": [
+        52.0,
+        7.2,
+        -145.7
+      ],
+      "title": "2호선 고가 하부의 파란 LED 선",
+      "facts": [
+        [
+          "모티프",
+          "근미래 모티프 #1 — 고가 하부 청색 LED 라인"
+        ],
+        [
+          "색상",
+          "#3E8AD0 (주간 6.0 / 야간 26.0)"
+        ]
+      ],
+      "lore": "낡은 콘크리트 고가 상판 하부 모서리에 덧대어진 파란 자율교통 유도선이 안개 속 1.5 km 너머까지 이어진다.",
+      "source": "docs/nowhere/research/dbh.md",
+      "render": "assets/nowhere/renders/hero-night.webp"
+    },
+    {
+      "id": "led_screen",
+      "layer": "future",
+      "pos": [
+        -8.0,
+        18.6,
+        -126.6
+      ],
+      "title": "벽돌 창고 위 비계 LED 스크린",
+      "facts": [
+        [
+          "모티프",
+          "근미래 모티프 #2 — 벽돌 창고 위 비계 LED 스크린"
+        ],
+        [
+          "규모",
+          "12.0 × 6.75 m, 아연도금 비계 프레임"
+        ]
+      ],
+      "lore": "붉은 벽돌 창고 지붕을 헐지 않고 철제 비계로 얹은 대형 상태 스크린이 구역 기상·대기 지수를 표시한다.",
+      "source": "docs/nowhere/research/dbh.md",
+      "render": "assets/nowhere/renders/hero-night.webp"
+    },
+    {
+      "id": "lot_moss",
+      "layer": "nature",
+      "pos": [
+        53.0,
+        -0.566,
+        -16.2
+      ],
+      "title": "빈터의 이끼 — 윗면·물가에만",
+      "facts": [
+        [
+          "규칙",
+          "윗면 법선 · 오목지 · 물가 가장자리에만 분포"
+        ],
+        [
+          "색상",
+          "올리브 #3A461C ~ #5C652D (DS 시그니처 #5)"
+        ]
+      ],
+      "lore": "철거 후 방치된 공사 부지의 콘크리트 기초와 현무암 틈새마다 잦은 비로 이끼 군락이 자라났다.",
+      "source": "docs/nowhere/research/ds.md",
+      "render": "assets/nowhere/renders/hero-lot.webp"
+    },
+    {
+      "id": "lot_rocks",
+      "layer": "nature",
+      "pos": [
+        49.5,
+        1.6,
+        -4.0
+      ],
+      "title": "현무암·잡석 3단 스케일",
+      "facts": [
+        [
+          "비율",
+          "대형 슬래브 1 : 중형 바위 5–8 : 소형 잔돌 다수"
+        ],
+        [
+          "소재",
+          "dark_rock · boulder_01 · rock_moss_set (CC0)"
+        ]
+      ],
+      "lore": "3단 암석 군집 규칙을 따라 깨진 콘크리트 슬래브와 현무암 덩어리가 물길 둘레에 무리를 이룬다.",
+      "source": "docs/nowhere/research/ds.md",
+      "render": "assets/nowhere/renders/hero-lot.webp"
+    },
+    {
+      "id": "lot_water",
+      "layer": "nature",
+      "pos": [
+        39.5,
+        -0.617,
+        -3.0
+      ],
+      "title": "고인 물과 물길",
+      "facts": [
+        [
+          "구현",
+          "수평 수면 절단 + 웅덩이 거칠기 0.04 + 빗물 파문"
+        ],
+        [
+          "소재",
+          "coast_sand_rocks_02 · nowhere-ground-mask.webp"
+        ]
+      ],
+      "lore": "낮은 물길과 옛 지하 기초 자리를 따라 고인 웅덩이가 흐린 하늘과 HAUS 매스를 거울처럼 비춘다.",
+      "source": "docs/nowhere/research/ds.md",
+      "render": "assets/nowhere/renders/hero-lot.webp"
+    },
+    {
+      "id": "robotaxi",
+      "layer": "future",
+      "pos": [
+        -54.0,
+        1.6,
+        36.95
+      ],
+      "title": "창이 상태 화면인 자율 택시",
+      "facts": [
+        [
+          "모티프",
+          "근미래 모티프 #5 — 상태창 자율주행 택시"
+        ],
+        [
+          "배치",
+          "뚝섬로 정류장 승하차 베이 포함 3대"
+        ]
+      ],
+      "lore": "운전석 없이 둥근 캡슐 형태로 다듬어진 로보택시가 측면 유리 전체에 운행 상태를 은은한 시안 빛으로 표시한다.",
+      "source": "docs/nowhere/research/dbh.md",
+      "render": "assets/nowhere/renders/hero-street.webp"
+    },
+    {
+      "id": "smart_crossing",
+      "layer": "future",
+      "pos": [
+        -14.0,
+        0.6,
+        42.0
+      ],
+      "title": "가장자리가 빛나는 횡단보도와 바닥 신호",
+      "facts": [
+        [
+          "모티프",
+          "근미래 모티프 #3 — 발광 횡단보도·연석 LED"
+        ],
+        [
+          "색상",
+          "청록 #43ABA7 · 백색 #E4EEF5"
+        ]
+      ],
+      "lore": "닳은 백색 도색 옆에 매립된 바닥 LED 바가 젖은 아스팔트 위에서 자율차량과 보행자의 우선권을 안내한다.",
+      "source": "docs/nowhere/research/dbh.md",
+      "render": "assets/nowhere/renders/hero-street.webp"
+    },
+    {
+      "id": "viaduct",
+      "layer": "present",
+      "pos": [
+        57.0,
+        13.0,
+        -145.5
+      ],
+      "title": "2호선 고가와 성수역형 승강장",
+      "facts": [
+        [
+          "구조",
+          "콘크리트 아치 교각 + 적벽돌 충전벽, 경간 22 m"
+        ],
+        [
+          "레일면 높이",
+          "9.0 m (성수역형 녹색 지붕 구간 포함)"
+        ]
+      ],
+      "lore": "1980년대 건설된 2호선 성수 고가는 철거되지 않고 아치 하부를 창고·바이크 주차장으로 쓰며 블록 북쪽을 가로지른다.",
+      "source": "docs/nowhere/research/seongsu.md",
+      "render": "assets/nowhere/renders/hero-viaduct.webp"
+    },
+    {
+      "id": "villas",
+      "layer": "present",
+      "pos": [
+        -26.0,
+        8.0,
+        -35.5
+      ],
+      "title": "노후 연립 — 필로티·외부 철제 계단",
+      "facts": [
+        [
+          "규모",
+          "4–5F 다세대·연립주택, 1층 필로티 주차"
+        ],
+        [
+          "특징",
+          "외부 철제 계단 · 옥상 청색 물탱크"
+        ]
+      ],
+      "lore": "공장 지대와 맞닿은 1990년대 적벽돌·타일 연립주택들이 옥상 방수 녹색 도장과 물탱크를 이고 자리를 지킨다.",
+      "source": "docs/nowhere/research/seongsu.md",
+      "render": "assets/nowhere/renders/hero-aerial.webp"
+    },
+    {
+      "id": "wires",
+      "layer": "present",
+      "pos": [
+        65.6,
+        9.5,
+        -74.4
+      ],
+      "title": "가공선 다발과 황흑 전주",
+      "facts": [
+        [
+          "구성",
+          "12 m 콘크리트 전주 · 주상변압기 · 처진 전선 다발"
+        ],
+        [
+          "보호대",
+          "황흑 사선 줄무늬 (#F2C200 / #1A1A1A)"
+        ]
+      ],
+      "lore": "지중화되지 못한 이면도로의 가공 배전선과 통신선 다발이 비 갠 하늘을 가로지르며 성수 골목의 실루엣을 만든다.",
+      "source": "docs/nowhere/research/seongsu.md",
+      "render": "assets/nowhere/renders/hero-viaduct.webp"
+    },
+    {
+      "id": "workshop",
+      "layer": "present",
+      "pos": [
+        62.5,
+        5.0,
+        -82.0
+      ],
+      "title": "골함석 공방",
+      "facts": [
+        [
+          "유형",
+          "1–2F 골함석 지붕·외벽 작업동"
+        ],
+        [
+          "소재",
+          "corrugated_iron_03 · painted_metal_shutter (CC0)"
+        ]
+      ],
+      "lore": "녹슨 골함석 외벽과 롤러셔터 문 너머로 소규모 금속·가죽 공방의 작업등이 새어 나온다.",
+      "source": "docs/nowhere/research/seongsu.md",
+      "render": "assets/nowhere/renders/hero-viaduct.webp"
+    }
+  ],
+  "drones": [
+    {
+      "id": "sec",
+      "object": "FU_drone_sec",
+      "beam": "FU_drone_sec_beam",
+      "speed": 4.0,
+      "path": [
+        [
+          5.0,
+          19.0,
+          -122.0
+        ],
+        [
+          -30.0,
+          18.0,
+          -140.0
+        ],
+        [
+          -70.0,
+          22.0,
+          -120.0
+        ],
+        [
+          -50.0,
+          24.0,
+          -75.0
+        ],
+        [
+          0.0,
+          25.0,
+          -62.0
+        ],
+        [
+          50.0,
+          24.0,
+          -70.0
+        ],
+        [
+          66.0,
+          21.0,
+          -110.0
+        ],
+        [
+          40.0,
+          18.0,
+          -138.0
+        ]
+      ]
+    },
+    {
+      "id": "d1",
+      "object": "FU_drone_del.0",
+      "beam": null,
+      "speed": 9.0,
+      "path": [
+        [
+          52.0,
+          34.0,
+          -8.0
+        ],
+        [
+          90.0,
+          40.0,
+          10.0
+        ],
+        [
+          140.0,
+          44.0,
+          -30.0
+        ],
+        [
+          110.0,
+          40.0,
+          -75.0
+        ],
+        [
+          60.0,
+          36.0,
+          -60.0
+        ]
+      ]
+    },
+    {
+      "id": "d2",
+      "object": "FU_drone_del.1",
+      "beam": null,
+      "speed": 11.0,
+      "path": [
+        [
+          -60.0,
+          30.0,
+          42.0
+        ],
+        [
+          20.0,
+          32.0,
+          42.0
+        ],
+        [
+          100.0,
+          30.0,
+          42.0
+        ],
+        [
+          100.0,
+          46.0,
+          90.0
+        ],
+        [
+          -60.0,
+          46.0,
+          95.0
+        ]
+      ]
+    },
+    {
+      "id": "d3",
+      "object": "FU_drone_del.2",
+      "beam": null,
+      "speed": 7.0,
+      "path": [
+        [
+          30.0,
+          28.0,
+          -110.0
+        ],
+        [
+          -10.0,
+          30.0,
+          -112.0
+        ],
+        [
+          -40.0,
+          32.0,
+          -85.0
+        ],
+        [
+          10.0,
+          30.0,
+          -80.0
+        ]
+      ]
+    }
+  ],
+  "maskRect": [
+    -112.0,
+    -162.0,
+    162.0,
+    172.0
+  ]
+}

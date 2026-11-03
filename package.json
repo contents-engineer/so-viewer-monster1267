@@ -1,0 +1,20 @@
+{
+  "name": "supreme-origin-viewer",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Supreme Origin 아카이브 뷰어 프로토타입 — HAUS NOWHERE SEOUL",
+  "scripts": {
+    "start": "npx -y serve@14.2.4 public -l 4173 --no-clipboard",
+    "start:lan": "npx -y serve@14.2.4 public -l tcp://0.0.0.0:4173 --no-clipboard",
+    "asset:convert": "uv run --with numpy --with pillow python -I tools/fbx2glb.py tools \"$FBX\" build/gm_building_raw.glb",
+    "asset:optimize": "npx -y @gltf-transform/cli@4.1.1 optimize build/gm_building_raw.glb public/assets/gm_building.glb --compress meshopt --texture-compress webp --texture-size 2048 --simplify false --join false --flatten false",
+    "asset": "npm run asset:convert && npm run asset:optimize",
+    "nowhere:fetch": "python3 -I tools/nowhere/fetch_sources.py tools/nowhere/sources.json build/nowhere-src",
+    "nowhere:build": "/Applications/Blender.app/Contents/MacOS/Blender -b build/nowhere/nowhere.blend --python tools/nowhere/blender/build.py",
+    "nowhere:optimize": "mkdir -p public/assets/nowhere/mobile && for L in ground present future; do npx -y @gltf-transform/cli@4.1.1 optimize build/nowhere/raw/nowhere-$L.glb public/assets/nowhere/nowhere-$L.glb --compress meshopt --texture-compress webp --texture-size 1024 --prune-attributes false --join false --flatten false --palette false --simplify false --instance true --instance-min 2 && npx -y @gltf-transform/cli@4.1.1 optimize build/nowhere/raw/nowhere-$L.glb public/assets/nowhere/mobile/nowhere-$L.glb --compress meshopt --texture-compress webp --texture-size 512 --prune-attributes false --join false --flatten false --palette false --simplify false --instance true --instance-min 2 || exit 1; done && npx -y @gltf-transform/cli@4.1.1 optimize build/nowhere/raw/nowhere-backdrop.glb public/assets/nowhere/nowhere-backdrop.glb --compress meshopt --texture-compress webp --texture-size 512 --prune-attributes false --join false --flatten false --palette false --simplify false --instance true --instance-min 2 && cp public/assets/nowhere/nowhere-backdrop.glb public/assets/nowhere/mobile/nowhere-backdrop.glb",
+    "nowhere:ds2:build": "/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python tools/nowhere/blender/ds2_build.py",
+    "nowhere:ds2:optimize": "mkdir -p public/assets/nowhere-ds2/mobile && for L in ground present future; do npx -y @gltf-transform/cli@4.1.1 optimize build/nowhere/raw-ds2/nowhere-$L.glb public/assets/nowhere-ds2/nowhere-$L.glb --compress meshopt --texture-compress webp --texture-size 1024 --prune-attributes false --join false --flatten false --palette false --simplify false --instance true --instance-min 2 && npx -y @gltf-transform/cli@4.1.1 optimize build/nowhere/raw-ds2/nowhere-$L.glb public/assets/nowhere-ds2/mobile/nowhere-$L.glb --compress meshopt --texture-compress webp --texture-size 512 --prune-attributes false --join false --flatten false --palette false --simplify false --instance true --instance-min 2 || exit 1; done && npx -y @gltf-transform/cli@4.1.1 optimize build/nowhere/raw-ds2/nowhere-backdrop.glb public/assets/nowhere-ds2/nowhere-backdrop.glb --compress meshopt --texture-compress webp --texture-size 512 --prune-attributes false --join false --flatten false --palette false --simplify false --instance true --instance-min 2 && cp public/assets/nowhere-ds2/nowhere-backdrop.glb public/assets/nowhere-ds2/mobile/nowhere-backdrop.glb",
+    "test": "node --test \"tests/*.test.mjs\""
+  }
+}

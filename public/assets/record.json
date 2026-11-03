@@ -1,0 +1,30 @@
+{
+  "index": "0001",
+  "title": "HAUS NOWHERE SEOUL",
+  "category": "건물",
+  "note": "텍스처는 아직 완성본이 아닙니다. 형태와 비례를 보는 용도의 원본입니다.",
+  "model": "assets/gm_building.glb",
+  "facts": [
+    [
+      "규모",
+      "50 × 52 m, 높이 81 m"
+    ],
+    [
+      "구성",
+      "포디움 1–5F, 타워 6–11F, 크라운 11–14F"
+    ],
+    [
+      "원본",
+      "GM_building_temp.fbx (Blender 5.2.2, 2026-10-14)"
+    ],
+    [
+      "제공",
+      "뉴프로젝트파트"
+    ],
+    [
+      "최적화",
+      "121.5 MB → 2.4 MB, 삼각형 12.8만"
+    ]
+  ],
+  "levels": "floors"
+}
