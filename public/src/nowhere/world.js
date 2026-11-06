@@ -66,6 +66,7 @@ export async function createWorld({
   // 해: 방위 32°(북북동, 계곡 상류) · 고도 26° → Three (x, y, z) = (0.476, 0.438, -0.762)
   const sunCfg = layout.sun || (worldVer === 'ds2' ? { dir: [0.4764, 0.4384, -0.7624] } : null);
   if (sunCfg?.dir) uniforms.uSunDir.value.fromArray(sunCfg.dir).normalize();
+  const sunBaseDir = uniforms.uSunDir.value.toArray();
   if (worldVer === 'ds2') {
     uniforms.uMossSoft.value = 1.0;
     uniforms.uMossColor.value.set('#34431F');
@@ -516,6 +517,8 @@ export async function createWorld({
     droneActors,
     groundHeightAt,
     getWalkBlocker,
+    // 14:00 기준 해 방향(성수 = Blender FX_sun 남서 34°, DS2 = layout.sun 북북동 26°) — 기상·시간 컨트롤러가 시각에 따라 돌린다
+    sunBaseDir: sunBaseDir,
     updateEnvironmentMap,
   };
 }

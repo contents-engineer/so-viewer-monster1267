@@ -251,6 +251,26 @@ body[data-world-ver="ds2"] .nw-loader {
   gap: 4px;
 }
 
+/* 기상 · 시간 분리: 시각 슬라이더 + 빠른 시간 버튼 */
+.nw-time-readout {
+  margin-left: 6px;
+  color: var(--nw-accent);
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+.nw-time-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.nw-time-slider {
+  width: 168px;
+  margin: 0;
+  accent-color: var(--nw-accent);
+  cursor: pointer;
+}
+
 /* ── 분석 모드 오버레이 ── */
 .nw-analysis-layer {
   position: fixed;

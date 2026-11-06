@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { detectQualityTier, getQualityConfig } from './quality.js';
 import { createWorld } from './world.js';
 import { createPostPipeline } from './post.js';
-import { createWeatherController, getPresets } from './weather.js';
+import { createWeatherController, getPresets, parseTimeParam, TIME_QUICK } from './weather.js';
 import { createRainSystem } from './rain.js';
 import { createCameraController, updateDroneActors } from './camera.js';
 import { createAnalysisController } from './analysis.js';
@@ -126,14 +126,17 @@ async function boot() {
     sharedUniforms: world.uniforms,
   });
 
+  // 기상(흐림·비·눈)과 시간(0~24시)을 따로 고른다. URL: weather=overcast|rain|snow(옛 dusk·night 는 시간으로), time=21.5 | 21:30
   const initialWeather = params.get('weather') || 'overcast';
   const weather = createWeatherController({
     world,
     post,
     renderer,
     initialPreset: initialWeather,
+    initialHour: parseTimeParam(params.get('time')),
     duration: 2.5,
     presets: getPresets(worldVer),
+    sunBaseDir: world.sunBaseDir,
   });
   if (worldVer === 'ds2' && post?.gradePass) {
     // 참조 화면: 역광으로 어두운 근경 + 화면 가장자리 감광
@@ -149,10 +152,20 @@ async function boot() {
   const walkBtn = document.getElementById('nw-btn-walk');
   const introBtn = document.getElementById('nw-btn-intro');
 
-  function syncWeatherUI(presetName) {
+  const timeSlider = document.getElementById('nw-time-slider');
+  const timeReadout = document.getElementById('nw-time-readout');
+
+  function syncWeatherUI() {
+    const name = weather.getWeather();
+    const hour = weather.getHour();
     document.querySelectorAll('[data-weather]').forEach((btn) => {
-      btn.classList.toggle('is-active', btn.dataset.weather === presetName);
+      btn.classList.toggle('is-active', btn.dataset.weather === name);
     });
+    document.querySelectorAll('[data-time]').forEach((btn) => {
+      btn.classList.toggle('is-active', Math.abs(Number(btn.dataset.time) - hour) < 0.01);
+    });
+    if (timeSlider && document.activeElement !== timeSlider) timeSlider.value = String(hour);
+    if (timeReadout) timeReadout.textContent = weather.getTimeLabel();
   }
 
   function syncCamUI(camId) {
@@ -197,30 +210,59 @@ async function boot() {
 
   const initialCam = params.get('cam') || 'street';
   camCtrl.setPreset(initialCam, true);
-  syncWeatherUI(weather.getPresetName());
+  syncWeatherUI();
 
-  if (!params.get('noIntro') && !params.get('cam') && !params.get('weather')) {
+  if (!params.get('noIntro') && !params.get('cam') && !params.get('weather') && !params.get('time')) {
     camCtrl.startIntro();
   }
 
+  // 옛 이름 호환: overcast·rain·snow → 기상, dusk·night → 시간
   function setWeatherPreset(name, instant = false) {
     weather.setPreset(name, instant);
-    syncWeatherUI(weather.getPresetName());
+    syncWeatherUI();
+  }
+
+  function setWeather(name, instant = false) {
+    weather.setWeather(name, instant);
+    syncWeatherUI();
+  }
+
+  function setTimeOfDay(hour, instant = false) {
+    weather.setTime(hour, instant);
+    syncWeatherUI();
   }
 
   function setCameraPreset(camId, instant = false) {
     const camDef = camCtrl.setPreset(camId, instant);
-    if (camDef?.mood && camDef.id === 'night' && weather.getPresetName() !== 'night') {
-      setWeatherPreset('night', instant);
+    // '밤' 카메라 프리셋은 기상은 그대로 두고 시각만 밤으로 맞춘다(비 오는 밤 등 유지)
+    const h = weather.getHour();
+    if (camDef?.mood === 'night' && h >= 5 && h < 19.5) {
+      setTimeOfDay(TIME_QUICK.night, instant);
     }
     return camDef;
   }
 
   document.querySelectorAll('[data-weather]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      setWeatherPreset(btn.dataset.weather, false);
+      setWeather(btn.dataset.weather, false);
     });
   });
+
+  document.querySelectorAll('[data-time]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      setTimeOfDay(Number(btn.dataset.time), false);
+    });
+  });
+
+  if (timeSlider) {
+    timeSlider.addEventListener('input', () => {
+      setTimeOfDay(Number(timeSlider.value), false);
+    });
+    // 슬라이더에서 손을 떼면 포커스를 풀어, 보행 이동·시선 키가 슬라이더로 가지 않게 한다
+    const release = () => timeSlider.blur();
+    timeSlider.addEventListener('pointerup', release);
+    timeSlider.addEventListener('touchend', release);
+  }
 
   document.querySelectorAll('[data-cam]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -301,11 +343,14 @@ async function boot() {
     quality,
     setCameraPreset,
     setWeatherPreset,
+    setWeather,
+    setTimeOfDay,
     getStats() {
       return {
         worldVer: quality.worldVer,
         tier: quality.tier,
-        weather: weather.getPresetName(),
+        weather: weather.getWeather(),
+        hour: weather.getHour(),
         camera: camCtrl.getPresetId(),
         walkMode: camCtrl.isWalkMode(),
         introActive: camCtrl.isIntroActive(),

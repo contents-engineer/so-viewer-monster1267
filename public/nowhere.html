@@ -90,14 +90,21 @@
 
   <!-- 하단 컨트롤 독 -->
   <footer class="nw-dock">
-    <div class="nw-dock-group">
-      <div class="nw-dock-label">기상 · 시간 (WEATHER)</div>
+    <div class="nw-dock-group nw-dock-weather">
+      <div class="nw-dock-label">기상 (WEATHER)</div>
       <div id="nw-weather-seg" class="nw-seg">
         <button type="button" class="nw-btn is-active" data-weather="overcast">흐림</button>
         <button type="button" class="nw-btn" data-weather="rain">비(타임폴)</button>
-        <button type="button" class="nw-btn" data-weather="dusk">황혼</button>
-        <button type="button" class="nw-btn" data-weather="night">밤</button>
         <button type="button" class="nw-btn" data-weather="snow">눈</button>
+      </div>
+      <div class="nw-dock-label">시간 (TIME) <span id="nw-time-readout" class="nw-time-readout">14:00 · 낮</span></div>
+      <div class="nw-time-row">
+        <input id="nw-time-slider" class="nw-time-slider" type="range" min="0" max="24" step="0.25" value="14" aria-label="시각 (0–24시)">
+        <div id="nw-time-seg" class="nw-seg">
+          <button type="button" class="nw-btn is-active" data-time="14">낮</button>
+          <button type="button" class="nw-btn" data-time="18.5">황혼</button>
+          <button type="button" class="nw-btn" data-time="21.5">밤</button>
+        </div>
       </div>
     </div>
 
