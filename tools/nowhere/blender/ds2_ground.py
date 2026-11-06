@@ -366,7 +366,7 @@ def terrain_drive(x, y):
     # 완만한 사면·오목부·물가에는 짙은 올리브 이끼(G 높음), 가파른 절벽면(slope > 0.75)은 바위 노출
     flatness = 1.0 - smoothstep(0.38, 0.92, slope)
     moss_patch = 0.5 + 0.5 * n2(x, y, 1 / 18.0, seed=404.0, octaves=2)
-    shelter = clamp01((0.38 + 0.48 * moss_patch + 0.65 * conc + 0.55 * s_ch) * flatness + 0.15 * conc)
+    shelter = clamp01((0.50 + 0.48 * moss_patch + 0.65 * conc + 0.55 * s_ch) * flatness + 0.15 * conc)
     return (water, shelter, 1.0, 0.0)
 
 
@@ -494,17 +494,18 @@ def mat_lot():
     t = M.texset('coast_sand_rocks_02', M.uv(3.4))
     t2 = M.texset('dark_rock', M.uv(2.8, offset=(0.25, 0.65)))
     P = M.pos
-    soil = M.grade(t['color'], 0.42, srgb('#C0B5A0'), 1.48)
-    soil = b.col(0.28, soil, srgb('#2A2722'))
-    basalt = M.grade(t2['color'], 0.55, srgb('#8A8E90'), 1.05)
-    pm = b.mul(b.smooth(0.52, 0.68, b.noise(P, 0.09, 4.0, 0.6, dist=0.35)), 0.85)
+    # 참조 화면의 계곡 바닥 = 초록·황록 이끼와 풀 사이로 회색 돌이 드러난 땅: coast_sand_rocks_02(원래 이끼+돌)의 채도를 살린다
+    soil = M.grade(t['color'], 1.05, srgb('#D2DAB4'), 1.55)
+    soil = b.col(0.12, soil, srgb('#232A19'))
+    basalt = M.grade(t2['color'], 0.5, srgb('#E4E8E6'), 4.6)
+    pm = b.mul(b.smooth(0.56, 0.70, b.noise(P, 0.09, 4.0, 0.6, dist=0.35)), 0.55)
     col = b.col(pm, soil, basalt)
     rough = b.flt(pm, t['rough'], t2['rough'])
     hgt = b.flt(pm, t['height'], t2['height'])
     nrm = b.mix('VECTOR', pm, t['normal'], t2['normal'])
     nrm = M.micro(nrm, 'coast_sand_rocks_02', 0.48, 0.65)
     col = M.macro_var(col, 0.22, 0.06)
-    mk = M.mask(base_wet=0.36, moss_bias=0.06)
+    mk = M.mask(base_wet=0.32, moss_bias=0.30)
     s = M.surface(col, rough, nrm, hgt, mk, crevice_moss=1.8, crevice_puddle=0.65, porosity=0.52, wet_gloss=0.22)
     return M.finish(s.outputs['Color'], s.outputs['Roughness'], s.outputs['Normal'], spec=0.38)
 
@@ -515,8 +516,9 @@ def mat_rock_slope():
     t = M.texset('dark_rock', M.uv(3.6))
     t2 = M.texset('lichen_rock', M.uv(2.6, offset=(0.4, 0.2)))
     P = M.pos
-    c1 = M.grade(t['color'], 0.55, srgb('#929699'), 1.12)
-    c2 = M.grade(t2['color'], 0.65, srgb('#9EA396'), 1.05)
+    # 원본 평균 선형 알베도 dark_rock ≈0.0125·lichen_rock ≈0.05 → 참조 화면의 회색 암반(≈0.07~0.11)
+    c1 = M.grade(t['color'], 0.5, srgb('#E2E6E4'), 4.6)
+    c2 = M.grade(t2['color'], 0.5, srgb('#E0E4DC'), 2.3)
     pm = b.smooth(0.45, 0.65, b.noise(P, 0.08, 4.0, 0.6, dist=0.3))
     col = b.col(pm, c1, c2)
     rough = b.flt(pm, t['rough'], t2['rough'])
@@ -524,7 +526,7 @@ def mat_rock_slope():
     nrm = b.mix('VECTOR', pm, t['normal'], t2['normal'])
     nrm = M.micro(nrm, 'dark_rock', 0.55, 0.6)
     col = M.macro_var(col, 0.20, 0.05)
-    mk = M.mask(base_wet=0.34, moss_bias=0.02)
+    mk = M.mask(base_wet=0.32, moss_bias=0.14)
     s = M.surface(col, rough, nrm, hgt, mk, crevice_moss=2.8, crevice_puddle=0.5, porosity=0.55, wet_gloss=0.55)
     return M.finish(s.outputs['Color'], s.outputs['Roughness'], s.outputs['Normal'], spec=0.45)
 

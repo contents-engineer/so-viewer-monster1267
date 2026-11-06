@@ -1,4 +1,4 @@
-# HAUS NOWHERE — DS2 산악 월드 / Task 2: 헤드리스 전체 빌드 · 지면 마스크 베이킹 · 6종 렌더 · GLB 내보내기.
+# HAUS NOWHERE — DS2 산악 월드 / Task 2: 헤드리스 전체 빌드 · 지면 마스크 베이킹 · 7종 렌더 · GLB 내보내기.
 # 실행:
 #   /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python tools/nowhere/blender/ds2_build.py
 import bpy, os, sys, math, time, json, shutil, importlib
@@ -28,6 +28,7 @@ CAM_ORDER = [
     ('night',   '산악의 밤 — 비콘과 점등된 건축',     'ds2-night.png',   'hero-night.webp',   'night'),
     ('ground',  '갈래 개울 근접 — 물웅덩이와 이끼',   'ds2-ground.png',  'hero-ground.webp',  'overcast'),
     ('lot',     '주상절리 포켓과 개척 교량',          'ds2-lot.png',     'hero-lot.webp',     'overcast'),
+    ('valley',  '빙하 계곡 — 겹쳐지는 층리 암벽과 개울', 'ds2-valley.png',  'hero-valley.webp',  'overcast'),
 ]
 
 DS2_ANCHORS_META = {
@@ -149,32 +150,33 @@ DS2_ANCHORS_META = {
     },
     'viaduct': {
         'layer': 'present',
-        'kicker': 'TERRAIN · BASALT CLIFF',
-        'title': '북측 주상절리 대절벽과 협곡',
-        'summary': '높이 16–36 m · 육각 주상절리 단애',
+        'kicker': 'TERRAIN · GLACIAL VALLEY',
+        'title': '빙하 계곡 층리 대암벽과 산악 고가교',
+        'summary': '암벽 높이 460–580 m · 상류로 V자 수렴',
         'priority': 90,
         'render': 'assets/nowhere-ds2/renders/hero-viaduct.webp',
         'facts': [
-            ['지질 구조', '수직 주상절리 현무암 기둥군 + 층리 암반 슬랩'],
-            ['이끼 분포', '단차 선반(ledge) 윗면에만 올리브 이끼 집중'],
+            ['지형', 'U자 빙하 계곡 — 바닥 반폭 165 m, 상류 2.6 km 에서 53 m'],
+            ['암벽 구조', '수평 층리 선반(이끼) + 회색 단애 띠 + 세로 낙석 걸리'],
+            ['고가교', '계곡을 가로지르는 22 m 경간 콘크리트 아치'],
         ],
-        'lore': '분지 북쪽을 병풍처럼 가로막은 거대한 주상절리 절벽은 수직면의 검은 현무암과 수평 단차 위에 내려앉은 초록 이끼의 강렬한 대비로 지형의 스케일을 각인시킨다.',
+        'lore': '분지 양쪽에서 솟아오른 수백 미터의 층리 암벽은 선반마다 초록 이끼를 이고 있고, 그 사이를 가로지르는 고가교가 계곡의 스케일을 가늠하게 한다. 상류로 갈수록 두 암벽은 겹쳐져 안개 속 소실점이 된다.',
         'sources': [
             {'label': 'DS 비주얼 리서치 §1·§6', 'url': 'docs/nowhere/research/ds.md'},
         ],
     },
     'brick_belt': {
         'layer': 'present',
-        'kicker': 'TERRAIN · MONOLITH',
-        'title': '현무암 단애와 층리 암반 노두',
-        'summary': 'lichen_rock · dark_rock 2k',
+        'kicker': 'TERRAIN · ERRATIC BOULDERS',
+        'title': '계곡 입구의 빙하 표석 무더기',
+        'summary': '폭 4–6 m 표석 + 위성 바위 · 윗면 이끼',
         'priority': 82,
-        'render': 'assets/nowhere-ds2/renders/hero-viaduct.webp',
+        'render': 'assets/nowhere-ds2/renders/hero-valley.webp',
         'facts': [
-            ['소재', 'Poly Haven dark_rock · lichen_rock · rock_face_01 (CC0)'],
-            ['스케일', '대형 절벽(1단)과 중형 애추 블록(2단)의 결합'],
+            ['소재', 'Poly Haven lichen_rock · dark_rock · rock_face_01 (CC0)'],
+            ['형태', '둥근 덩어리 + 평평한 파쇄면 + 땅에 박힌 납작한 바닥'],
         ],
-        'lore': '오랜 풍화와 침식으로 깎여 나간 층리 암반 노두가 개울 상류와 중경 구릉 곳곳에 솟아올라 거친 고원 지형의 골격을 드러낸다.',
+        'lore': '빙하가 물러나며 떨궈 놓은 회색 표석들이 계곡 입구와 산자락에 무더기로 박혀 있다. 비에 젖은 아랫부분은 어둡고, 해를 향한 윗면에는 이끼가 모자처럼 앉았다.',
         'sources': [
             {'label': 'DS 비주얼 리서치 §2', 'url': 'docs/nowhere/research/ds.md'},
         ],
@@ -246,15 +248,15 @@ DS2_ANCHORS_META = {
     'lot_rocks': {
         'layer': 'nature',
         'kicker': 'NATURE · 3-TIER ROCKS',
-        'title': '3단 스케일 현무암·애추 군집',
-        'summary': '절벽(1단) : 중형 바위(2단) : 잔돌(3단)',
+        'title': '3단 스케일 표석·잡석 군집',
+        'summary': '큰 표석(1단) : 중형 바위(2단) : 잔돌(3단)',
         'priority': 86,
         'render': 'assets/nowhere-ds2/renders/hero-lot.webp',
         'facts': [
-            ['구성', '주상절리 노두 · Poly Haven 이끼 바위 6종 · 각진 쇄석'],
-            ['질감', '젖음 시 알베도 0.42배 감쇠 + 거칠기 0.15로 푸른 하늘광 반사'],
+            ['구성', '회색 화강암 표석 · Poly Haven 이끼 바위 6종 · 각진 쇄석'],
+            ['질감', '윗면 이끼 모자 · 젖은 하부는 알베도 0.42배 감쇠'],
         ],
-        'lore': '둥근 강돌 대신 모서리가 살아 있는 각진 현무암 블록들이 대·중·소 3단 스케일로 절벽 밑동과 수변에 무더기로 쌓여 지질학적 설득력을 만든다.',
+        'lore': '회색 표석들이 대·중·소 3단 스케일로 개울 둑과 이끼 언덕에 흩어져 있다. 큰 바위 곁에는 반드시 떨어져 나간 위성 바위와 잔돌이 모여, 계곡 바닥의 바위 들판이 우연이 아니라 오랜 시간의 결과로 읽힌다.',
         'sources': [
             {'label': 'DS 비주얼 리서치 §1·§6 #6', 'url': 'docs/nowhere/research/ds.md'},
         ],
@@ -415,6 +417,14 @@ def update_ds2_ground_drive(sc):
     return updated
 
 
+def apply_overcast(sc):
+    """흐림 무드 + DS2 역광 헤이즈 룩(ds2_look: 북북동 낮은 해, 태양 헤이즈 하늘, 전방 산란 안개, 고대비 톤)."""
+    import ds2_look
+    importlib.reload(ds2_look)
+    lib.apply_mood(sc, 'overcast', bake=False)
+    ds2_look.apply(sc)
+
+
 def bake_ds2(sc):
     import bake
     importlib.reload(bake)
@@ -422,7 +432,7 @@ def bake_ds2(sc):
     bake.MASK_RGB_PNG = os.path.join(lib.OUT, 'renders', 'ds2-ground-mask-rgb.png')
     bake.MASK_PUD_PNG = os.path.join(lib.OUT, 'renders', 'ds2-ground-mask-puddle.png')
     os.makedirs(PUB_DIR, exist_ok=True)
-    lib.apply_mood(sc, 'overcast', bake=False)
+    apply_overcast(sc)
     update_ds2_ground_drive(sc)
     gm = bake.bake_ground_mask(sc, bake.MASK_SIZE)
     # PR_via.* 및 FU_bridge_* 도 Cycles AO 베이킹 대상에 포함되도록 별칭 보강
@@ -441,7 +451,10 @@ def render_ds2_views(sc):
         if cam is None:
             continue
         if mood != current_mood:
-            lib.apply_mood(sc, mood, bake=False)
+            if mood == 'overcast':
+                apply_overcast(sc)
+            else:
+                lib.apply_mood(sc, mood, bake=False)
             current_mood = mood
         png_path = os.path.join(lib.OUT, 'renders', png_name)
         lib.render(sc, cam, png_path, res=(1280, 720), samples=28)
@@ -455,12 +468,12 @@ def render_ds2_views(sc):
         converted.append((webp_name, os.path.getsize(dst_webp)))
 
     if current_mood != 'overcast':
-        lib.apply_mood(sc, 'overcast', bake=False)
+        apply_overcast(sc)
 
     hdr_src = os.path.join(lib.SRC, 'hdri', 'urban_street_03_1k.hdr')
     hdr_dst = os.path.join(PUB_DIR, 'sky-1k.hdr')
     shutil.copy2(hdr_src, hdr_dst)
-    print('[ds2_build] rendered 6 views:', converted)
+    print(f"[ds2_build] rendered {len(converted)} views:", converted)
     return converted
 
 
@@ -532,10 +545,14 @@ def export_ds2_layout_and_anchors(sc):
             'path': [to_three(p) for p in pts],
         })
 
+    import ds2_look
     x0, y0, x1, y1 = lib.MASK_RECT
     layout = {
         'world': 'ds2',
         'title': 'HAUS NOWHERE — DS2 산악 고원',
+        # 웹(world.js) 키 라이트·하늘 헤이즈·안개 산란광이 Blender FX_sun 과 같은 해 방향을 쓰도록 기록
+        'sun': {'dir': ds2_look.sun_dir_three(), 'color': ds2_look.SUN_COLOR,
+                'azimuth': ds2_look.SUN_AZIMUTH, 'elevation': ds2_look.SUN_ELEVATION},
         'buildings': buildings,
         'cameras': cameras,
         'anchors': anchors,
@@ -556,7 +573,7 @@ def export_ds2_layout_and_anchors(sc):
 
 
 def bake_and_export_live():
-    """라이브 Blender 세션에 이미 빌드된 DS2 씬에서 베이킹 · .blend 저장 · 6종 렌더 · GLB 내보내기를 수행한다."""
+    """라이브 Blender 세션에 이미 빌드된 DS2 씬에서 베이킹 · .blend 저장 · 7종 렌더 · GLB 내보내기를 수행한다."""
     t0 = time.time()
     import export
     importlib.reload(export)
@@ -567,6 +584,7 @@ def bake_and_export_live():
 
     print('[ds2_build] 1) Baking ground mask (2048x2048) & Cycles vertex AO...')
     bake_ds2(sc)
+    apply_overcast(sc)
     lib.bake_light_probes(sc)
     sc['nw_baked'] = True
 

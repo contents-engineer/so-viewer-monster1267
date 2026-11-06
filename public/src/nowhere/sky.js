@@ -1,4 +1,5 @@
 // HAUS NOWHERE — 성수 2041: 하늘 돔 셰이더 (지평선→천정 그라데이션 + 저주파 흐린 구름 결 + 지평선 안개 융합).
+// DS2: uSunHaze > 0 이면 해 주변 헤이즈·코로나·원반과 옅은 22° 무리(참조 화면 오른쪽 위 무지개빛 호)를 더한다.
 import * as THREE from 'three';
 
 export function createSkyDome(sharedUniforms) {
@@ -11,6 +12,8 @@ export function createSkyDome(sharedUniforms) {
     uFogFarColor: sharedUniforms.uFogFarColor,
     uTime: sharedUniforms.uTime,
     uNight: sharedUniforms.uNight,
+    uSunDir: sharedUniforms.uSunDir,
+    uSunHaze: sharedUniforms.uSunHaze,
   };
 
   const geom = new THREE.SphereGeometry(7600, 48, 24);
@@ -36,6 +39,8 @@ export function createSkyDome(sharedUniforms) {
       uniform vec3 uFogFarColor;
       uniform float uTime;
       uniform float uNight;
+      uniform vec3 uSunDir;
+      uniform float uSunHaze;
       varying vec3 vWorldDir;
 
       float hash2(vec2 p) {
@@ -84,6 +89,21 @@ export function createSkyDome(sharedUniforms) {
 
         float horizonHaze = exp(-abs(y) * 14.0);
         sky = mix(sky, mix(uSkyHorizon, uFogFarColor, 0.55), horizonHaze * 0.65);
+
+        // 역광 태양 헤이즈(넓은 번짐 + 좁은 코로나 + 원반) — 구름 너머 해가 하늘을 하얗게 태운다
+        if (uSunHaze > 0.001) {
+          float c = max(dot(dir, normalize(uSunDir)), 0.0);
+          vec3 sunCol = vec3(1.0, 0.95, 0.87);
+          float glow = 0.42 * pow(c, 6.0) + 0.85 * pow(c, 48.0) + 4.0 * pow(c, 2400.0);
+          sky += sunCol * glow * uSunHaze * (1.0 - below) * (1.0 - uNight);
+          // 22° 무리: 아주 옅은 분광 호(바깥 붉은 → 안쪽 푸른)
+          float ang = acos(clamp(dot(dir, normalize(uSunDir)), -1.0, 1.0));
+          float t = (ang - 0.384) / 0.009;        // 폭 ≈0.5° 의 가는 띠, 바깥 붉은 → 안쪽 푸른
+          vec3 spec = vec3(exp(-pow(t - 1.6, 2.0)), exp(-pow(t, 2.0)) * 0.8, exp(-pow(t + 1.6, 2.0)));
+          // 해 위쪽 호만 보이게(참조 화면 오른쪽 위 무지개빛 호), 지평선 쪽으로 사라진다
+          float arc = smoothstep(0.05, 0.35, y);
+          sky += (spec - vec3(0.25) * exp(-t * t * 0.15)) * 0.05 * arc * uSunHaze * (1.0 - below) * (1.0 - uNight);
+        }
 
         gl_FragColor = vec4(sky, 1.0);
       }

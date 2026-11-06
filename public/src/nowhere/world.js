@@ -13,6 +13,14 @@ import {
   patchSurfaceMaterial,
 } from './surface.js';
 import { createSkyDome } from './sky.js';
+import {
+  createHeightGrid,
+  rasterizeTriangle,
+  createGroundQuery,
+  createOccupancyGrid,
+  markObstacleTriangle,
+  isBlockedAt,
+} from './terrain.js';
 
 export async function createWorld({
   renderer,
@@ -53,6 +61,19 @@ export async function createWorld({
 
   const uniforms = createSharedUniforms(groundMaskTex, maskRect);
 
+  // DS2 산악 월드 룩(참조 화면: 빙하 계곡 역광 헤이즈) — Blender tools/nowhere/blender/ds2_look.py 와 같은 해 방향.
+  // 해: 방위 32°(북북동, 계곡 상류) · 고도 26° → Three (x, y, z) = (0.476, 0.438, -0.762)
+  const sunCfg = layout.sun || (worldVer === 'ds2' ? { dir: [0.4764, 0.4384, -0.7624] } : null);
+  if (sunCfg?.dir) uniforms.uSunDir.value.fromArray(sunCfg.dir).normalize();
+  if (worldVer === 'ds2') {
+    uniforms.uMossSoft.value = 1.0;
+    uniforms.uMossColor.value.set('#34431F');
+    uniforms.uMossColor2.value.set('#6F7B31');
+    uniforms.uHeatherColor.value.set('#5C3526');
+    uniforms.uPudColor.value.setRGB(0.3, 0.34, 0.36);   // 계곡 개울: 회청색 반사 수면(성수의 은빛 거울보다 어둡게)
+    uniforms.uPudMetal.value = 0.85;
+  }
+
   // 3) 하늘 돔 + 조명 + 환경 반사맵(PMREM) 구성
   const sky = createSkyDome(uniforms);
   scene.add(sky.mesh);
@@ -63,6 +84,8 @@ export async function createWorld({
   // DS 시그니처 #4: 젖은 노면이 어두운 집/나무 대신 밝은 흐린 하늘을 비추도록 하늘 돔 기반 PMREM 생성
   const envScene = new THREE.Scene();
   const envSkyClone = createSkyDome(uniforms);
+  // 반사용 하늘에는 태양 헤이즈를 넣지 않는다: 역광 쪽 거친 지면·풀밭이 헤이즈를 정반사해 우윳빛으로 뜨는 것을 막는다
+  envSkyClone.uniforms.uSunHaze = { value: 0.0 };
   envScene.add(envSkyClone.mesh);
   let envRT = pmrem.fromScene(envScene, 0.03);
   scene.environment = envRT.texture;
@@ -95,6 +118,7 @@ export async function createWorld({
 
   const sunLight = new THREE.DirectionalLight('#FFF4E6', 1.35);
   sunLight.position.set(-115, 135, 165);
+  if (sunCfg?.dir) sunLight.position.copy(uniforms.uSunDir.value).multiplyScalar(240);
   sunLight.castShadow = false;
   scene.add(sunLight);
 
@@ -330,6 +354,91 @@ export async function createWorld({
   facearchRoot.rotation.y = THREE.MathUtils.degToRad(faceCfg.rotY || 0);
   processRoot(facearchRoot, 'building_facearch', 'building');
 
+  // 지형 높이 격자: 카메라가 지면 아래로 내려가 지형이 뒷면 컬링으로 사라지는("바닥 아래가 비쳐 보이는") 상태 방지.
+  // 지면 레이어 전체 + 원경 지형 메시(계곡 바닥·암벽·암괴·개울·강·도로)를 로드 시 한 번 래스터화한다.
+  //   고해상도 2 m: 분지와 주 시점 주변 / 저해상도 24 m: 반경 6.3 km 전체
+  const fineGrid = createHeightGrid({ x0: -420, z0: -1300, x1: 520, z1: 420, cell: 2 });
+  const coarseGrid = createHeightGrid({ x0: -6300, z0: -6300, x1: 6300, z1: 6300, cell: 24 });
+  const BACKDROP_GROUND = /^BD_(ground|tors|stream|river|roads|park)/;
+  const _va = new THREE.Vector3();
+  const _vb = new THREE.Vector3();
+  const _vc = new THREE.Vector3();
+  function rasterizeMesh(mesh) {
+    const pos = mesh.geometry?.attributes?.position;
+    if (!pos) return;
+    mesh.updateWorldMatrix(true, false);
+    const mw = mesh.matrixWorld;
+    const idx = mesh.geometry.index;
+    const triCount = idx ? idx.count / 3 : pos.count / 3;
+    for (let t = 0; t < triCount; t++) {
+      const ia = idx ? idx.getX(t * 3) : t * 3;
+      const ib = idx ? idx.getX(t * 3 + 1) : t * 3 + 1;
+      const ic = idx ? idx.getX(t * 3 + 2) : t * 3 + 2;
+      _va.fromBufferAttribute(pos, ia).applyMatrix4(mw);
+      _vb.fromBufferAttribute(pos, ib).applyMatrix4(mw);
+      _vc.fromBufferAttribute(pos, ic).applyMatrix4(mw);
+      for (const g of (Math.max(Math.abs(_va.x), Math.abs(_va.z)) < 1400 ? [fineGrid, coarseGrid] : [coarseGrid])) {
+        rasterizeTriangle(g, _va.x, _va.y, _va.z, _vb.x, _vb.y, _vb.z, _vc.x, _vc.y, _vc.z);
+      }
+    }
+  }
+  layerGroups.ground?.traverse((n) => {
+    if (n.isMesh && !n.isInstancedMesh) rasterizeMesh(n);
+  });
+  layerGroups.backdrop?.traverse((n) => {
+    if (n.isMesh && !n.isInstancedMesh && BACKDROP_GROUND.test(n.name)) rasterizeMesh(n);
+  });
+  const groundHeightAt = createGroundQuery([fineGrid, coarseGrid], 0);
+
+  // 보행 충돌용 장애물 점유 격자(0.5 m): 건물·바위·전주·교량·원경 암괴 등의 몸통 높이 부분.
+  // 풀·관목(foliage)·홀로그램·발광 띠·수면·움직이는 드론은 통과. 보행 시점에 처음 들어갈 때 한 번만 만든다.
+  let walkBlocker = null;
+  function getWalkBlocker() {
+    if (walkBlocker) return walkBlocker;
+    const t0 = performance.now();
+    const occ = createOccupancyGrid({ x0: -300, z0: -1300, x1: 420, z1: 300, cell: 0.5 });
+    const PASS_SURFACES = new Set(['foliage', 'holo', 'water', 'emissive']);
+    const tmpM = new THREE.Matrix4();
+    const instM = new THREE.Matrix4();
+    let tris = 0;
+    const markMesh = (mesh) => {
+      const surf = mesh.userData?.nw_surface;
+      if (PASS_SURFACES.has(surf) || /^FU_drone/.test(mesh.name) || !mesh.visible) return;
+      const pos = mesh.geometry?.attributes?.position;
+      if (!pos) return;
+      mesh.updateWorldMatrix(true, false);
+      const idx = mesh.geometry.index;
+      const triCount = idx ? idx.count / 3 : pos.count / 3;
+      const count = mesh.isInstancedMesh ? mesh.count : 1;
+      for (let k = 0; k < count; k++) {
+        if (mesh.isInstancedMesh) {
+          mesh.getMatrixAt(k, instM);
+          tmpM.multiplyMatrices(mesh.matrixWorld, instM);
+        } else {
+          tmpM.copy(mesh.matrixWorld);
+        }
+        for (let t = 0; t < triCount; t++) {
+          _va.fromBufferAttribute(pos, idx ? idx.getX(t * 3) : t * 3).applyMatrix4(tmpM);
+          _vb.fromBufferAttribute(pos, idx ? idx.getX(t * 3 + 1) : t * 3 + 1).applyMatrix4(tmpM);
+          _vc.fromBufferAttribute(pos, idx ? idx.getX(t * 3 + 2) : t * 3 + 2).applyMatrix4(tmpM);
+          markObstacleTriangle(occ, _va.x, _va.y, _va.z, _vb.x, _vb.y, _vb.z, _vc.x, _vc.y, _vc.z, groundHeightAt);
+          tris++;
+        }
+      }
+    };
+    for (const key of ['ground', 'present', 'future', 'building_haus', 'building_facearch']) {
+      layerGroups[key]?.traverse((n) => {
+        if (n.isMesh) markMesh(n);
+      });
+    }
+    layerGroups.backdrop?.traverse((n) => {
+      if (n.isMesh && /^BD_(tors|mid_)/.test(n.name)) markMesh(n);
+    });
+    walkBlocker = (x, z, radius = 0.35) => isBlockedAt(occ, x, z, radius);
+    console.info(`[nowhere] 보행 충돌 격자 ${occ.nx}×${occ.nz} (${tris} tris) ${Math.round(performance.now() - t0)} ms`);
+    return walkBlocker;
+  }
+
   // 6) 드론 객체 연결 (Task 7 비행 애니메이션용)
   const futureRoot = layerGroups.future;
   const droneActors = [];
@@ -345,7 +454,34 @@ export async function createWorld({
         obj = futureRoot.getObjectByName(name);
         if (obj) break;
       }
-      const beam = d.beam ? futureRoot.getObjectByName(d.beam) : null;
+      let beam = d.beam ? futureRoot.getObjectByName(d.beam) : null;
+      if (beam && Array.isArray(d.path) && d.path.length) {
+        // meshopt 양자화로 빔 메시의 원점이 원뿔 중심(bbox 중심)으로 옮겨져 있다. 그대로 드론 위치에 두면
+        // 원뿔 가운데가 드론에 붙어 위아래로 뻗는다 → Blender 원점(= 원뿔 꼭짓점 = 드론 경로 첫 점)에 피벗을 두고 붙인다.
+        const apexWorld = new THREE.Vector3().fromArray(d.path[0]);
+        beam.updateWorldMatrix(true, false);
+        const apexLocal = beam.worldToLocal(apexWorld.clone());
+        beam.traverse((n) => {
+          if (!n.isMesh || !n.geometry?.attributes?.position) return;
+          const bp = n.geometry.attributes.position;
+          let len = 0;
+          for (let i = 0; i < bp.count; i++) {
+            len = Math.max(len, Math.hypot(bp.getX(i) - apexLocal.x, bp.getY(i) - apexLocal.y, bp.getZ(i) - apexLocal.z));
+          }
+          for (const m of Array.isArray(n.material) ? n.material : [n.material]) {
+            if (!m) continue;
+            m.userData.nwBeamApex = apexLocal.toArray();   // 셰이더 축 감쇠 기준(로컬 양자화 단위)
+            m.userData.nwBeamLen = len;
+          }
+        });
+        const pivot = new THREE.Group();
+        pivot.name = `${beam.name}_pivot`;
+        pivot.position.copy(apexWorld);
+        futureRoot.add(pivot);
+        pivot.updateMatrixWorld(true);
+        pivot.attach(beam);
+        beam = pivot;
+      }
       if (obj && Array.isArray(d.path) && d.path.length >= 2) {
         const pts = d.path.map((p) => new THREE.Vector3(p[0], p[1], p[2]));
         const curve = new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.5);
@@ -372,6 +508,8 @@ export async function createWorld({
     sky,
     lights: { hemiLight, sunLight },
     droneActors,
+    groundHeightAt,
+    getWalkBlocker,
     updateEnvironmentMap,
   };
 }

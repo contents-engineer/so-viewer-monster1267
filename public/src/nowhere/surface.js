@@ -41,6 +41,13 @@ export function createSharedUniforms(groundMaskTex = null, maskRect = [-170, -21
     uScanRadius: { value: -10.0 },
     uScanWidth: { value: 18.0 },
     uGroundMask: { value: groundMaskTex },
+    // 월드별 룩(성수 기본값 = 이전과 동일). DS2 는 world.js 가 덮어쓴다.
+    uSunHaze: { value: 0.0 },                                  // 해 쪽 하늘·안개 산란광 세기
+    uMossSoft: { value: 0.0 },                                 // 0 = 경계가 또렷한 이끼 얼룩, 1 = 부드러운 풀·이끼 피복
+    uMossColor2: { value: new THREE.Color('#6E7A30') },       // 황록 풀 끝(밝은 반점)
+    uHeatherColor: { value: new THREE.Color('#5A3426') },     // 적갈색 히스·고산 식물 반점
+    uPudColor: { value: new THREE.Color(0.54, 0.62, 0.66) },  // 웅덩이·수면 반사 기본색
+    uPudMetal: { value: 0.88 },
     uMaskRect: {
       value: new THREE.Vector4(maskRect[0], maskRect[1], maskRect[2], maskRect[3]),
     },
@@ -137,7 +144,17 @@ export function patchSurfaceMaterial(material, surfaceType, sharedUniforms, hasV
     material.depthWrite = false;
   }
 
-  const cacheKey = `nw_v3_${surface}_${hasVertexMask ? 1 : 0}_${isAlwaysEmit ? 1 : 0}_${isNightOnlyEmit ? 1 : 0}_${windowEmitKind}`;
+  // 드론 서치라이트 원뿔(NWF_beam*): 홀로그램 주사선 대신 가산 광주(光柱). 광원 쪽이 밝고 멀어질수록·윤곽으로 갈수록
+  // 사라지며, 흐린 낮에는 보이지 않고 밤·비(타임폴)에만 드러난다. Blender NWF_beam_cone(가산 투명 + 축 방향 감쇠)과 같은 읽기.
+  const isBeam = matName.startsWith('NWF_beam');
+  if (isBeam) {
+    material.transparent = true;
+    material.depthWrite = false;
+    material.blending = THREE.AdditiveBlending;
+    material.side = THREE.DoubleSide;
+  }
+
+  const cacheKey = `nw_v4_${surface}_${hasVertexMask ? 1 : 0}_${isAlwaysEmit ? 1 : 0}_${isNightOnlyEmit ? 1 : 0}_${windowEmitKind}_${isBeam ? 1 : 0}`;
   material.customProgramCacheKey = () => cacheKey;
 
   material.onBeforeCompile = (shader) => {
@@ -147,6 +164,9 @@ export function patchSurfaceMaterial(material, surfaceType, sharedUniforms, hasV
     shader.uniforms.uNwAlwaysEmit = { value: isAlwaysEmit ? 1.0 : 0.0 };
     shader.uniforms.uNwNightOnlyEmit = { value: isNightOnlyEmit ? 1.0 : 0.0 };
     shader.uniforms.uNwWindowKind = { value: windowEmitKind };
+    shader.uniforms.uNwBeam = { value: isBeam ? 1.0 : 0.0 };
+    shader.uniforms.uNwBeamLen = { value: material.userData.nwBeamLen || 1.0 };   // world.js 가 꼭짓점→열린 끝 길이로 채운다
+    shader.uniforms.uNwBeamApex = { value: new THREE.Vector3().fromArray(material.userData.nwBeamApex || [0, 0, 0]) };
 
     shader.vertexShader = shader.vertexShader
       .replace(
@@ -157,6 +177,8 @@ ${hasVertexMask ? 'attribute vec4 nwMask;' : ''}
 varying vec3 vNwWorld;
 varying vec3 vNwWorldNormal;
 varying vec4 vNwMask;
+varying float vNwBeamDist;
+uniform vec3 uNwBeamApex;
 `,
       )
       .replace(
@@ -180,6 +202,7 @@ varying vec4 vNwMask;
   #endif
   vNwWorldNormal = normalize(mat3(modelMatrix) * nwWn);
   vNwMask = ${hasVertexMask ? 'nwMask' : 'vec4(0.0, 0.25, 1.0, 0.0)'};
+  vNwBeamDist = length(position - uNwBeamApex);   // 원뿔 꼭짓점(드론)에서의 거리, 메시 로컬 단위
 }
 `,
       );
@@ -209,15 +232,24 @@ uniform float uScanRadius;
 uniform float uScanWidth;
 uniform sampler2D uGroundMask;
 uniform vec4 uMaskRect;
+uniform float uSunHaze;
+uniform float uMossSoft;
+uniform vec3 uMossColor2;
+uniform vec3 uHeatherColor;
+uniform vec3 uPudColor;
+uniform float uPudMetal;
 uniform int uNwSurfaceKind;
 uniform float uNwHasVertMask;
 uniform float uNwAlwaysEmit;
 uniform float uNwNightOnlyEmit;
 uniform int uNwWindowKind;
+uniform float uNwBeam;
+uniform float uNwBeamLen;
 
 varying vec3 vNwWorld;
 varying vec3 vNwWorldNormal;
 varying vec4 vNwMask;
+varying float vNwBeamDist;
 
 float nwHash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
@@ -278,6 +310,7 @@ if (uNwSurfaceKind == 6) {
   nwWet = 1.0;
   nwPud = 1.0;
 }
+float nwPudRough = mix(0.035, 0.09, uMossSoft);   // DS2 개울은 잔물결로 반사가 조금 흐려진다
 
 // 젖으면 다공질 표면 알베도가 어두워진다 (유리·발광·홀로그램 제외)
 if (uNwSurfaceKind != 5 && uNwSurfaceKind != 7 && uNwSurfaceKind != 8) {
@@ -286,20 +319,35 @@ if (uNwSurfaceKind != 5 && uNwSurfaceKind != 7 && uNwSurfaceKind != 8) {
 }
 
 // 이끼 군락 (ground, wall, rock, foliage — 물웅덩이·수로(nwPud) 구간은 이끼가 덮지 않도록 마스킹)
+float nwMossCover = 0.0;
 if (uNwSurfaceKind == 1 || uNwSurfaceKind == 2 || uNwSurfaceKind == 3) {
   float mossN = nwNoise(vNwWorld.xz * 0.8);
-  float mossEdge = step(0.55, nwM.r + 0.25 * nwNoise(vNwWorld.xz * 3.1)) * uMoss * (1.0 - uSnow * 0.8) * (1.0 - smoothstep(0.12, 0.42, nwPud));
+  float mossHard = step(0.55, nwM.r + 0.25 * nwNoise(vNwWorld.xz * 3.1));
+  // DS2: 원거리에서 점묘처럼 깨지지 않는 부드러운 피복 경계(저주파 + 고주파 흔들림)
+  float mossSoftV = smoothstep(0.36, 0.62, nwM.r + 0.16 * (nwNoise(vNwWorld.xz * 0.9) - 0.5) + 0.10 * (nwNoise(vNwWorld.xz * 3.1) - 0.5));
+  float mossEdge = mix(mossHard, mossSoftV, uMossSoft) * uMoss * (1.0 - uSnow * 0.8) * (1.0 - smoothstep(0.12, 0.42, nwPud));
   vec3 mossCol = uMossColor * (0.7 + 0.6 * mossN);
+  if (uMossSoft > 0.001) {
+    // 참조 화면의 계곡 바닥: 짙은 초록 이끼 ↔ 황록 풀 끝 얼룩 + 드문드문 적갈색 히스
+    float g1 = nwNoise(vNwWorld.xz * 0.21 + 3.7);
+    float g2 = nwNoise(vNwWorld.xz * 1.9 + 11.0);
+    vec3 grass = mix(uMossColor, uMossColor2, smoothstep(0.38, 0.85, g1 * 0.65 + g2 * 0.35));
+    float heather = smoothstep(0.80, 0.93, nwNoise(vNwWorld.xz * 1.3 + 5.0)) * smoothstep(0.35, 0.7, nwM.r);
+    grass = mix(grass, uHeatherColor, heather * 0.55);
+    mossCol = mix(mossCol, grass * (0.78 + 0.44 * nwNoise(vNwWorld.xz * 5.3)), uMossSoft);
+  }
   diffuseColor.rgb = mix(diffuseColor.rgb, mossCol, mossEdge * 0.88);
   roughnessFactor = mix(roughnessFactor, 0.88, mossEdge);
+  nwMossCover = mossEdge;
 }
 
 // 눈 덮임 (윗면 법선)
 float nwSnowMask = uSnow * smoothstep(0.52, 0.82, vNwWorldNormal.y) * (1.0 - nwPud * 0.85);
 if (uNwSurfaceKind != 5 && uNwSurfaceKind != 7 && uNwSurfaceKind != 8) {
   diffuseColor.rgb = mix(diffuseColor.rgb, uSnowColor, nwSnowMask * 0.88);
-  roughnessFactor = mix(roughnessFactor, 0.15, nwWet * (1.0 - nwSnowMask));
-  roughnessFactor = mix(roughnessFactor, 0.035, nwPud);
+  // DS2: 풀·이끼 피복은 젖어도 유리처럼 번쩍이지 않는다(역광에서 하얀 반사광 방지) — 성수(uMossSoft=0)는 그대로
+  roughnessFactor = mix(roughnessFactor, 0.15, nwWet * (1.0 - nwSnowMask) * (1.0 - 0.8 * nwMossCover * uMossSoft));
+  roughnessFactor = mix(roughnessFactor, nwPudRough, nwPud);
   roughnessFactor = mix(roughnessFactor, 0.62, nwSnowMask);
 }
 `,
@@ -310,8 +358,8 @@ if (uNwSurfaceKind != 5 && uNwSurfaceKind != 7 && uNwSurfaceKind != 8) {
 #include <metalnessmap_fragment>
 if (nwPud > 0.02) {
   float pudMirror = clamp(nwPud * (1.0 - nwSnowMask), 0.0, 1.0);
-  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.54, 0.62, 0.66), pudMirror * 0.82);
-  metalnessFactor = mix(metalnessFactor, 0.88, pudMirror);
+  diffuseColor.rgb = mix(diffuseColor.rgb, uPudColor, pudMirror * 0.82);
+  metalnessFactor = mix(metalnessFactor, uPudMetal, pudMirror);
 }
 `,
       )
@@ -324,6 +372,15 @@ if (nwPud > 0.05) {
   if (uRain > 0.02) {
     vec2 rip = nwPuddleRipple(vNwWorld.xz, uTime) * uRain;
     flatUp = normalize(mat3(viewMatrix) * normalize(vec3(rip.x, 1.0, rip.y)));
+  } else if (uNwSurfaceKind == 6 && uMossSoft > 0.001) {
+    // DS2 개울: 흐르는 잔물결 법선 → 하늘·암벽 반사가 띠 모양으로 일렁인다(참조 화면의 반짝이는 여울)
+    vec2 q = vNwWorld.xz * vec2(0.55, 0.28) + vec2(0.0, uTime * 0.5);
+    float e = 0.2;
+    float n0 = nwNoise(q) + 0.5 * nwNoise(q * 2.7 + 3.1);
+    float nx = nwNoise(q + vec2(e, 0.0)) + 0.5 * nwNoise((q + vec2(e, 0.0)) * 2.7 + 3.1);
+    float nz = nwNoise(q + vec2(0.0, e)) + 0.5 * nwNoise((q + vec2(0.0, e)) * 2.7 + 3.1);
+    vec2 grad = vec2(nx - n0, nz - n0) / e;
+    flatUp = normalize(mat3(viewMatrix) * normalize(vec3(-grad.x * 0.16, 1.0, -grad.y * 0.16)));
   }
   normal = normalize(mix(normal, flatUp, clamp(nwPud * 1.15, 0.0, 0.96)));
 }
@@ -337,6 +394,16 @@ if (nwPud > 0.05) {
   float bakedAo = clamp(nwM.b, 0.18, 1.0);
   reflectedLight.indirectDiffuse *= mix(1.0, bakedAo, 0.78);
   reflectedLight.indirectSpecular *= mix(1.0, bakedAo, 0.55);
+  // DS2 풀·이끼: 잎 사이 미세 차폐로 하늘 정반사가 거의 없다(스침각 우윳빛 방지)
+  reflectedLight.indirectSpecular *= 1.0 - 0.7 * nwMossCover * uMossSoft;
+  reflectedLight.directSpecular *= 1.0 - 0.8 * nwMossCover * uMossSoft;   // 역광 스침각 태양 정반사(우윳빛 번들거림) 억제
+  if (uNwSurfaceKind == 6) reflectedLight.directSpecular *= 1.0 - 0.8 * uMossSoft;   // DS2 개울: 해 반사 점광을 여울 반짝임 정도로
+  if (uNwBeam > 0.5) {
+    reflectedLight.directDiffuse = vec3(0.0);
+    reflectedLight.directSpecular = vec3(0.0);
+    reflectedLight.indirectDiffuse = vec3(0.0);
+    reflectedLight.indirectSpecular = vec3(0.0);
+  }
 }
 `,
       )
@@ -388,11 +455,23 @@ if (uNwSurfaceKind == 10 && uNwWindowKind == 0 && uNight > 0.01) {
   float crownWash = smoothstep(56.0, 76.0, vNwWorld.y) * 0.16;
   totalEmissiveRadiance += diffuseColor.rgb * vec3(1.0, 0.88, 0.72) * (upWash + crownWash) * uNight;
 }
-if (uNwSurfaceKind == 8) {
+if (uNwSurfaceKind == 8 && uNwBeam < 0.5) {
   float scan = 0.78 + 0.22 * sin(vNwWorld.y * 28.0 - uTime * 5.0);
   float flick = 0.92 + 0.08 * sin(uTime * 19.0 + vNwWorld.x * 0.7);
   totalEmissiveRadiance *= scan * flick * mix(0.9, 1.8, uEmitGain);
   diffuseColor.a *= clamp(scan * 0.85, 0.18, 0.85);
+}
+if (uNwBeam > 0.5) {
+  // 서치라이트 광주: 정면으로 보이는 중심부만 은은하고(윤곽 감쇠), 드론에서 멀어질수록 사라진다(축 감쇠).
+  float facing = abs(dot(normalize(vNwWorldNormal), normalize(cameraPosition - vNwWorld)));
+  float edge = pow(facing, 2.2);
+  // Blender NWF_beam_cone 과 같은 (1 − v)^1.65 축 감쇠: 원뿔 끝(열린 바닥)에서 정확히 0 → 잘린 테두리가 보이지 않는다
+  float v = clamp(vNwBeamDist / max(uNwBeamLen, 1.0), 0.0, 1.0);
+  float axial = pow(1.0 - v, 1.65) * smoothstep(0.0, 0.04, v);
+  float vis = clamp(uNight + 0.35 * uRain, 0.0, 1.0);   // 흐린 낮엔 보이지 않는다
+  diffuseColor.rgb = vec3(0.0);
+  diffuseColor.a = 1.0;
+  totalEmissiveRadiance = vec3(0.80, 0.88, 1.0) * edge * axial * vis * 0.5;
 }
 `,
       )
@@ -403,7 +482,16 @@ if (uNwSurfaceKind == 8) {
   float fogF = heightFog(cameraPosition, vNwWorld, uFogB, uFogK);
   float distR = length(vNwWorld.xz);
   vec3 fCol = mix(uFogColor, uFogFarColor, smoothstep(350.0, 3200.0, distR));
-  gl_FragColor.rgb = mix(gl_FragColor.rgb, fCol, fogF);
+  // DS2: 해 쪽을 바라보는 시선의 안개는 산란광으로 밝게 번진다(역광 헤이즈)
+  if (uSunHaze > 0.001) {
+    float sv = max(dot(normalize(vNwWorld - cameraPosition), normalize(uSunDir)), 0.0);
+    fCol += vec3(1.0, 0.95, 0.87) * (0.42 * pow(sv, 6.0) + 0.85 * pow(sv, 48.0)) * uSunHaze * (1.0 - uNight);   // sky.js 헤이즈와 같은 식
+  }
+  if (uNwBeam > 0.5) {
+    gl_FragColor.rgb *= 1.0 - fogF;   // 가산 광주는 안개색으로 칠하지 않고 안개 속으로 사라진다
+  } else {
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, fCol, fogF);
+  }
 
   // 분석 모드 스캔 펄스 링 & 감광
   if (uScanRadius > 0.0) {

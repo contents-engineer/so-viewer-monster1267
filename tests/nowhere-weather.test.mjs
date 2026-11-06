@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PRESETS, lerp, srgbToLinear, linearToSrgb } from '../public/src/nowhere/weather.js';
+import { PRESETS, getPresets, lerp, srgbToLinear, linearToSrgb } from '../public/src/nowhere/weather.js';
 
 test('(a) PRESETS 5종(overcast, rain, dusk, night, snow)이 존재하고 키 집합이 모두 동일하다', () => {
   const names = ['overcast', 'rain', 'dusk', 'night', 'snow'];
@@ -43,3 +43,17 @@ test('(c) lerp(a, b, t): hex 색상은 선형 RGB 공간에서 보간한다', ()
   assert.ok(rByte > 170, `선형 RGB 보간이면 중간 회색이 sRGB 170보다 커야 함 (실제 ${rByte})`);
   assert.ok(Math.abs(srgbToLinear(linearToSrgb(0.37)) - 0.37) < 1e-6);
 });
+
+test('(d) getPresets: 성수는 PRESETS 그대로, DS2 는 같은 키 집합에 역광 헤이즈(sunHaze)·높이 연무를 덮어쓴다', () => {
+  assert.equal(getPresets('seongsu'), PRESETS);
+  const ds2 = getPresets('ds2');
+  const baseKeys = Object.keys(PRESETS.overcast).sort();
+  for (const n of Object.keys(PRESETS)) {
+    assert.deepEqual(Object.keys(ds2[n]).sort(), baseKeys, `ds2 ${n} 프리셋의 키 집합이 다름`);
+    assert.equal(PRESETS[n].sunHaze, 0, `성수 ${n} 는 태양 헤이즈가 없어야 함`);
+  }
+  assert.ok(ds2.overcast.sunHaze > 0.5, 'DS2 흐림은 역광 태양 헤이즈가 보여야 함');
+  assert.ok(ds2.overcast.uFogK < PRESETS.overcast.uFogK, 'DS2 계곡 연무는 성수보다 높이까지 차야 함(uFogK 작게)');
+  assert.equal(ds2.night.sunHaze, 0);
+});
+

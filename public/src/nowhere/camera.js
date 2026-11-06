@@ -1,8 +1,21 @@
 // HAUS NOWHERE — 성수 2041: 카메라 컨트롤러 (프리셋 전환 · 12초 인트로 경로 · 자유 궤도 · 1.7m 보행 시점 · 드론 비행).
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { clampAboveGround, resolveWalkStep } from './terrain.js';
 
-export function createCameraController({ camera, canvas, layout, onPresetChange = null, onWalkChange = null }) {
+const EYE_HEIGHT = 1.7;        // 보행 시점 눈높이(지면 기준)
+const ORBIT_CLEARANCE = 1.2;   // 궤도·전환·인트로 카메라가 지면 위로 유지할 최소 여유고
+const MAX_CLIMB = 1.2;         // 보행으로 오를 수 있는 최대 경사(높이/수평 ≈ 50°) — 암벽은 걸어 오를 수 없다
+
+export function createCameraController({
+  camera,
+  canvas,
+  layout,
+  onPresetChange = null,
+  onWalkChange = null,
+  groundHeightAt = () => 0,
+  getWalkBlocker = null,   // 보행 충돌 (x, z) => 막힘 여부 (world.getWalkBlocker, 첫 보행 진입 때 생성)
+}) {
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
   controls.dampingFactor = 0.07;
@@ -13,6 +26,7 @@ export function createCameraController({ camera, canvas, layout, onPresetChange 
   const cameras = Array.isArray(layout?.cameras) ? layout.cameras : [];
   let currentPresetId = 'street';
   let walkMode = false;
+  let walkBlocker = null;
 
   // 프리셋 부드러운 전환 상태
   let transition = null;
@@ -75,9 +89,10 @@ export function createCameraController({ camera, canvas, layout, onPresetChange 
       onUserInterrupt();
       return;
     }
-    if (!walkMode && (e.key === 'w' || e.key === 'W') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    // 보행 시점 토글은 V — 이동키(WASD·방향키)와 겹치지 않게 한다
+    if ((e.key === 'v' || e.key === 'V') && !e.metaKey && !e.ctrlKey && !e.altKey) {
       e.preventDefault();
-      setWalkMode(true);
+      setWalkMode(!walkMode);
       return;
     }
     if (walkMode && e.key === 'Escape') {
@@ -97,6 +112,9 @@ export function createCameraController({ camera, canvas, layout, onPresetChange 
     cancelIntro();
     transition = null;
     walkMode = Boolean(enabled);
+    if (walkMode && !walkBlocker && typeof getWalkBlocker === 'function') {
+      walkBlocker = getWalkBlocker();
+    }
     if (walkMode) {
       // 눈높이 1.7m 고정, 카메라 바로 앞 2m 지점을 타깃으로 두어 드래그로 둘러보기 동작
       const forward = new THREE.Vector3();
@@ -105,13 +123,14 @@ export function createCameraController({ camera, canvas, layout, onPresetChange 
       if (forward.lengthSq() < 1e-4) forward.set(1, 0, -0.3);
       forward.normalize();
 
-      if (camera.position.y > 6 || camera.position.y < 0.8) {
-        camera.position.set(-72.0, 1.7, 36.5);
-      } else {
-        camera.position.y = 1.7;
+      // 지면 기준 높이로 판단(DS2 는 지형 기복이 커서 절대 높이 1.7 m 가 언덕 속으로 들어간다)
+      const above = camera.position.y - groundHeightAt(camera.position.x, camera.position.z);
+      if (above > 6 || above < 0.8) {
+        camera.position.set(-72.0, 0, 36.5);
       }
+      camera.position.y = groundHeightAt(camera.position.x, camera.position.z) + EYE_HEIGHT;
       controls.target.copy(camera.position).addScaledVector(forward, 2.5);
-      controls.target.y = 1.7;
+      controls.target.y = camera.position.y;
       controls.minDistance = 0.1;
       controls.maxDistance = 4.0;
       controls.enablePan = false;
@@ -187,6 +206,15 @@ export function createCameraController({ camera, canvas, layout, onPresetChange 
   }
 
   function update(dt) {
+    stepCamera(dt);
+    // 모든 모드(궤도·프리셋 전환·인트로)에서 카메라가 지면 아래로 내려가지 않게 한다.
+    // 보행 모드는 stepCamera 에서 지면 + 눈높이로 이미 맞춘다.
+    if (!walkMode && clampAboveGround(camera.position, groundHeightAt, ORBIT_CLEARANCE)) {
+      controls.update();
+    }
+  }
+
+  function stepCamera(dt) {
     if (introActive) {
       introElapsed += dt;
       const t = Math.min(1, introElapsed / INTRO_DURATION);
@@ -219,8 +247,9 @@ export function createCameraController({ camera, canvas, layout, onPresetChange 
     }
 
     if (walkMode) {
-      camera.position.y = 1.7;
-      controls.target.y = Math.max(0.4, Math.min(3.2, controls.target.y));
+      const g0 = groundHeightAt(camera.position.x, camera.position.z);
+      camera.position.y = g0 + EYE_HEIGHT;
+      controls.target.y = Math.max(g0 + 0.4, Math.min(g0 + 3.2, controls.target.y));
       const speed = 9.0 * dt;
       const fwd = new THREE.Vector3().subVectors(controls.target, camera.position);
       fwd.y = 0;
@@ -234,8 +263,26 @@ export function createCameraController({ camera, canvas, layout, onPresetChange 
         if (walkKeys.has('KeyA') || walkKeys.has('ArrowLeft')) move.sub(right);
         if (move.lengthSq() > 0) {
           move.normalize().multiplyScalar(speed);
-          camera.position.add(move);
-          controls.target.add(move);
+          // 장애물(건물·바위·전주 등)과 급경사는 통과하지 못하고, 막힌 방향은 벽을 따라 미끄러진다
+          const here = camera.position;
+          const gHere = groundHeightAt(here.x, here.z);
+          const canStand = (x, z) => {
+            if (walkBlocker && walkBlocker(x, z)) return false;
+            const run = Math.hypot(x - here.x, z - here.z);
+            return run < 1e-6 || (groundHeightAt(x, z) - gHere) / run <= MAX_CLIMB;
+          };
+          const next = resolveWalkStep(here, move.x, move.z, canStand);
+          const mx = next.x - here.x;
+          const mz = next.z - here.z;
+          camera.position.x += mx;
+          camera.position.z += mz;
+          controls.target.x += mx;
+          controls.target.z += mz;
+          // 이동한 자리의 지면을 따라 눈높이를 유지(오르막·내리막)
+          const g1 = groundHeightAt(camera.position.x, camera.position.z);
+          const dy = g1 + EYE_HEIGHT - camera.position.y;
+          camera.position.y += dy;
+          controls.target.y += dy;
         }
       }
     }

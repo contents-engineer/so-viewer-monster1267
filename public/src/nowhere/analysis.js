@@ -5,7 +5,7 @@
 //   - 4px 기준점 + 45°/직선 리더선(1.25px SVG) + 2열 라벨(이름 IBM Plex Sans KR / 값 JetBrains Mono tabular-nums)
 //   - 우선순위 정렬 및 화면 겹침 회피 (모바일 ≤ 720px 은 상위 6개만 표시)
 //   - 기록 카드: 사실(record.json·facearch.json·리서치·CC0 출처)과 서사(2041 허구) 분리 표시, 모바일 하단 시트 스크롤 맨 위 초기화
-//   - 키보드: A(분석 토글), Esc(카드 닫기 → 분석 종료), ←/→(앵커 순환), hover 레이캐스트 100ms 스로틀
+//   - 키보드: F(분석 토글), Esc(카드 닫기 → 분석 종료), [ / ](앵커 순환), hover 레이캐스트 100ms 스로틀
 import * as THREE from 'three';
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
@@ -346,10 +346,12 @@ export async function createAnalysisController({
     });
   }
 
-  // 키보드 단축키: A(분석 모드), Esc(카드 닫기 → 분석 종료), ←/→(앵커 이동)
+  // 키보드 단축키: F(분석 모드), Esc(카드 닫기 → 분석 종료), [ / ](앵커 이동)
+  // 보행 이동키(WASD·방향키)와 겹치지 않게 A·←/→ 대신 F·[ ] 를 쓴다.
   window.addEventListener('keydown', (e) => {
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
-    if (e.key === 'a' || e.key === 'A') {
+    if (e.defaultPrevented) return;   // 보행 시점 해제(Esc) 등 카메라가 이미 처리한 키
+    if ((e.key === 'f' || e.key === 'F') && !e.metaKey && !e.ctrlKey && !e.altKey) {
       if (!camCtrl?.isWalkMode()) {
         e.preventDefault();
         setAnalysisMode(!active);
@@ -362,10 +364,10 @@ export async function createAnalysisController({
         e.preventDefault();
         setAnalysisMode(false);
       }
-    } else if (active && e.key === 'ArrowRight') {
+    } else if (active && e.key === ']') {
       e.preventDefault();
       cycleAnchor(1);
-    } else if (active && e.key === 'ArrowLeft') {
+    } else if (active && e.key === '[') {
       e.preventDefault();
       cycleAnchor(-1);
     }

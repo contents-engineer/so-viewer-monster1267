@@ -439,12 +439,16 @@ def materials():
         'weeds': gen_image('NW_gen_ds2_weeds', 256, 128, paint_weeds),
     }
     M = {}
-    # 1) 주상절리 현무암 (어두운 현무암 + 윗면 올리브 이끼 + 접지 오염)
-    M['basalt'] = mat_tex('NW_basalt', 'dark_rock', 2.4, sat=0.58, tint=srgb('#989E9D'), gain=1.12,
+    # 0) 빙하 표석 화강암 — 참조 화면의 회색 바위(윗면 이끼). lichen_rock 원본 평균 선형 알베도 ≈0.05 → ≈0.12
+    M['granite'] = mat_tex('NW_granite', 'lichen_rock', 2.6, sat=0.32, tint=srgb('#EEF0EE'), gain=2.7,
+                           crevice_moss=3.6, porosity=0.6, wet_gloss=0.6, base_wet=0.3, moss_bias=0.15,
+                           surface='rock', micro=0.5, streak=0.35)
+    # 1) 어두운 현무암 (dark_rock 원본 ≈0.0125 → ≈0.05: 젖은 개울 바위·잡석)
+    M['basalt'] = mat_tex('NW_basalt', 'dark_rock', 2.4, sat=0.5, tint=srgb('#E4E8E6'), gain=5.0,
                           crevice_moss=3.8, porosity=0.68, wet_gloss=0.72, base_wet=0.38, moss_bias=0.18,
                           surface='rock', micro=0.55, streak=0.55)
-    # 2) 층리 암반 & 지의류 바위 (단애·대절벽 슬랩)
-    M['strata'] = mat_tex('NW_cliff_strata', 'lichen_rock', 3.2, sat=0.85, tint=srgb('#A6AF9B'), gain=1.08,
+    # 2) 층리 암반 & 지의류 바위 (≈0.08)
+    M['strata'] = mat_tex('NW_cliff_strata', 'lichen_rock', 3.2, sat=0.6, tint=srgb('#DDE2DA'), gain=2.2,
                           crevice_moss=4.2, porosity=0.62, wet_gloss=0.65, base_wet=0.34, moss_bias=0.22,
                           surface='rock', micro=0.5, streak=0.65)
     # 3) 브루탈리즘 산악 교량·전초기지 노출 콘크리트 (거푸집 패널 줄 concrete_slab_wall_02)
@@ -649,7 +653,7 @@ def import_protos(sc):
                 _record_gltf_textures(m, mid)
                 # 스캔 바위(rock_face_01, boulder_01, rock_moss_set_*)는 따뜻한 황토빛 채도를 낮추고 차가운 현무암 톤으로 그레이딩
                 if mid in ('rock_face_01', 'boulder_01', 'rock_moss_set_01', 'rock_moss_set_02'):
-                    _grime_material(m, tint_rgb=(0.56, 0.60, 0.62), sat_mul=0.38, val_mul=0.58)
+                    _grime_material(m, tint_rgb=(0.80, 0.83, 0.84), sat_mul=0.45, val_mul=0.92)
                 else:
                     _grime_material(m)
                 canon[bn] = m
@@ -730,68 +734,71 @@ def _basalt_column_world(acc, cx, cy, z_base, sides, r, h, rnd, mat, tilt=0.10, 
     return zmax
 
 
+def _emit_boulder(acc, geo, x, y, z0, sx, sy, sz, rz, mat):
+    """ds2_rocks.boulder_geom 표석을 월드 좌표에 찍는다(면 주축 박스 투영 UV(m), 윗면 이끼 마스크)."""
+    import ds2_rocks
+    V, F, gh = geo
+    ca, sa = math.cos(rz), math.sin(rz)
+    W = [(x + vx * sx * ca - vy * sy * sa, y + vx * sx * sa + vy * sy * ca, z0 + vz * sz) for vx, vy, vz in V]
+    mk0 = ds2_rocks.boulder_mask(gh * sz, seed=x * 0.013)
+
+    def mk(p, n):
+        return mk0((p[0] - x, p[1] - y, p[2] - z0), n)
+    for f in F:
+        pts = [W[i] for i in f]
+        n, _ = newell(pts)
+        ax = max(range(3), key=lambda i: abs(n[i]))
+        uv = [((q[1], q[2]) if ax == 0 else (q[0], q[2]) if ax == 1 else (q[0], q[1])) for q in pts]
+        acc.poly(pts, uv, mat, mk)
+    return z0 + gh * sz
+
+
 def build_mountain_cliffs_and_outcrops(C, M, P, gz):
-    """계곡 분지와 산악 사면을 병풍처럼 감싸는 대형 단층 암반(layered crags) + 스캔 암벽(rock_face_01) + 중경 노두."""
+    """계곡 분지를 둘러싼 산자락의 빙하 표석 들판(큰 표석 + 위성 바위) + 스캔 암벽(rock_face_01).
+    참조 화면처럼 상자형 주상절리 대신 둥글고 각진 회색 표석이 이끼 사면에 촘촘히 박힌 모습으로 만든다."""
+    import ds2_rocks
+    importlib.reload(ds2_rocks)
     rnd = random.Random(2041)
     cliffs = Acc()
+    geos = [ds2_rocks.boulder_geom(1200 + i, subdiv=2, cuts=7, squash=0.66, lump=0.24) for i in range(6)]
 
-    # 1) 산악 사면에 자연스럽게 박힌 계단식 현무암 암괴·단애 (수직 막대기 실루엣 대신 넓고 거친 층리 암괴들이 겹쳐진 형태)
-    cliff_chains = [
-        # 북서 산악 단애 (HAUS 북서쪽 배후)
-        ((-98.0, 68.0), (-34.0, 114.0), 11, 6.2, 6.5, 14.5, 'basalt'),
-        ((-32.0, 104.0), (14.0, 132.0), 9, 6.5, 7.0, 15.5, 'strata'),
-        # 북동 산악 단애 (계곡 상류 동쪽 사면)
-        ((54.0, 128.0), (128.0, 82.0), 12, 6.4, 7.0, 16.0, 'basalt'),
-        # 서쪽 국도변 암반 노두 (CAM_street 좌측 사면)
-        ((-86.0, -16.0), (-44.0, 14.0), 7, 4.8, 4.2, 9.5, 'basalt'),
-        # 동쪽 FaceArch 배후 단애
-        ((138.0, -20.0), (152.0, 66.0), 10, 5.6, 6.0, 13.5, 'strata'),
-        # 남쪽 협곡 건너편 단애
-        ((-76.0, -98.0), (-12.0, -114.0), 9, 5.5, 5.5, 11.5, 'strata'),
-        ((56.0, -108.0), (128.0, -90.0), 9, 5.5, 5.5, 12.0, 'basalt'),
+    def pile(cx, cy, w, h, mat, n_sat=3):
+        g = geos[rnd.randrange(len(geos))]
+        _emit_boulder(cliffs, g, cx, cy, gz.z(cx, cy) - 0.2 * h, w, w * rnd.uniform(0.72, 0.98), h / g[2],
+                      rnd.uniform(0, 6.3), mat)
+        for _ in range(n_sat):
+            a = rnd.uniform(0, 2 * math.pi); d = w * rnd.uniform(0.7, 1.35)
+            sx, sy = cx + d * math.cos(a), cy + d * math.sin(a)
+            ww = w * rnd.uniform(0.28, 0.6); hh = h * rnd.uniform(0.3, 0.6)
+            g2 = geos[rnd.randrange(len(geos))]
+            _emit_boulder(cliffs, g2, sx, sy, gz.z(sx, sy) - 0.22 * hh, ww, ww * rnd.uniform(0.7, 1.0), hh / g2[2],
+                          rnd.uniform(0, 6.3), mat)
+
+    # 1) 산자락 표석 띠 (A → B 를 따라 큰 표석 + 위성 바위). 높이는 기존 단애의 0.45배 — 바위 들판 스케일
+    boulder_chains = [
+        ((-98.0, 68.0), (-34.0, 114.0), 11, 4.6, 3.2, 7.0, 'granite'),       # 북서 산자락
+        ((-32.0, 104.0), (14.0, 132.0), 9, 4.8, 3.4, 7.2, 'granite'),
+        ((54.0, 128.0), (128.0, 82.0), 12, 4.8, 3.4, 7.6, 'granite'),        # 북동 계곡 상류 사면
+        ((-86.0, -16.0), (-44.0, 14.0), 7, 3.8, 2.4, 5.0, 'granite'),        # 서쪽 국도변 (CAM_street 좌측)
+        ((138.0, -20.0), (152.0, 66.0), 10, 4.4, 3.0, 6.4, 'strata'),        # 동쪽 FaceArch 배후
+        ((-76.0, -98.0), (-12.0, -114.0), 9, 4.2, 2.8, 5.6, 'granite'),      # 남쪽 협곡 건너편
+        ((56.0, -108.0), (128.0, -90.0), 9, 4.2, 2.8, 5.8, 'strata'),
     ]
-
-    for (ax, ay), (bx, by), count, rad_base, h_min, h_max, mkey in cliff_chains:
-        mat = M[mkey]
+    for (ax, ay), (bx, by), count, w_base, h_min, h_max, mkey in boulder_chains:
         for i in range(count):
             t = i / max(1, count - 1)
-            cx = ax + (bx - ax) * t + rnd.uniform(-3.0, 3.0)
-            cy = ay + (by - ay) * t + rnd.uniform(-3.0, 3.0)
-            zb = gz.z(cx, cy) - 1.4
-            h_main = rnd.uniform(h_min, h_max) * (0.72 + 0.38 * math.sin(math.pi * t))
-            r_main = rad_base * rnd.uniform(0.88, 1.28)
-            _basalt_column_world(cliffs, cx, cy, zb, rnd.choice((6, 7, 8)), r_main, h_main, rnd, mat,
-                                 tilt=0.22, lean=(rnd.uniform(-0.18, 0.18), rnd.uniform(-0.18, 0.18)))
-            # 주변에 낮고 넓은 어깨 암반(shoulder ledges) 3개를 겹쳐 계단식 자연 절벽 실루엣 형성
-            for sub in range(3):
-                ang = rnd.uniform(0, 2 * math.pi)
-                dist = r_main * rnd.uniform(0.48, 0.92)
-                sx = cx + math.cos(ang) * dist; sy = cy + math.sin(ang) * dist
-                sh = h_main * rnd.uniform(0.32, 0.68)
-                sr = r_main * rnd.uniform(0.65, 1.05)
-                _basalt_column_world(cliffs, sx, sy, gz.z(sx, sy) - 1.1, rnd.choice((6, 7)), sr, sh, rnd, mat,
-                                     tilt=0.24, lean=(rnd.uniform(-0.15, 0.15), rnd.uniform(-0.15, 0.15)))
+            cx = ax + (bx - ax) * t + rnd.uniform(-4.0, 4.0)
+            cy = ay + (by - ay) * t + rnd.uniform(-4.0, 4.0)
+            h = rnd.uniform(h_min, h_max) * (0.75 + 0.35 * math.sin(math.pi * t))
+            pile(cx, cy, w_base * rnd.uniform(0.85, 1.3), h, M[mkey], n_sat=rnd.choice((2, 3, 4)))
 
-    # 2) 중경 주상절리 노두(Outcrops): 계곡 상류 입구와 산자락 경계에서 과장되지 않은 자연 암반 노두 형성
+    # 2) 계곡 입구·하류 협곡의 큰 표석 무더기 (참조 화면 중경의 이끼 모자 바위 언덕)
     outcrops = [
-        ((24.0, 62.0), 3.4, 4.8, 'basalt'),      # 계곡 북서 입구 노두
-        ((66.0, 60.0), 3.8, 5.6, 'strata'),      # 계곡 북동 입구 노두
-        ((16.0, 88.0), 4.2, 6.8, 'basalt'),      # 상류 서안 노두
-        ((56.0, 90.0), 4.4, 7.2, 'basalt'),      # 상류 동안 노두
-        ((-36.0, 34.0), 3.4, 4.6, 'strata'),     # HAUS 북서쪽 바위 노두
-        ((136.0, 42.0), 3.6, 5.5, 'basalt'),     # FaceArch 북동쪽 바위 노두
-        ((24.0, -68.0), 3.2, 4.2, 'basalt'),     # 남쪽 하류 협곡 서안 노두
-        ((52.0, -72.0), 3.4, 4.8, 'strata'),     # 남쪽 하류 협곡 동안 노두
+        ((24.0, 62.0), 4.6, 4.4), ((66.0, 60.0), 5.2, 5.0), ((16.0, 88.0), 5.8, 6.0), ((56.0, 90.0), 6.2, 6.4),
+        ((-36.0, 34.0), 4.4, 4.0), ((136.0, 42.0), 5.0, 4.8), ((24.0, -68.0), 4.2, 3.8), ((52.0, -72.0), 4.6, 4.2),
     ]
-    for (cx, cy), r_m, h_m, mkey in outcrops:
-        mat = M[mkey]
-        zb = gz.z(cx, cy) - 0.9
-        _basalt_column_world(cliffs, cx, cy, zb, 7, r_m, h_m, rnd, mat, tilt=0.18)
-        for sub in range(4):
-            a = 2 * math.pi * sub / 4.0 + rnd.uniform(-0.28, 0.28)
-            d = r_m * rnd.uniform(0.58, 1.02)
-            sx, sy = cx + math.cos(a) * d, cy + math.sin(a) * d
-            _basalt_column_world(cliffs, sx, sy, gz.z(sx, sy) - 0.7, 6, r_m * 0.68, h_m * rnd.uniform(0.38, 0.68), rnd, mat, tilt=0.20)
+    for (cx, cy), w, h in outcrops:
+        pile(cx, cy, w, h, M['granite'], n_sat=5)
 
     STATIC.extend(cliffs)
 
@@ -860,6 +867,16 @@ def basalt_mesh(name, seed, cols, M):
     return me
 
 
+def boulder_mesh(name, seed, M, w, d, h, mkey='granite', subdiv=2, cuts=6):
+    """근경 인스턴스용 표석 메시(로컬, 바닥 z=0). 박스 투영 UV(m), 용접 + 스무스(파쇄면 모서리는 날카롭게)."""
+    import ds2_rocks
+    V, F, gh = ds2_rocks.boulder_geom(seed, subdiv=subdiv, cuts=cuts, squash=0.68, lump=0.22)
+    acc = Acc()
+    _emit_boulder(acc, (V, F, gh), 0.0, 0.0, 0.0, w, d, h / gh, 0.0, M[mkey])
+    me = acc.to_mesh(name, weld=True, smooth=True, sharp=40)
+    return me
+
+
 def weed_mesh(name, M, u0, u1, hgt=0.75, n=3):
     acc = Acc()
     w = hgt * 1.0
@@ -890,20 +907,13 @@ def build_valley_nature(c, M, P, gz):
     rnd = random.Random(2041)
     lx0, ly0, lx1, ly1 = G.LOT
 
-    big_a = basalt_mesh('PR_lot_basalt_big_a', 7, [
-        (0.0, 0.0, 6, 0.65, 2.5), (1.05, 0.25, 6, 0.56, 1.85), (0.45, -0.95, 5, 0.58, 1.45),
-        (-0.95, -0.4, 6, 0.52, 2.05), (-0.5, 0.85, 5, 0.52, 1.25), (0.9, -0.95, 6, 0.44, 0.85)
-    ], M)
-    big_b = basalt_mesh('PR_lot_basalt_big_b', 13, [
-        (0.0, 0.0, 6, 0.72, 2.9), (-1.1, 0.3, 6, 0.58, 2.1), (0.85, 0.75, 5, 0.52, 1.65),
-        (0.25, -1.05, 6, 0.48, 1.35)
-    ], M)
-    meds = [basalt_mesh(f'PR_lot_basalt_m{i}', 20 + i, cols, M) for i, cols in enumerate((
-        [(0, 0, 6, 0.44, 1.05)],
-        [(0, 0, 5, 0.52, 0.72), (0.62, 0.2, 6, 0.38, 0.95)],
-        [(0, 0, 6, 0.38, 1.28)],
-        [(0, 0, 7, 0.56, 0.55), (-0.5, 0.45, 5, 0.32, 0.75)],
-    ))]
+    # 큰 표석(근경 군집 중심) 2종 + 중형 표석 5종 — 참조 화면의 윗면 이끼 회색 바위
+    big_a = boulder_mesh('PR_lot_boulder_big_a', 7, M, 2.7, 2.2, 2.5)
+    big_b = boulder_mesh('PR_lot_boulder_big_b', 13, M, 3.1, 2.4, 2.9)
+    meds = [boulder_mesh(f'PR_lot_boulder_m{i}', 20 + i, M, w, d, h, mk, subdiv=1 if i % 2 else 2)
+            for i, (w, d, h, mk) in enumerate(((1.0, 0.8, 0.95, 'granite'), (1.25, 0.9, 0.8, 'granite'),
+                                               (0.85, 0.75, 1.05, 'strata'), (1.35, 1.05, 0.7, 'granite'),
+                                               (0.95, 0.7, 0.6, 'basalt')))]
     smalls = [chunk_proto(f'PR_lot_basalt_s{i}', 300 + i, (0.55, 0.8, 0.4)[i], M) for i in range(3)]
     phm = [P['rock_a'], P['rock_b'], P['rock_c'], P['rock_d'], P['rock_e'], P['boulder']]
     pools = [((x, y), r) for (x, y), r in G.POOLS]
@@ -914,14 +924,16 @@ def build_valley_nature(c, M, P, gz):
         return all(math.hypot(x - px, y - py) > pr + rr for (px, py), pr in pools)
 
     clusters = [
-        ((50.5, 4.5), big_a, 8, 36, 4.4),
-        ((58.5, 24.5), None, 7, 28, 3.8),
-        ((33.5, 21.0), big_b, 6, 26, 3.5),
-        ((39.5, -14.0), None, 7, 32, 3.2),      # CAM_lot / CAM_ground 근경
-        ((59.5, -14.0), None, 6, 22, 3.0),
-        ((43.5, 34.5), None, 6, 24, 3.4),
-        ((57.0, 44.5), None, 6, 22, 3.4),
-        ((33.0, 46.5), None, 6, 22, 3.4),
+        ((50.5, 4.5), big_a, 14, 40, 5.0),
+        ((58.5, 24.5), big_b, 12, 30, 4.4),
+        ((33.5, 21.0), big_b, 11, 28, 4.0),
+        ((39.5, -14.0), None, 10, 34, 3.6),     # CAM_lot / CAM_ground 근경
+        ((59.5, -14.0), big_a, 10, 24, 3.6),
+        ((43.5, 34.5), None, 10, 26, 3.8),
+        ((57.0, 44.5), big_a, 10, 24, 3.8),
+        ((33.0, 46.5), None, 10, 24, 3.8),
+        ((30.5, 4.0), None, 8, 20, 3.2),        # 개울 서안
+        ((62.0, 8.0), None, 8, 20, 3.4),        # 개울 동안
     ]
     j = 0
     for idx_c, ((cx, cy), big_me, nm, ns, rad) in enumerate(clusters):
@@ -955,14 +967,17 @@ def build_valley_nature(c, M, P, gz):
 
     # 광역 산악 사면(GR_terrain) 주요 시야 지점에도 스캔 볼더·현무암 중형 바위 군집 배치
     slope_clusters = [
-        ((-46.0, -24.0), 7.5, 8, 14),     # CAM_street 좌측 산자락
-        ((-76.0, -26.0), 8.5, 9, 16),     # CAM_street 좌측 전경 산자락
+        ((-46.0, -24.0), 7.5, 12, 18),    # CAM_street 좌측 산자락
+        ((-76.0, -26.0), 8.5, 13, 20),    # CAM_street 좌측 전경 산자락
         ((-56.0, -64.0), 8.0, 7, 12),     # CAM_street 우측 남쪽 사면
         ((18.0, 56.0), 8.5, 8, 14),       # 계곡 북서 입구
         ((68.0, 54.0), 8.5, 8, 14),       # 계곡 북동 입구
-        ((32.0, 74.0), 9.0, 9, 16),       # 상류 계곡물 양안
-        ((52.0, 78.0), 9.0, 9, 16),
-        ((36.0, 102.0), 10.0, 9, 16),
+        ((32.0, 74.0), 9.0, 14, 20),      # 상류 계곡물 양안
+        ((52.0, 78.0), 9.0, 14, 20),
+        ((36.0, 102.0), 10.0, 14, 20),
+        ((44.0, 126.0), 11.0, 12, 18),
+        ((90.0, 40.0), 10.0, 10, 16),     # FaceArch 북서 이끼 언덕
+        ((-20.0, 60.0), 10.0, 10, 16),    # HAUS 북쪽 이끼 언덕
         ((38.0, -64.0), 8.0, 7, 14),      # 국도 남쪽 하류 협곡
     ]
     for (cx, cy), rad, nm, ns in slope_clusters:
@@ -988,12 +1003,12 @@ def build_valley_nature(c, M, P, gz):
             j += 1
 
     # 잡초·고산 사초·관목 배치
-    gk = ['weed_green', 'weed_green', 'weed_dry', 'weed_dry_t']
+    gk = ['weed_green', 'weed_green', 'weed_green', 'weed_dry', 'weed_dry_t']   # 참조 화면: 초록 풀 위주, 마른 풀은 드문드문
     g = 0; s_cnt = 0
     spots = []
     for (cx, cy), *_ in clusters:
-        for _ in range(16):
-            a = rnd.uniform(0, 2 * math.pi); d = rnd.uniform(0.9, 4.8)
+        for _ in range(26):
+            a = rnd.uniform(0, 2 * math.pi); d = rnd.uniform(0.9, 6.0)
             spots.append((cx + d * math.cos(a), cy + d * math.sin(a)))
     for (cx, cy), rad, *_ in slope_clusters:
         for _ in range(12):
@@ -1009,13 +1024,46 @@ def build_valley_nature(c, M, P, gz):
         if abs(x - 43.8) < 1.5 and y < 0:
             continue
         z = gz.z(x, y)
-        if rnd.random() < 0.22:
+        if rnd.random() < 0.38:
             place(f'PR_ph_shrub.v{s_cnt:03d}', P['shrub'], c, (x, y, z - 0.04), rnd.uniform(0, 6.3), rnd.uniform(0.32, 0.58), surface='foliage')
             s_cnt += 1
         else:
             key = gk[rnd.randrange(len(gk))]
             place(f'PR_lot_weed.{g:03d}', P[key], c, (x, y, z - 0.03), rnd.uniform(0, 6.3), rnd.uniform(0.72, 1.38), surface='foliage')
             g += 1
+
+    # 상류 계곡 바닥(MASK_RECT 북쪽 바깥, CAM_valley 근경): 개울 둑의 표석·호박돌 + 관목·풀 — 참조 화면 전경
+    import ds2_backdrop as B
+    importlib.reload(B)
+    for _ in range(420):
+        y = rnd.uniform(246.0, 430.0)
+        side = rnd.choice((-1.0, 1.0))
+        off = rnd.uniform(5.0, 70.0) ** 1.0 * (0.4 + 0.6 * rnd.random())
+        x = B.stream_x(y) + side * max(5.2, off)
+        z = B.outer_mountain_z(x, y)
+        r = rnd.random()
+        if r < 0.22:
+            me = meds[rnd.randrange(len(meds))] if rnd.random() < 0.6 else phm[rnd.randrange(len(phm))]
+            sc_ = rnd.uniform(0.7, 2.2) * (1.4 if off > 20 else 1.0)
+            place(f'PR_up_rock.{j:03d}', me, c, (x, y, z - 0.18 * sc_), rnd.uniform(0, 6.3), sc_,
+                  rx=rnd.uniform(-0.12, 0.12), ry=rnd.uniform(-0.12, 0.12), surface='rock')
+            j += 1
+        elif r < 0.5:
+            place(f'PR_ph_shrub.u{s_cnt:03d}', P['shrub'], c, (x, y, z - 0.05), rnd.uniform(0, 6.3), rnd.uniform(0.45, 0.9), surface='foliage')
+            s_cnt += 1
+        else:
+            key = ('weed_green', 'weed_green', 'weed_dry')[rnd.randrange(3)]
+            place(f'PR_up_weed.{g:03d}', P[key], c, (x, y, z - 0.03), rnd.uniform(0, 6.3), rnd.uniform(0.8, 1.5), surface='foliage')
+            g += 1
+    for k_ in range(240):                    # 개울 가장자리·바닥의 젖은 호박돌(반쯤 잠겨 수면을 깨뜨린다)
+        y = rnd.uniform(240.0, 560.0)
+        x = B.stream_x(y) + rnd.choice((-1.0, 1.0)) * (rnd.uniform(3.0, 7.0) if k_ % 2 else rnd.uniform(0.0, 3.8))
+        z = B.outer_mountain_z(x, y)
+        me, h = smalls[rnd.randrange(3)]
+        sc_ = rnd.uniform(0.5, 1.4)
+        place(f'PR_up_chip.{j:03d}', me, c, (x, y, z - h * sc_ * 0.25), rnd.uniform(0, 6.3), (sc_ * rnd.uniform(0.8, 1.3), sc_, sc_),
+              rx=rnd.uniform(-0.3, 0.3), ry=rnd.uniform(-0.3, 0.3), surface='rock')
+        j += 1
 
     print('valley nature: rocks/chips', j, 'weeds', g, 'shrubs', s_cnt)
 
@@ -1319,13 +1367,13 @@ ANCHORS = [
     ('facearch_eyes', 'building', 'FaceArch 두 면의 눈', (100.7, 8.4, 17.0)),
     ('facearch_legs', 'building', 'FaceArch 필로티 다리', (108.0, 14.0, 4.5)),
     ('facearch_body', 'building', 'FaceArch 둥근 삼각 매스', (105.0, 15.0, 25.0)),
-    ('viaduct', 'present', '북쪽 협곡 산악 고가교와 주상절리 대절벽', (38.0, VIA_Y0 - 4.5, 24.0)),
-    ('brick_belt', 'present', '현무암 단애와 층리 암반 노두', (66.0, 60.0, 11.5)),
+    ('viaduct', 'present', '빙하 계곡 층리 대암벽과 산악 고가교', (38.0, VIA_Y0 - 4.5, 24.0)),
+    ('brick_belt', 'present', '계곡 입구의 빙하 표석 무더기', (66.0, 60.0, 11.5)),
     ('cafe_canopy', 'present', '산악 전초기지 컨테이너 모듈', (57.5, -21.5, 2.8)),
     ('wires', 'present', '산악 횡단 국도 가공선과 황흑 전주', (17.0, -53.8, 9.5)),
     ('lot_moss', 'nature', '고산 올리브 이끼 군락 — 윗면·수변', (53.0, 16.2, 0.3)),
     ('lot_water', 'nature', '갈래 시냇물과 거울 물웅덩이', (39.5, 2.5, 0.0)),
-    ('lot_rocks', 'nature', '현무암·잡석 3단 스케일', (50.5, 4.5, 1.8)),
+    ('lot_rocks', 'nature', '표석·잡석 3단 스케일', (50.5, 4.5, 1.8)),
     ('ginkgo', 'nature', '수변 고산 관목과 사초 다발', (33.5, 21.0, 1.2)),
 ]
 
@@ -1465,7 +1513,7 @@ def build():
 
     # 정적 절벽 묶음 → 재질별 메시 PR_static_<재질> (Cycles 정점 AO 베이킹 대상!)
     for m, sub in sorted(STATIC.split().items(), key=lambda kv: kv[0].name):
-        sub.to_obj(f'PR_static_{m.name}', C, m.get('nw_surface', 'rock'), smooth=True, sharp=42)
+        sub.to_obj(f'PR_static_{m.name}', C, m.get('nw_surface', 'rock'), weld=True, smooth=True, sharp=40)
 
     build_anchors(sc, GZ)
     build_camera(sc)

@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { detectQualityTier, getQualityConfig } from './quality.js';
 import { createWorld } from './world.js';
 import { createPostPipeline } from './post.js';
-import { createWeatherController } from './weather.js';
+import { createWeatherController, getPresets } from './weather.js';
 import { createRainSystem } from './rain.js';
 import { createCameraController, updateDroneActors } from './camera.js';
 import { createAnalysisController } from './analysis.js';
@@ -50,7 +50,17 @@ async function boot() {
       night: '산악의 밤',
       ground: '개울 근접',
       lot: '이끼 포켓',
+      valley: '빙하 계곡',
     };
+    // DS2 전용 7번째 시점: 참조 화면 구도(상류 개울 둑에서 겹쳐지는 층리 암벽을 바라봄)
+    const camSeg = document.getElementById('nw-cam-seg');
+    if (camSeg && !camSeg.querySelector('[data-cam="valley"]')) {
+      const vBtn = document.createElement('button');
+      vBtn.type = 'button';
+      vBtn.className = 'nw-btn';
+      vBtn.dataset.cam = 'valley';
+      camSeg.appendChild(vBtn);
+    }
     document.querySelectorAll('[data-cam]').forEach((btn) => {
       const cid = btn.dataset.cam;
       if (camLabels[cid]) btn.textContent = camLabels[cid];
@@ -122,7 +132,12 @@ async function boot() {
     renderer,
     initialPreset: initialWeather,
     duration: 2.5,
+    presets: getPresets(worldVer),
   });
+  if (worldVer === 'ds2' && post?.gradePass) {
+    // 참조 화면: 역광으로 어두운 근경 + 화면 가장자리 감광
+    post.gradePass.uniforms.uVignette.value = 0.34;
+  }
 
   const rain = createRainSystem({
     scene,
@@ -149,6 +164,8 @@ async function boot() {
     camera,
     canvas,
     layout: world.layout,
+    groundHeightAt: world.groundHeightAt,
+    getWalkBlocker: world.getWalkBlocker,
     onPresetChange(camDef) {
       syncCamUI(camDef.id);
     },

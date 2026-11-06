@@ -58,6 +58,7 @@ export const PRESETS = {
     sunColor: '#FFF4E6',
     hemiIntensity: 0.95,
     envIntensity: 0.85,
+    sunHaze: 0.0,
   },
   rain: {
     uWet: 1.0,
@@ -78,6 +79,7 @@ export const PRESETS = {
     sunColor: '#C8D8E0',
     hemiIntensity: 0.72,
     envIntensity: 0.75,
+    sunHaze: 0.0,
   },
   dusk: {
     uWet: 0.40,
@@ -98,6 +100,7 @@ export const PRESETS = {
     sunColor: '#FFB870',
     hemiIntensity: 0.80,
     envIntensity: 0.78,
+    sunHaze: 0.0,
   },
   night: {
     uWet: 0.80,
@@ -118,6 +121,7 @@ export const PRESETS = {
     sunColor: '#6E86B0',
     hemiIntensity: 0.55,
     envIntensity: 0.65,
+    sunHaze: 0.0,
   },
   snow: {
     uWet: 0.20,
@@ -138,8 +142,47 @@ export const PRESETS = {
     sunColor: '#F7F5EE',
     hemiIntensity: 1.05,
     envIntensity: 0.90,
+    sunHaze: 0.0,
   },
 };
+
+// DS2 산악 월드 덮어쓰기 — 참조 화면(빙하 계곡 역광 헤이즈)의 읽기:
+//   해는 계곡 상류(북북동) 암벽 너머 낮은 고도, 그 주변 하늘이 하얗게 번진다(sunHaze).
+//   계곡 공기는 회청색 연무가 높이까지 차 있어(uFogK 작게) 300 m 밖 암벽부터 밝게 지워지고, 근경은 역광이라 어둡고 대비가 강하다.
+//   Blender 쪽 같은 값: tools/nowhere/blender/ds2_look.py
+export const DS2_OVERRIDES = {
+  overcast: {
+    uWet: 0.5,
+    uFogB: 0.0015,
+    uFogK: 0.012,
+    fogColor: '#AEB6B8',
+    fogFarColor: '#C8CED0',
+    skyHorizon: '#C9CECD',
+    skyZenith: '#9FA8AB',
+    skyGround: '#2C302C',
+    exposure: 0.8,
+    saturation: 0.84,
+    sunIntensity: 2.3,
+    sunColor: '#FFF0DC',
+    hemiIntensity: 0.8,
+    envIntensity: 0.8,
+    sunHaze: 1.0,
+  },
+  rain: { uFogB: 0.0042, uFogK: 0.012, sunHaze: 0.12 },
+  dusk: { uFogB: 0.0024, uFogK: 0.014, sunHaze: 0.85 },
+  night: { uFogB: 0.0032, uFogK: 0.014, sunHaze: 0.0 },
+  snow: { uFogB: 0.0036, uFogK: 0.012, sunHaze: 0.45 },
+};
+
+/** 월드 버전별 프리셋 표(성수 = PRESETS 그대로, DS2 = DS2_OVERRIDES 덮어쓰기). */
+export function getPresets(worldVer = 'seongsu') {
+  if (worldVer !== 'ds2') return PRESETS;
+  const out = {};
+  for (const [name, base] of Object.entries(PRESETS)) {
+    out[name] = { ...base, ...(DS2_OVERRIDES[name] || {}) };
+  }
+  return out;
+}
 
 export function lerp(a, b, t) {
   const u = Math.max(0, Math.min(1, Number.isFinite(t) ? t : 0));
@@ -158,11 +201,11 @@ export function lerp(a, b, t) {
   return out;
 }
 
-export function createWeatherController({ world, post, renderer, initialPreset = 'overcast', duration = 2.5 }) {
-  let currentName = PRESETS[initialPreset] ? initialPreset : 'overcast';
-  let fromState = { ...PRESETS[currentName] };
-  let targetState = { ...PRESETS[currentName] };
-  let currentState = { ...PRESETS[currentName] };
+export function createWeatherController({ world, post, renderer, initialPreset = 'overcast', duration = 2.5, presets = PRESETS }) {
+  let currentName = presets[initialPreset] ? initialPreset : 'overcast';
+  let fromState = { ...presets[currentName] };
+  let targetState = { ...presets[currentName] };
+  let currentState = { ...presets[currentName] };
   let elapsed = duration;
 
   function applyStateToScene(st, refreshEnv = false) {
@@ -176,6 +219,7 @@ export function createWeatherController({ world, post, renderer, initialPreset =
     u.uFogColor.value.set(st.fogColor);
     u.uFogFarColor.value.set(st.fogFarColor);
     u.uEmitGain.value = st.uEmitGain;
+    if (u.uSunHaze) u.uSunHaze.value = st.sunHaze ?? 0;
 
     world.sky.uniforms.uSkyHorizon.value.set(st.skyHorizon);
     world.sky.uniforms.uSkyZenith.value.set(st.skyZenith);
@@ -202,10 +246,10 @@ export function createWeatherController({ world, post, renderer, initialPreset =
   applyStateToScene(currentState, true);
 
   function setPreset(name, instant = false) {
-    if (!PRESETS[name]) return currentState;
+    if (!presets[name]) return currentState;
     currentName = name;
     fromState = { ...currentState };
-    targetState = { ...PRESETS[name] };
+    targetState = { ...presets[name] };
     if (instant) {
       elapsed = duration;
       currentState = { ...targetState };
