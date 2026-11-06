@@ -1,10 +1,15 @@
 // HAUS NOWHERE — 공용 모달(시나리오 투어 · 실내 출구 · 오류). 조작 안내 오버레이와 같은 패널 스타일.
 // resolveModalKey 는 순수 함수(테스트: tests/nowhere-modal.test.mjs). DOM 은 createModal 을 부를 때만 만든다.
 
+/** 기본 버튼(primary, 없으면 첫 버튼). 없으면 undefined. Enter 처리와 초기 포커스가 같은 규칙을 쓴다. */
+export function primaryButton(buttons) {
+  return buttons.find((b) => b.primary) || buttons[0];
+}
+
 /** Enter → 기본 버튼 id(없으면 첫 버튼), Escape → 취소 버튼 id(없으면 null), 그 밖 → undefined. */
 export function resolveModalKey(key, buttons) {
   if (key === 'Enter') {
-    const p = buttons.find((b) => b.primary) || buttons[0];
+    const p = primaryButton(buttons);
     return p ? p.id : null;
   }
   if (key === 'Escape') {
@@ -40,7 +45,7 @@ export function createModal({ onShow = null } = {}) {
   root.append(panel);
   document.body.append(root);
 
-  let current = null;   // { buttons, resolve }
+  let current = null;   // { buttons, btns(버튼 요소, buttons 와 같은 순서), resolve }
 
   function finish(id) {
     if (!current) return;
@@ -57,7 +62,7 @@ export function createModal({ onShow = null } = {}) {
     body.textContent = b;
     body.hidden = !b;
     actions.replaceChildren();
-    let primaryBtn = null;
+    const btns = [];
     for (const spec of buttons) {
       const btn = el('button', `nw-btn nw-modal-btn${spec.primary ? ' is-primary' : ''}`);
       btn.type = 'button';
@@ -65,24 +70,44 @@ export function createModal({ onShow = null } = {}) {
       if (spec.sub) btn.append(el('span', 'nw-modal-btn-sub', spec.sub));
       btn.addEventListener('click', () => finish(spec.id));
       actions.append(btn);
-      if (!primaryBtn && (spec.primary || buttons[0] === spec)) primaryBtn = btn;
+      btns.push(btn);
     }
     root.hidden = false;
-    if (typeof onShow === 'function') onShow();
-    primaryBtn?.focus();
-    return new Promise((resolve) => {
-      current = { buttons, resolve };
+    // current 를 onShow 보다 먼저 세운다 — onShow 가 던져도 열린 모달이 Promise·닫기 경로 없이 남지 않게.
+    const promise = new Promise((resolve) => {
+      current = { buttons, btns, resolve };
     });
+    if (typeof onShow === 'function') {
+      try {
+        onShow();
+      } catch (err) {
+        console.warn('[modal] onShow 실패', err);
+      }
+    }
+    // 초기 포커스는 Enter 기본 버튼과 같은 규칙(primaryButton).
+    btns[buttons.indexOf(primaryButton(buttons))]?.focus();
+    return promise;
   }
 
   window.addEventListener(
     'keydown',
     (e) => {
       if (!current) return;
-      const id = resolveModalKey(e.key, current.buttons);
+      // 도움말이 열려 있으면 Esc/Enter 는 도움말 몫 — 같은 창 캡처 단계라 등록 순서와 무관하게 막는다.
+      if (e.defaultPrevented) return;
+      const help = document.querySelector('.nw-help');
+      if (help && !help.hidden) return;
+      let id = resolveModalKey(e.key, current.buttons);
       if (id === undefined) return;
       e.preventDefault();
       e.stopPropagation();
+      // 키 반복(꾹 누름)은 삼키기만 한다 — 연쇄 모달이 자동 확정되거나 카메라로 새지 않게.
+      if (e.repeat) return;
+      // 포커스된 모달 버튼에서 Enter → 그 버튼 활성화(기본 포커스는 기본 버튼이라 기본 Enter 동작은 그대로).
+      if (e.key === 'Enter') {
+        const i = current.btns.indexOf(document.activeElement);
+        if (i >= 0) id = current.buttons[i].id;
+      }
       finish(id);
     },
     true,
