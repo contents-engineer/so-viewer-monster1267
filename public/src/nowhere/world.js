@@ -20,6 +20,7 @@ import {
   createOccupancyGrid,
   markObstacleTriangle,
   isBlockedAt,
+  obstacleTopAt,
 } from './terrain.js';
 
 export async function createWorld({
@@ -434,7 +435,12 @@ export async function createWorld({
     layerGroups.backdrop?.traverse((n) => {
       if (n.isMesh && /^BD_(tors|mid_)/.test(n.name)) markMesh(n);
     });
-    walkBlocker = (x, z, radius = 0.35) => isBlockedAt(occ, x, z, radius);
+    walkBlocker = {
+      // clearance: 발 높이 + 오를 수 있는 턱(지면 위 m). 그보다 높은 장애물이 몸 반경 안에 있으면 막힘
+      isBlocked: (x, z, clearance = 0, radius = 0.35) => isBlockedAt(occ, x, z, radius, clearance),
+      // 발밑 장애물 윗면(지면 위 m, 없으면 0) — 바위 위에 올라서기·착지
+      topAt: (x, z, radius = 0.2) => obstacleTopAt(occ, x, z, radius),
+    };
     console.info(`[nowhere] 보행 충돌 격자 ${occ.nx}×${occ.nz} (${tris} tris) ${Math.round(performance.now() - t0)} ms`);
     return walkBlocker;
   }

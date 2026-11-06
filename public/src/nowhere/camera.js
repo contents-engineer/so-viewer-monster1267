@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { clampAboveGround, resolveWalkStep } from './terrain.js';
 import { stepLook } from './look.js';
+import { walkSpeed, stepBody, STEP_UP } from './walk.js';
 
 const EYE_HEIGHT = 1.7;        // 보행 시점 눈높이(지면 기준)
 const ORBIT_CLEARANCE = 1.2;   // 궤도·전환·인트로 카메라가 지면 위로 유지할 최소 여유고
@@ -31,6 +32,9 @@ export function createCameraController({
   // 보행 위치의 기준값. OrbitControls 는 포인터 이벤트 안에서도 update() 로 카메라를 공전시키므로
   // 매 프레임 camera.position 이 아니라 이 값으로 몸 위치를 되돌린다(드래그해도 제자리에서 고개만 돌아감).
   const walkEye = new THREE.Vector3();
+  // 보행 몸 상태(발 높이·수직 속도·접지)와 이번 프레임 점프 입력(Space)
+  const body = { feetY: 0, vy: 0, grounded: true };
+  let jumpQueued = false;
 
   // 프리셋 부드러운 전환 상태
   let transition = null;
@@ -106,10 +110,15 @@ export function createCameraController({
     }
     if (walkMode) {
       if (e.code.startsWith('Arrow')) e.preventDefault();   // 방향키 시선 회전 중 페이지 스크롤 방지
+      if (e.code === 'Space') {
+        e.preventDefault();                                   // 페이지 스크롤·포커스된 버튼 클릭 방지
+        if (!e.repeat) jumpQueued = true;                     // 누를 때 한 번만 점프(누르고 있어도 연속 점프 없음)
+      }
       walkKeys.add(e.code);
     }
   });
   window.addEventListener('keyup', (e) => {
+    if (walkMode && e.code === 'Space') e.preventDefault();
     walkKeys.delete(e.code);
   });
 
@@ -137,6 +146,14 @@ export function createCameraController({
       controls.target.copy(camera.position).addScaledVector(forward, 2.5);
       controls.target.y = camera.position.y;
       walkEye.copy(camera.position);
+      body.feetY = camera.position.y - EYE_HEIGHT;
+      body.vy = 0;
+      body.grounded = true;
+      jumpQueued = false;
+      // 보행 버튼 클릭으로 들어왔으면 버튼에 남은 포커스가 Space(점프)를 버튼 클릭으로 바꾸므로 풀어 둔다
+      if (typeof document !== 'undefined' && document.activeElement && document.activeElement !== document.body) {
+        document.activeElement.blur?.();
+      }
       controls.minDistance = 0.1;
       controls.maxDistance = 4.0;
       // 올려다보기·내려다보기 ±80° 를 허용(궤도 모드의 0.56π 제한은 위쪽 시선을 약 11° 로 막는다)
@@ -266,7 +283,7 @@ export function createCameraController({
       camera.position.copy(walkEye);
       // 2) 키 시선(게임 방식): ↑/↓ 올려다보기·내려다보기, ←/→ 좌우로 돌아보기 (상하 ±80°)
       const dir = stepLook(look, walkKeys, dt);
-      // 3) 이동(WASD): 시선의 수평 성분 기준
+      // 3) 이동(WASD, Shift 달리기): 시선의 수평 성분 기준
       const fwd = new THREE.Vector3(dir.x, 0, dir.z);
       if (fwd.lengthSq() > 1e-8) {
         fwd.normalize();
@@ -277,22 +294,30 @@ export function createCameraController({
         if (walkKeys.has('KeyD')) move.add(right);
         if (walkKeys.has('KeyA')) move.sub(right);
         if (move.lengthSq() > 0) {
-          move.normalize().multiplyScalar(9.0 * dt);
-          // 장애물(건물·바위·전주 등)과 급경사는 통과하지 못하고, 막힌 방향은 벽을 따라 미끄러진다
+          move.normalize().multiplyScalar(walkSpeed(walkKeys) * dt);
+          // 장애물은 발 높이 + 턱(0.35 m)보다 높으면 막힌다 → 점프 중에는 낮은 바위·화단 벽을 넘을 수 있다.
+          // 접지 중 50° 넘는 오르막은 못 오르고, 공중에서는 발보다 높은 비탈로 파고들지 않는다. 막히면 벽을 따라 미끄러진다.
           const here = camera.position;
           const gHere = groundHeightAt(here.x, here.z);
           const canStand = (x, z) => {
-            if (walkBlocker && walkBlocker(x, z)) return false;
+            const g = groundHeightAt(x, z);
+            if (walkBlocker && walkBlocker.isBlocked(x, z, body.feetY - g + STEP_UP)) return false;
+            if (!body.grounded) return g <= body.feetY + STEP_UP;
             const run = Math.hypot(x - here.x, z - here.z);
-            return run < 1e-6 || (groundHeightAt(x, z) - gHere) / run <= MAX_CLIMB;
+            return run < 1e-6 || (g - gHere) / run <= MAX_CLIMB;
           };
           const next = resolveWalkStep(here, move.x, move.z, canStand);
           camera.position.x = next.x;
           camera.position.z = next.z;
         }
       }
-      // 4) 지면을 따라 눈높이 유지(오르막·내리막) + 시선 타깃은 눈 앞 2.5 m
-      camera.position.y = groundHeightAt(camera.position.x, camera.position.z) + EYE_HEIGHT;
+      // 4) 수직: 발밑 표면(지면 또는 발이 닿는 장애물 윗면)에 붙거나, 점프·낙하 중이면 중력으로 진행
+      const gx = groundHeightAt(camera.position.x, camera.position.z);
+      const top = walkBlocker ? walkBlocker.topAt(camera.position.x, camera.position.z) : 0;
+      const support = top > 0 && gx + top <= body.feetY + STEP_UP ? gx + top : gx;
+      stepBody(body, support, dt, jumpQueued);
+      jumpQueued = false;
+      camera.position.y = body.feetY + EYE_HEIGHT;
       walkEye.copy(camera.position);
       controls.target.set(
         camera.position.x + dir.x * 2.5,

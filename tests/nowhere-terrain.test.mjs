@@ -9,6 +9,7 @@ import {
   createOccupancyGrid,
   markObstacleTriangle,
   isBlockedAt,
+  obstacleTopAt,
   resolveWalkStep,
 } from '../public/src/nowhere/terrain.js';
 
@@ -85,5 +86,17 @@ test('(g) resolveWalkStep: 막힌 방향은 벽을 따라 미끄러지고, 완�
   assert.deepEqual(resolveWalkStep({ x: 1.5, z: 0 }, 1, 0, free), { x: 1.5, z: 0 });   // 정면 충돌 → 제자리
   // 이미 장애물 안에 서 있으면(진입 직후 등) 빠져나갈 수 있게 이동을 허용
   assert.deepEqual(resolveWalkStep({ x: 3, z: 0 }, 1, 0, free), { x: 4, z: 0 });
+});
+
+test('(h) 장애물 높이를 기억한다: 0.8 m 바위는 발이 충분히 높으면(점프 중) 막지 않고, 그 위에 올라설 높이를 준다', () => {
+  const g = createOccupancyGrid({ x0: -10, z0: -10, x1: 10, z1: 10, cell: 0.5 });
+  // x = 2 평면의 낮은 벽(높이 0.8 m)
+  markObstacleTriangle(g, 2, 0, -2, 2, 0, 2, 2, 0.8, 2, flat);
+  markObstacleTriangle(g, 2, 0, -2, 2, 0.8, 2, 2, 0.8, -2, flat);
+  assert.equal(isBlockedAt(g, 2, 0, 0), true, '지면에 선 채로는 막힘');
+  assert.equal(isBlockedAt(g, 2, 0, 0, 0.6 + 0.35), false, '발이 0.6 m 높이(+턱 0.35 m)면 넘어감');
+  assert.equal(isBlockedAt(g, 2, 0, 0, 0.3 + 0.35), true, '발이 0.3 m 면 여전히 막힘');
+  assert.ok(Math.abs(obstacleTopAt(g, 2, 0, 0) - 0.8) <= 0.1, `top=${obstacleTopAt(g, 2, 0, 0)}`);
+  assert.equal(obstacleTopAt(g, -5, 0, 0), 0, '빈 칸은 0');
 });
 

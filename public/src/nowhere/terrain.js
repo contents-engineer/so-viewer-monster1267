@@ -77,8 +77,9 @@ export function clampAboveGround(position, groundAt, clearance) {
 }
 
 // ── 보행 충돌: 장애물 점유 격자 ──
-// 장애물 삼각형 중 "지면 + bandLow ~ 지면 + bandHigh"(몸통 높이)에 걸친 부분만 xz 격자 칸을 막는다.
-// 머리 위 처마·필로티 상부·지면에 깔린 판은 막지 않는다.
+// 장애물 삼각형 중 "지면 + bandLow ~ 지면 + bandHigh"(몸통 높이)에 걸친 부분만 xz 격자 칸에 기록한다.
+// 머리 위 처마·필로티 상부·지면에 깔린 판은 기록하지 않는다. 칸 값 = 그 칸 장애물 윗면의 지면 위 높이(0.1 m 단위, 0 = 빈 칸)
+// → 점프로 낮은 바위를 넘거나 그 위에 올라설 수 있다.
 
 export function createOccupancyGrid({ x0, z0, x1, z1, cell }) {
   const nx = Math.max(1, Math.ceil((x1 - x0) / cell));
@@ -86,11 +87,13 @@ export function createOccupancyGrid({ x0, z0, x1, z1, cell }) {
   return { x0, z0, cell, nx, nz, data: new Uint8Array(nx * nz) };
 }
 
-function markCell(g, x, z) {
+function markCell(g, x, z, relTop) {
   const i = Math.floor((x - g.x0) / g.cell);
   const j = Math.floor((z - g.z0) / g.cell);
   if (i < 0 || j < 0 || i >= g.nx || j >= g.nz) return;
-  g.data[j * g.nx + i] = 1;
+  const k = j * g.nx + i;
+  const v = Math.min(255, Math.max(1, Math.ceil(relTop * 10 - 1e-6)));
+  if (v > g.data[k]) g.data[k] = v;
 }
 
 /** 삼각형 표면을 칸 크기 절반 간격으로 표본화해, 표본 높이가 그 자리 지면 기준 몸통 높이 띠 안이면 칸을 막는다. */
@@ -115,14 +118,15 @@ export function markObstacleTriangle(g, ax, ay, az, bx, by, bz, cx, cy, cz, grou
       const x = u * ax + v * bx + w * cx;
       const z = u * az + v * bz + w * cz;
       const gy = groundAt(x, z);
-      if (y > gy + bandLow && y < gy + bandHigh) markCell(g, x, z);
+      if (y > gy + bandLow && y < gy + bandHigh) markCell(g, x, z, y - gy);
     }
   }
 }
 
-/** (x, z) 를 중심으로 반경 radius 의 몸이 막힌 칸에 걸치는지(중심 + 둘레 8점). 격자 밖은 막히지 않음. */
-export function isBlockedAt(g, x, z, radius = 0) {
+/** 반경 radius 의 몸(중심 + 둘레 8점)이 걸치는 칸들 중 가장 높은 장애물 윗면(지면 위 m). 빈 칸·격자 밖은 0. */
+export function obstacleTopAt(g, x, z, radius = 0) {
   const pts = radius > 0 ? 9 : 1;
+  let top = 0;
   for (let k = 0; k < pts; k++) {
     const a = (k - 1) * Math.PI / 4;
     const px = k === 0 ? x : x + Math.cos(a) * radius;
@@ -130,9 +134,15 @@ export function isBlockedAt(g, x, z, radius = 0) {
     const i = Math.floor((px - g.x0) / g.cell);
     const j = Math.floor((pz - g.z0) / g.cell);
     if (i < 0 || j < 0 || i >= g.nx || j >= g.nz) continue;
-    if (g.data[j * g.nx + i]) return true;
+    top = Math.max(top, g.data[j * g.nx + i] / 10);
   }
-  return false;
+  return top;
+}
+
+/** 몸이 막히는지: 걸치는 장애물 윗면이 clearance(발 높이 + 오를 수 있는 턱, 지면 위 m)보다 높으면 막힘.
+ *  clearance 0(기본) = 장애물이 조금이라도 있으면 막힘. */
+export function isBlockedAt(g, x, z, radius = 0, clearance = 0) {
+  return obstacleTopAt(g, x, z, radius) > clearance;
 }
 
 /** 보행 한 걸음: 전체 이동 → 막히면 x 만 → z 만(벽 따라 미끄러짐) → 모두 막히면 제자리.
