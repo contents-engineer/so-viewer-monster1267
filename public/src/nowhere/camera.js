@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { clampAboveGround, resolveWalkStep } from './terrain.js';
-import { stepLook } from './look.js';
+import { stepLook, ORBIT_MAX_POLAR } from './look.js';
 import { walkSpeed, stepBody, STEP_UP } from './walk.js';
 
 const EYE_HEIGHT = 1.7;        // 보행 시점 눈높이(지면 기준)
@@ -21,7 +21,7 @@ export function createCameraController({
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
   controls.dampingFactor = 0.07;
-  controls.maxPolarAngle = Math.PI * 0.56;
+  controls.maxPolarAngle = ORBIT_MAX_POLAR;
   controls.minDistance = 0.25;
   controls.maxDistance = 1800;
 
@@ -156,7 +156,7 @@ export function createCameraController({
       }
       controls.minDistance = 0.1;
       controls.maxDistance = 4.0;
-      // 올려다보기·내려다보기 ±80° 를 허용(궤도 모드의 0.56π 제한은 위쪽 시선을 약 11° 로 막는다)
+      // 올려다보기·내려다보기 ±80° 를 허용(궤도 모드 상한은 위쪽 시선을 약 22° 로 막는다)
       controls.minPolarAngle = Math.PI * 0.04;
       controls.maxPolarAngle = Math.PI * 0.96;
       controls.enablePan = false;
@@ -166,7 +166,7 @@ export function createCameraController({
     } else {
       controls.minDistance = 1.5;
       controls.minPolarAngle = 0;
-      controls.maxPolarAngle = Math.PI * 0.56;
+      controls.maxPolarAngle = ORBIT_MAX_POLAR;
       controls.maxDistance = 1800;
       controls.enablePan = true;
     }

@@ -100,3 +100,15 @@ test('(h) 장애물 높이를 기억한다: 0.8 m 바위는 발이 충분히 높
   assert.equal(obstacleTopAt(g, -5, 0, 0), 0, '빈 칸은 0');
 });
 
+
+test('(i) 아주 높은 벽(60 m)도 몸통 높이 띠는 빠짐없이 막고, 윗면 높이는 띠 상한(1.9 m) 이내로 기록한다', () => {
+  const g = createOccupancyGrid({ x0: -40, z0: -40, x1: 40, z1: 40, cell: 0.5 });
+  // z = 5 평면의 길이 60 m · 높이 60 m 벽(대각선으로 나눈 삼각형 두 장)
+  markObstacleTriangle(g, -30, 0, 5, 30, 0, 5, 30, 60, 5, flat);
+  markObstacleTriangle(g, -30, 0, 5, 30, 60, 5, -30, 60, 5, flat);
+  for (let x = -29.5; x <= 29.5; x += 0.5) {
+    assert.equal(isBlockedAt(g, x, 5, 0), true, `x=${x} 에서 벽이 비어 있음`);
+  }
+  assert.ok(obstacleTopAt(g, 0, 5, 0) <= 1.9 + 1e-6);
+  assert.equal(isBlockedAt(g, 0, 7, 0.35), false, '벽에서 2 m 떨어진 곳은 비어 있음');
+});

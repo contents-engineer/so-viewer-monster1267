@@ -109,9 +109,25 @@ export function markObstacleTriangle(g, ax, ay, az, bx, by, bz, cx, cy, cz, grou
     Math.hypot(ax - cx, ay - cy, az - cz),
   );
   const n = Math.min(400, Math.max(1, Math.ceil(maxEdge / (g.cell * 0.5))));
+  // 높이는 무게중심 좌표에 선형이므로, 행(u 고정)마다 높이 띠(+삼각형 안쪽 지면 기복 여유 1 m)에 드는 v 구간만 표본화한다.
+  // 높은 건물 벽면에서 띠 밖(머리 위) 표본을 건너뛰어 격자 생성 시간을 크게 줄인다.
+  const lo = gMin + bandLow - 1.0;
+  const hi = gMax + bandHigh + 1.0;
+  const slope = by - cy;
   for (let i = 0; i <= n; i++) {
-    for (let j = 0; j <= n - i; j++) {
-      const u = i / n;
+    const u = i / n;
+    const base = u * ay + (1 - u) * cy;   // v = 0 일 때 높이
+    let j0 = 0;
+    let j1 = n - i;
+    if (Math.abs(slope) < 1e-9) {
+      if (base < lo || base > hi) continue;
+    } else {
+      const va = (lo - base) / slope;
+      const vb = (hi - base) / slope;
+      j0 = Math.max(j0, Math.floor(Math.min(va, vb) * n));
+      j1 = Math.min(j1, Math.ceil(Math.max(va, vb) * n));
+    }
+    for (let j = j0; j <= j1; j++) {
       const v = j / n;
       const w = 1 - u - v;
       const y = u * ay + v * by + w * cy;

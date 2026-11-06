@@ -32,3 +32,17 @@ test('(d) WASD 이동키는 시선을 바꾸지 않는다', () => {
   const d = stepLook({ x: 0, y: 0, z: -1 }, new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD']), 1);
   assert.ok(near(d.x, 0) && near(d.y, 0) && near(d.z, -1));
 });
+
+test('(e) 모든 카메라 프리셋(성수·DS2)이 궤도 카메라 극각 상한 안에 있다 — 상한에 걸리면 OrbitControls 가 시점을 밀어 올린다', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { ORBIT_MAX_POLAR } = await import('../public/src/nowhere/look.js');
+  assert.equal(typeof ORBIT_MAX_POLAR, 'number');
+  for (const ver of ['nowhere', 'nowhere-ds2']) {
+    const layout = JSON.parse(readFileSync(new URL(`../public/assets/${ver}/layout.json`, import.meta.url), 'utf8'));
+    for (const c of layout.cameras) {
+      const d = [c.pos[0] - c.target[0], c.pos[1] - c.target[1], c.pos[2] - c.target[2]];
+      const polar = Math.acos(d[1] / Math.hypot(...d));
+      assert.ok(polar <= ORBIT_MAX_POLAR, `[${ver}] ${c.id} 극각 ${(polar * 180 / Math.PI).toFixed(1)}° > 상한 ${(ORBIT_MAX_POLAR * 180 / Math.PI).toFixed(1)}°`);
+    }
+  }
+});
