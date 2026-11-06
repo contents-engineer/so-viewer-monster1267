@@ -728,3 +728,63 @@ body.is-analysis .nw-filter-bar {
   text-overflow: ellipsis;
 }
 
+
+/* ── 공용 모달(시나리오 투어 · 실내 출구 · 오류) ── */
+.nw-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 48;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(4, 8, 14, 0.42);
+}
+.nw-modal[hidden] {
+  display: none;
+}
+.nw-modal-panel {
+  width: min(460px, 100%);
+  padding: 20px 22px 18px;
+  background: var(--nw-bg-panel-strong);
+  border: 1px solid var(--nw-line-struct);
+  border-top: 2px solid var(--nw-accent);
+  border-radius: 4px;
+  color: var(--nw-text);
+}
+.nw-modal-title {
+  margin: 0 0 6px;
+  font-size: 17px;
+  font-weight: 600;
+  word-break: keep-all;
+}
+.nw-modal-body {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--nw-text-dim);
+  word-break: keep-all;
+}
+.nw-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+.nw-modal-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 88px;
+}
+.nw-modal-btn.is-primary {
+  color: var(--nw-accent);
+  border-color: var(--nw-accent);
+}
+.nw-modal-btn-sub {
+  font-family: var(--nw-font-mono);
+  font-size: 10.5px;
+  color: var(--nw-text-dim);
+}
