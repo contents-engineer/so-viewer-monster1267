@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { clampAboveGround, resolveWalkStep } from './terrain.js';
+import { stepLook } from './look.js';
 
 const EYE_HEIGHT = 1.7;        // 보행 시점 눈높이(지면 기준)
 const ORBIT_CLEARANCE = 1.2;   // 궤도·전환·인트로 카메라가 지면 위로 유지할 최소 여유고
@@ -27,6 +28,9 @@ export function createCameraController({
   let currentPresetId = 'street';
   let walkMode = false;
   let walkBlocker = null;
+  // 보행 위치의 기준값. OrbitControls 는 포인터 이벤트 안에서도 update() 로 카메라를 공전시키므로
+  // 매 프레임 camera.position 이 아니라 이 값으로 몸 위치를 되돌린다(드래그해도 제자리에서 고개만 돌아감).
+  const walkEye = new THREE.Vector3();
 
   // 프리셋 부드러운 전환 상태
   let transition = null;
@@ -101,6 +105,7 @@ export function createCameraController({
       return;
     }
     if (walkMode) {
+      if (e.code.startsWith('Arrow')) e.preventDefault();   // 방향키 시선 회전 중 페이지 스크롤 방지
       walkKeys.add(e.code);
     }
   });
@@ -116,7 +121,7 @@ export function createCameraController({
       walkBlocker = getWalkBlocker();
     }
     if (walkMode) {
-      // 눈높이 1.7m 고정, 카메라 바로 앞 2m 지점을 타깃으로 두어 드래그로 둘러보기 동작
+      // 지면 위 1.7 m 눈높이, 눈 앞 2.5 m 지점을 시선 타깃으로 둔다(드래그·방향키로 제자리에서 둘러보기)
       const forward = new THREE.Vector3();
       camera.getWorldDirection(forward);
       forward.y = 0;
@@ -131,14 +136,20 @@ export function createCameraController({
       camera.position.y = groundHeightAt(camera.position.x, camera.position.z) + EYE_HEIGHT;
       controls.target.copy(camera.position).addScaledVector(forward, 2.5);
       controls.target.y = camera.position.y;
+      walkEye.copy(camera.position);
       controls.minDistance = 0.1;
       controls.maxDistance = 4.0;
+      // 올려다보기·내려다보기 ±80° 를 허용(궤도 모드의 0.56π 제한은 위쪽 시선을 약 11° 로 막는다)
+      controls.minPolarAngle = Math.PI * 0.04;
+      controls.maxPolarAngle = Math.PI * 0.96;
       controls.enablePan = false;
       camera.fov = 50;
       camera.updateProjectionMatrix();
       controls.update();
     } else {
       controls.minDistance = 1.5;
+      controls.minPolarAngle = 0;
+      controls.maxPolarAngle = Math.PI * 0.56;
       controls.maxDistance = 1800;
       controls.enablePan = true;
     }
@@ -247,22 +258,26 @@ export function createCameraController({
     }
 
     if (walkMode) {
-      const g0 = groundHeightAt(camera.position.x, camera.position.z);
-      camera.position.y = g0 + EYE_HEIGHT;
-      controls.target.y = Math.max(g0 + 0.4, Math.min(g0 + 3.2, controls.target.y));
-      const speed = 9.0 * dt;
-      const fwd = new THREE.Vector3().subVectors(controls.target, camera.position);
-      fwd.y = 0;
-      if (fwd.lengthSq() > 1e-5) {
+      // 1) 마우스 드래그(OrbitControls)는 타깃을 중심으로 몸을 공전시키므로, 갱신 뒤 시선 방향만 취하고
+      //    몸은 제자리에 둔다 → 게임처럼 제자리에서 고개를 돌린다.
+      controls.update();
+      const look = new THREE.Vector3().subVectors(controls.target, camera.position);
+      if (look.lengthSq() < 1e-8) look.set(0, 0, -1);
+      camera.position.copy(walkEye);
+      // 2) 키 시선(게임 방식): ↑/↓ 올려다보기·내려다보기, ←/→ 좌우로 돌아보기 (상하 ±80°)
+      const dir = stepLook(look, walkKeys, dt);
+      // 3) 이동(WASD): 시선의 수평 성분 기준
+      const fwd = new THREE.Vector3(dir.x, 0, dir.z);
+      if (fwd.lengthSq() > 1e-8) {
         fwd.normalize();
         const right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0)).normalize();
         const move = new THREE.Vector3();
-        if (walkKeys.has('KeyW') || walkKeys.has('ArrowUp')) move.add(fwd);
-        if (walkKeys.has('KeyS') || walkKeys.has('ArrowDown')) move.sub(fwd);
-        if (walkKeys.has('KeyD') || walkKeys.has('ArrowRight')) move.add(right);
-        if (walkKeys.has('KeyA') || walkKeys.has('ArrowLeft')) move.sub(right);
+        if (walkKeys.has('KeyW')) move.add(fwd);
+        if (walkKeys.has('KeyS')) move.sub(fwd);
+        if (walkKeys.has('KeyD')) move.add(right);
+        if (walkKeys.has('KeyA')) move.sub(right);
         if (move.lengthSq() > 0) {
-          move.normalize().multiplyScalar(speed);
+          move.normalize().multiplyScalar(9.0 * dt);
           // 장애물(건물·바위·전주 등)과 급경사는 통과하지 못하고, 막힌 방향은 벽을 따라 미끄러진다
           const here = camera.position;
           const gHere = groundHeightAt(here.x, here.z);
@@ -272,19 +287,19 @@ export function createCameraController({
             return run < 1e-6 || (groundHeightAt(x, z) - gHere) / run <= MAX_CLIMB;
           };
           const next = resolveWalkStep(here, move.x, move.z, canStand);
-          const mx = next.x - here.x;
-          const mz = next.z - here.z;
-          camera.position.x += mx;
-          camera.position.z += mz;
-          controls.target.x += mx;
-          controls.target.z += mz;
-          // 이동한 자리의 지면을 따라 눈높이를 유지(오르막·내리막)
-          const g1 = groundHeightAt(camera.position.x, camera.position.z);
-          const dy = g1 + EYE_HEIGHT - camera.position.y;
-          camera.position.y += dy;
-          controls.target.y += dy;
+          camera.position.x = next.x;
+          camera.position.z = next.z;
         }
       }
+      // 4) 지면을 따라 눈높이 유지(오르막·내리막) + 시선 타깃은 눈 앞 2.5 m
+      camera.position.y = groundHeightAt(camera.position.x, camera.position.z) + EYE_HEIGHT;
+      walkEye.copy(camera.position);
+      controls.target.set(
+        camera.position.x + dir.x * 2.5,
+        camera.position.y + dir.y * 2.5,
+        camera.position.z + dir.z * 2.5,
+      );
+      return;   // OrbitControls 는 1) 에서 이미 갱신했다
     }
 
     controls.update();

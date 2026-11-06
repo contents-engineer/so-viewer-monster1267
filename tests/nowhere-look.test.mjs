@@ -1,0 +1,34 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { stepLook, LOOK_LIMIT } from '../public/src/nowhere/look.js';
+
+// Three.js 좌표: 기본 시선은 −Z, 위는 +Y.
+const near = (a, b, eps = 1e-6) => Math.abs(a - b) < eps;
+
+test('(a) 키를 누르지 않으면 방향은 그대로(정규화만)', () => {
+  const d = stepLook({ x: 0, y: 0, z: -2.5 }, new Set(), 0.1);
+  assert.ok(near(d.x, 0) && near(d.y, 0) && near(d.z, -1));
+});
+
+test('(b) ↑ 는 올려다보고 ↓ 는 내려다본다, 상하 한계(±80°)에서 멈춘다', () => {
+  const up = stepLook({ x: 0, y: 0, z: -1 }, new Set(['ArrowUp']), 0.5, { pitchSpeed: Math.PI / 2 });
+  assert.ok(near(Math.asin(up.y), Math.PI / 4), '0.5 s × 90°/s = 45° 위');
+  const top = stepLook({ x: 0, y: 0, z: -1 }, new Set(['ArrowUp']), 10);
+  assert.ok(near(Math.asin(top.y), LOOK_LIMIT), '한계각 고정');
+  const down = stepLook({ x: 0, y: 0, z: -1 }, new Set(['ArrowDown']), 10);
+  assert.ok(near(Math.asin(down.y), -LOOK_LIMIT));
+});
+
+test('(c) ← 는 왼쪽으로, → 는 오른쪽으로 돌아본다(앙각 유지)', () => {
+  const left = stepLook({ x: 0, y: 0, z: -1 }, new Set(['ArrowLeft']), 1, { yawSpeed: Math.PI / 2 });
+  assert.ok(near(left.x, -1) && near(left.z, 0), '−Z 를 보다 왼쪽(−X)으로 90°');
+  const right = stepLook({ x: 0, y: 0, z: -1 }, new Set(['ArrowRight']), 1, { yawSpeed: Math.PI / 2 });
+  assert.ok(near(right.x, 1) && near(right.z, 0));
+  const tilted = stepLook({ x: 0, y: 0.5, z: -0.5 }, new Set(['ArrowLeft']), 1, { yawSpeed: Math.PI / 2 });
+  assert.ok(near(Math.asin(tilted.y), Math.PI / 4), '좌우로 돌아도 올려다보는 각도는 그대로');
+});
+
+test('(d) WASD 이동키는 시선을 바꾸지 않는다', () => {
+  const d = stepLook({ x: 0, y: 0, z: -1 }, new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD']), 1);
+  assert.ok(near(d.x, 0) && near(d.y, 0) && near(d.z, -1));
+});
