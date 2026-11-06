@@ -7,6 +7,7 @@ import { createWeatherController, getPresets } from './weather.js';
 import { createRainSystem } from './rain.js';
 import { createCameraController, updateDroneActors } from './camera.js';
 import { createAnalysisController } from './analysis.js';
+import { createHelpOverlay, createWalkHud } from './help.js';
 
 async function boot() {
   const canvas = document.getElementById('nw-canvas');
@@ -160,6 +161,7 @@ async function boot() {
     });
   }
 
+  const walkHud = createWalkHud();
   const camCtrl = createCameraController({
     camera,
     canvas,
@@ -174,8 +176,15 @@ async function boot() {
         walkBtn.classList.toggle('is-active', active);
         walkBtn.setAttribute('aria-pressed', String(active));
       }
+      walkHud.setState({ walk: active, locked: false });
+    },
+    onPointerLockChange(locked) {
+      walkHud.setState({ walk: camCtrl.isWalkMode(), locked });
     },
   });
+
+  // 조작 안내(? 키 · 상단 버튼). 열 때 보행 마우스 고정을 풀어 안내를 클릭으로 닫을 수 있게 한다.
+  const help = createHelpOverlay({ onOpen: () => camCtrl.releasePointer() });
 
   const analysis = await createAnalysisController({
     scene,
@@ -286,6 +295,7 @@ async function boot() {
     weather,
     rain,
     analysis,
+    help,
     world,
     post,
     quality,

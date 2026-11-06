@@ -46,3 +46,14 @@ test('(e) 모든 카메라 프리셋(성수·DS2)이 궤도 카메라 극각 상
     }
   }
 });
+
+test('(f) 마우스 시선(포인터 잠금): 오른쪽으로 밀면 오른쪽, 위로 밀면 위를 본다, 상하 한계 유지', async () => {
+  const { MOUSE_SENS } = await import('../public/src/nowhere/look.js');
+  const keys = new Set();
+  const right = stepLook({ x: 0, y: 0, z: -1 }, keys, 0, {}, { dx: (Math.PI / 2) / MOUSE_SENS, dy: 0 });
+  assert.ok(near(right.x, 1, 1e-6) && near(right.z, 0, 1e-6), '−Z 를 보다 오른쪽(+X)으로 90°');
+  const up = stepLook({ x: 0, y: 0, z: -1 }, keys, 0, {}, { dx: 0, dy: -((Math.PI / 6) / MOUSE_SENS) });
+  assert.ok(near(Math.asin(up.y), Math.PI / 6, 1e-6), '마우스를 위로(−dy) 밀면 30° 올려다봄');
+  const top = stepLook({ x: 0, y: 0, z: -1 }, keys, 0, {}, { dx: 0, dy: -1e6 });
+  assert.ok(near(Math.asin(top.y), LOOK_LIMIT, 1e-6));
+});

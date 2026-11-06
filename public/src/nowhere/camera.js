@@ -17,6 +17,7 @@ export function createCameraController({
   onWalkChange = null,
   groundHeightAt = () => 0,
   getWalkBlocker = null,   // 보행 충돌 (x, z) => 막힘 여부 (world.getWalkBlocker, 첫 보행 진입 때 생성)
+  onPointerLockChange = null,   // 보행 마우스 시선 고정(포인터 잠금) 상태 변경 알림 (locked) => void
 }) {
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
@@ -35,6 +36,39 @@ export function createCameraController({
   // 보행 몸 상태(발 높이·수직 속도·접지)와 이번 프레임 점프 입력(Space)
   const body = { feetY: 0, vy: 0, grounded: true };
   let jumpQueued = false;
+
+  // 보행 마우스 시선 고정(포인터 잠금, 게임 방식): 보행 중 화면을 클릭하면 마우스만 움직여 둘러본다.
+  // 첫 Esc 는 브라우저가 잠금만 풀고(보행 유지), 보행 해제는 그다음 Esc 나 V 로 한다.
+  const mouseLook = { dx: 0, dy: 0 };
+  let lastUnlockAt = -1e9;
+  const downAt = { x: 0, y: 0 };
+  const isPointerLocked = () => typeof document !== 'undefined' && document.pointerLockElement === canvas;
+  function releasePointer() {
+    if (isPointerLocked()) document.exitPointerLock?.();
+  }
+  canvas.addEventListener('pointerdown', (e) => {
+    downAt.x = e.clientX;
+    downAt.y = e.clientY;
+  });
+  canvas.addEventListener('click', (e) => {
+    // 드래그로 둘러본 뒤의 click 은 잠그지 않는다(제자리 클릭만)
+    if (!walkMode || isPointerLocked() || Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 5) return;
+    const req = canvas.requestPointerLock?.();
+    if (req && typeof req.catch === 'function') req.catch(() => {});
+  });
+  document.addEventListener('pointerlockchange', () => {
+    const locked = isPointerLocked();
+    controls.enableRotate = !locked;   // 잠금 중에는 OrbitControls 드래그 회전 대신 마우스 이동량으로 시선 회전
+    mouseLook.dx = 0;
+    mouseLook.dy = 0;
+    if (!locked) lastUnlockAt = performance.now();
+    if (typeof onPointerLockChange === 'function') onPointerLockChange(locked);
+  });
+  document.addEventListener('mousemove', (e) => {
+    if (!walkMode || !isPointerLocked()) return;
+    mouseLook.dx += e.movementX || 0;
+    mouseLook.dy += e.movementY || 0;
+  });
 
   // 프리셋 부드러운 전환 상태
   let transition = null;
@@ -105,6 +139,8 @@ export function createCameraController({
     }
     if (walkMode && e.key === 'Escape') {
       e.preventDefault();
+      // 마우스 고정 중(또는 방금 Esc 로 풀린 직후)의 Esc 는 잠금 해제만 — 보행은 유지
+      if (isPointerLocked() || performance.now() - lastUnlockAt < 300) return;
       setWalkMode(false);
       return;
     }
@@ -164,6 +200,7 @@ export function createCameraController({
       camera.updateProjectionMatrix();
       controls.update();
     } else {
+      releasePointer();
       controls.minDistance = 1.5;
       controls.minPolarAngle = 0;
       controls.maxPolarAngle = ORBIT_MAX_POLAR;
@@ -281,8 +318,10 @@ export function createCameraController({
       const look = new THREE.Vector3().subVectors(controls.target, camera.position);
       if (look.lengthSq() < 1e-8) look.set(0, 0, -1);
       camera.position.copy(walkEye);
-      // 2) 키 시선(게임 방식): ↑/↓ 올려다보기·내려다보기, ←/→ 좌우로 돌아보기 (상하 ±80°)
-      const dir = stepLook(look, walkKeys, dt);
+      // 2) 키 시선(게임 방식): ↑/↓ 올려다보기·내려다보기, ←/→ 좌우로 돌아보기 + 마우스 고정 중 마우스 이동량 (상하 ±80°)
+      const dir = stepLook(look, walkKeys, dt, {}, mouseLook);
+      mouseLook.dx = 0;
+      mouseLook.dy = 0;
       // 3) 이동(WASD, Shift 달리기): 시선의 수평 성분 기준
       const fwd = new THREE.Vector3(dir.x, 0, dir.z);
       if (fwd.lengthSq() > 1e-8) {
@@ -334,6 +373,8 @@ export function createCameraController({
     controls,
     getPresetId: () => currentPresetId,
     isWalkMode: () => walkMode,
+    isPointerLocked,
+    releasePointer,
     isIntroActive: () => introActive,
     setPreset,
     setWalkMode,

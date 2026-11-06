@@ -7,13 +7,27 @@ export const LOOK_LIMIT = (80 * Math.PI) / 180;   // 상하 시선 한계 ±80°
 // 지면 아래로 내려가는 것은 terrain.clampAboveGround 가 막으므로 이 상한이 지면 보호 역할을 할 필요는 없다.
 export const ORBIT_MAX_POLAR = Math.PI * 0.62;
 
+// 포인터 잠금 마우스 시선 감도(rad/px ≈ 0.126°/px)
+export const MOUSE_SENS = 0.0022;
+
 /**
- * 현재 시선 방향 dir 에 누르고 있는 시선 키(keys: KeyboardEvent.code 집합)를 dt 초만큼 반영한 단위 방향을 돌려준다.
+ * 현재 시선 방향 dir 에 누르고 있는 시선 키(keys: KeyboardEvent.code 집합)를 dt 초만큼, 그리고 포인터 잠금 중
+ * 마우스 이동량(mouse.dx, mouse.dy: movementX/Y 누적 px)을 반영한 단위 방향을 돌려준다.
  * yaw(방위)는 +Y 축 기준, pitch(앙각)는 수평면 기준이며 ±LOOK_LIMIT 로 제한한다.
  */
-export function stepLook(dir, keys, dt, { yawSpeed = (100 * Math.PI) / 180, pitchSpeed = (70 * Math.PI) / 180, limit = LOOK_LIMIT } = {}) {
+export function stepLook(
+  dir,
+  keys,
+  dt,
+  { yawSpeed = (100 * Math.PI) / 180, pitchSpeed = (70 * Math.PI) / 180, limit = LOOK_LIMIT, mouseSens = MOUSE_SENS } = {},
+  mouse = null,
+) {
   let yaw = Math.atan2(dir.x, dir.z);
   let pitch = Math.atan2(dir.y, Math.hypot(dir.x, dir.z));
+  if (mouse) {
+    yaw -= mouse.dx * mouseSens;      // 오른쪽(+dx)으로 밀면 오른쪽으로 돈다
+    pitch -= mouse.dy * mouseSens;    // 위(−dy)로 밀면 올려다본다
+  }
   if (keys.has('ArrowLeft')) yaw += yawSpeed * dt;
   if (keys.has('ArrowRight')) yaw -= yawSpeed * dt;
   if (keys.has('ArrowUp')) pitch += pitchSpeed * dt;
