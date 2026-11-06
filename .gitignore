@@ -4,3 +4,5 @@ build/
 __pycache__/
 *.pyc
 *.log
+# 실내 에셋 중 4K HDRI(21 MB) — env/modern_bathroom_1k.exr 와 같은 이미지라 빌드에 쓰지 않음
+public/assets/inner/light/light.exr
