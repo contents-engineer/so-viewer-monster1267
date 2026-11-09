@@ -150,7 +150,12 @@ export function createCameraController({
     if (flight) {
       // 시나리오 비행 중 키 입력은 무시(Esc 는 main.js 가 캡처 단계에서 먼저 받아 투어를 끝낸다).
       // 끊을 수 있는 비행(실내 층 둘러보기)은 아무 키로 멈추고 그 자리에서 자유 이동
-      if (flight.interruptible && !e.metaKey && !e.ctrlKey) stopFlight();
+      if (flight.interruptible && !e.metaKey && !e.ctrlKey) {
+        // 멈추는 데 쓴 Enter · Space · Tab 의 기본 동작을 막는다 — 포커스된 버튼(「이 층 둘러보기」 등)이
+        // 같은 키로 눌려 둘러보기가 다시 시작되거나 포커스가 밀리지 않게
+        if (e.key === 'Enter' || e.key === ' ' || e.key === 'Tab') e.preventDefault();
+        stopFlight();
+      }
       return;
     }
     if (introActive && !e.metaKey && !e.ctrlKey) {
