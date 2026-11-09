@@ -13,8 +13,8 @@ export const TOUR_BUILDINGS = {
     label: '하우스노웨어 몽골',
     summary: '22 × 18 m · 높이 31 m',
     enterable: false,
-    // 얼굴 정면에서 두 눈과 필로티를 함께 본다
-    approach: { pos: [0, 6, 48], target: [0, 14, 0] },
+    // 얼굴 정면에서 두 눈과 필로티를 함께 본다. 얼굴은 로컬 축이 아니라 (−0.84, 0, 0.55) 쪽을 향한다(두 눈 메시 위치로 확인)
+    approach: { pos: [-46, 7, 30], target: [0, 16, 0] },
   },
 };
 

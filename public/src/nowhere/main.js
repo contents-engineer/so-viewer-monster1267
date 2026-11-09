@@ -7,6 +7,11 @@ import { createWeatherController, getPresets, parseTimeParam, TIME_QUICK } from 
 import { createRainSystem } from './rain.js';
 import { createCameraController, updateDroneActors } from './camera.js';
 import { createHelpOverlay, createWalkHud } from './help.js';
+import { createModal } from './modal.js';
+import { createScenarioRunner, CANCEL } from './scenario.js';
+import { approachFor, TOUR_BUILDINGS } from './tour-config.js';
+import { buildFlightPath } from './flight.js';
+import { createInterior } from './interior.js';
 
 async function boot() {
   const canvas = document.getElementById('nw-canvas');
@@ -194,12 +199,66 @@ async function boot() {
   // 조작 안내(? 키 · 상단 버튼). 열 때 보행 마우스 고정을 풀어 안내를 클릭으로 닫을 수 있게 한다.
   const help = createHelpOverlay({ onOpen: () => camCtrl.releasePointer() });
 
+  // ── 시나리오 투어: 인트로 → 건물 선택 → 정면 비행 → 입장(성수 → 실내) / 준비중(몽골) ──
+  const modal = createModal({ onShow: () => camCtrl.releasePointer() });
+  const interior = createInterior({
+    renderer,
+    camera,
+    camCtrl,
+    post,
+    world,
+    quality,
+    modal,
+    exteriorScene: scene,
+  });
+  const scenario = createScenarioRunner({
+    adapters: {
+      // 끝까지 재생 · 사용자 입력으로 건너뜀 → 건물 선택으로, 다른 동작이 끊음 → 투어 종료
+      intro: () => new Promise((resolve) => camCtrl.startIntro((reason) => resolve(reason === 'cancelled' ? CANCEL : reason))),
+      modal: (step) =>
+        modal.show({
+          title: step.title,
+          buttons: step.buttons.map((b) => ({ ...b, sub: b.building ? TOUR_BUILDINGS[b.building].summary : undefined })),
+        }),
+      fly: async (step) => {
+        const to = approachFor(world.layout, step.building);
+        if (!to) return CANCEL;
+        const from = { pos: camera.position.toArray(), target: camCtrl.controls.target.toArray() };
+        const r = await camCtrl.flyTo(buildFlightPath(from, to));
+        return r === 'done' ? 'done' : CANCEL;
+      },
+      enterInterior: async (step) => ((await interior.enter(step.building)) ? 'done' : CANCEL),
+    },
+  });
+
+  function startScenario(stepId) {
+    if (interior.isActive()) return;
+    modal.close();
+    camCtrl.stopFlight();
+    scenario.start(stepId);
+  }
+
+  // Esc: 모달 · 조작 안내가 먼저 받고(캡처 단계), 남은 Esc 는 인트로 · 비행 중인 투어를 끝낸다
+  window.addEventListener(
+    'keydown',
+    (e) => {
+      if (e.key !== 'Escape' || !scenario.isRunning() || interior.isActive()) return;
+      if (!camCtrl.isIntroActive() && !camCtrl.isFlying()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      scenario.cancel();
+      camCtrl.stopFlight();
+      camCtrl.cancelIntro();
+    },
+    true,
+  );
+
   const initialCam = params.get('cam') || 'street';
   camCtrl.setPreset(initialCam, true);
   syncWeatherUI();
 
   if (!params.get('noIntro') && !params.get('cam') && !params.get('weather') && !params.get('time')) {
-    camCtrl.startIntro();
+    startScenario('intro');
   }
 
   // 옛 이름 호환: overcast·rain·snow → 기상, dusk·night → 시간
@@ -264,7 +323,13 @@ async function boot() {
 
   if (introBtn) {
     introBtn.addEventListener('click', () => {
-      camCtrl.startIntro();
+      startScenario('intro');
+    });
+  }
+  const buildingsBtn = document.getElementById('nw-btn-buildings');
+  if (buildingsBtn) {
+    buildingsBtn.addEventListener('click', () => {
+      startScenario('chooseBuilding');
     });
   }
 
@@ -306,6 +371,7 @@ async function boot() {
     rain.update();
     updateDroneActors(world.droneActors, elapsed);
     camCtrl.update(dt);
+    interior.update(dt);
 
     renderer.info.reset();
     post.composer.render();
@@ -322,6 +388,10 @@ async function boot() {
     weather,
     rain,
     help,
+    modal,
+    interior,
+    scenario,
+    startScenario,
     world,
     post,
     quality,
@@ -338,6 +408,9 @@ async function boot() {
         camera: camCtrl.getPresetId(),
         walkMode: camCtrl.isWalkMode(),
         introActive: camCtrl.isIntroActive(),
+        interior: interior.isActive(),
+        floor: interior.currentFloor(),
+        scenarioStep: scenario.current(),
         fps: currentFps,
         calls: renderer.info.render.calls,
         triangles: renderer.info.render.triangles,

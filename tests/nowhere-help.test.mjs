@@ -29,3 +29,13 @@ test('(b) 코드에 바인딩된 단축키가 모두 안내에 실려 있고, �
   assert.match(look, /ArrowUp/);
   assert.equal(existsSync(new URL('../public/src/nowhere/analysis.js', import.meta.url)), false, 'analysis.js 가 남아 있음');
 });
+
+test('(c) 투어가 main.js 에 연결되어 있다(자동 시작 · 투어 시작 · 건물 이동)', () => {
+  const main = readFileSync(new URL('../public/src/nowhere/main.js', import.meta.url), 'utf8');
+  assert.match(main, /startScenario\('intro'\)/);
+  assert.match(main, /startScenario\('chooseBuilding'\)/);
+  assert.match(main, /createInterior\(/);
+  const descs = CONTROL_SECTIONS.flatMap((s) => s.rows.map((r) => r.desc)).join('\n');
+  assert.match(descs, /투어 시작/);
+  assert.match(descs, /밖으로 나가기/);
+});

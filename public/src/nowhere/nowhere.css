@@ -595,3 +595,11 @@ body[data-world-ver="ds2"] .nw-loader {
   width: 18px;
   height: auto;
 }
+
+/* 실내에서는 외관 전용 UI(월드 전환 · 투어 · 건물 이동 · 카메라 프리셋)를 숨긴다. 기상 · 시간은 유지 */
+body.is-interior .nw-world-switch,
+body.is-interior #nw-btn-intro,
+body.is-interior #nw-btn-buildings,
+body.is-interior .nw-dock-camera {
+  display: none;
+}
