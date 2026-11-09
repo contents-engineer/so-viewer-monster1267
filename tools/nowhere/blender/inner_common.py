@@ -181,12 +181,19 @@ def decimate_to(obj, max_tris):
     tris = tri_count(obj)
     if tris <= max_tris:
         return tris
+    # UV 이음매로 갈라진 정점(같은 자리)을 먼저 용접 — 갈라진 채로 두면 Collapse 가 조각마다 오그라뜨려 구멍이 난다
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
+    bm.to_mesh(obj.data)
+    bm.free()
     mod = obj.modifiers.new('decimate', 'DECIMATE')
     mod.ratio = max_tris / tris
     bpy.ops.object.select_all(action='DESELECT')
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.modifier_apply(modifier=mod.name)
+    obj.data.validate(clean_customdata=False)   # 용접한 메시를 감축하면 겹친 면이 생김 — 정리(남기면 glTF 내보내기가 "not valid" 경고)
     return tri_count(obj)
 
 
