@@ -32,6 +32,8 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
   scene.name = 'NW_Interior';
   scene.background = new THREE.Color('#C9CECD');
   scene.add(new THREE.HemisphereLight('#F4F1EA', '#3A2A26', 1.1));
+  // 모바일은 HDRI 환경광을 받지 않으므로(진입 예산) 고른 채움광으로 천장 · 바닥이 어둡게 가라앉지 않게 한다
+  if (quality.tier === 'mobile') scene.add(new THREE.AmbientLight('#EDEAE4', 1.2));
   const key = new THREE.DirectionalLight('#FFF4E6', 1.2);
   key.position.set(-8, 14, 10);
   scene.add(key);
@@ -49,6 +51,7 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
   let floorRoot = null;
   let exitArmed = true;
   let exitPrompt = false;   // 출구 질문 모달이 떠 있는지
+  let fovBefore = null;     // 진입 직전 외관 카메라 시야각
 
   // 화면 전환(검게) + 실내 HUD
   const fade = el('div', 'nw-fade');
@@ -152,12 +155,14 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
       await loadLayout();
       if (layout.building !== buildingId) throw new Error(`실내 없음: ${buildingId}`);
       const def = layout.floors.find((f) => f.id === layout.defaultFloor);
-      await loadEnv();
+      // 모바일은 외관처럼 HDRI 를 받지 않는다(진입 추가 다운로드 ≤ 4 MB — 1F 모바일 GLB 만). 반구광 · 방향광으로 비춘다
+      if (quality.tier !== 'mobile') await loadEnv();
       const entry = await loadFloor(def, (r) => {
         fadeText.textContent = `실내 불러오는 중… ${Math.round(r * 100)}%`;
       });
       camCtrl.stopFlight();
       camCtrl.setWalkMode(false);
+      fovBefore = camera.fov;   // 나갈 때 외관 구도의 시야각으로 되돌린다(보행 시야각 50° 가 남지 않게)
       showFloor(def, entry);
       post.renderPass.scene = scene;
       active = true;
@@ -204,6 +209,10 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
       camCtrl.setBounds(null);
       const a = approachFor(world.layout, 'haus');
       if (a) camCtrl.placeAt(a.pos, a.target);
+      if (fovBefore) {
+        camera.fov = fovBefore;
+        camera.updateProjectionMatrix();
+      }
       active = false;
       document.body.classList.remove('is-interior');
       hud.hidden = true;

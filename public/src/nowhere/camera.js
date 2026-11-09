@@ -143,6 +143,9 @@ export function createCameraController({
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
     if (flight) return;   // 시나리오 비행 중 키 입력 무시(Esc 는 main.js 가 캡처 단계에서 먼저 받아 투어를 끝낸다)
     if (introActive && !e.metaKey && !e.ctrlKey) {
+      // 건너뛰기에 쓴 Enter · Space · Tab 의 기본 동작을 막는다 — 곧바로 뜨는 건물 선택 모달의 포커스된 버튼이
+      // 같은 키의 keypress 로 눌리거나(Enter · Space) 포커스가 밀리지(Tab) 않게
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'Tab') e.preventDefault();
       onUserInterrupt();
       return;
     }

@@ -40,3 +40,16 @@ test('(c) 파일 존재 · 예산(층 GLB 데스크톱 ≤ 6 MB · 모바일 ≤
     assert.ok(size(f.mobileGlb) <= 3 * 1024 * 1024, `${f.mobileGlb} ${size(f.mobileGlb)} B`);
   }
 });
+
+test('(d) 실내 진입 추가 다운로드(스펙 §2.7): 데스크톱 1F GLB + HDRI ≤ 8 MB, 모바일 1F 모바일 GLB(HDRI 생략) ≤ 4 MB', () => {
+  const L = JSON.parse(readFileSync(layoutUrl, 'utf8'));
+  const size = (rel) => statSync(new URL(rel, PUB)).size;
+  const f1 = L.floors.find((f) => f.id === L.defaultFloor);
+  const desktop = size(f1.glb) + size(L.env);
+  const mobile = size(f1.mobileGlb);
+  assert.ok(desktop <= 8 * 1024 * 1024, `데스크톱 진입 ${desktop} B`);
+  assert.ok(mobile <= 4 * 1024 * 1024, `모바일 진입 ${mobile} B`);
+  // 모바일이 HDRI 를 받지 않는 정책이 코드에 남아 있는지
+  const src = readFileSync(new URL('src/nowhere/interior.js', PUB), 'utf8');
+  assert.match(src, /quality\.tier !== 'mobile'\) await loadEnv\(\)/);
+});

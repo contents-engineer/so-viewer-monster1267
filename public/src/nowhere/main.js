@@ -237,6 +237,8 @@ async function boot() {
     camCtrl.stopFlight();
     // 인트로 중 '건물 이동' · '투어 시작' → 인트로를 끝내고 건너뛰기와 같이 거리 시점(시야각 포함)으로 내려온 뒤 시작
     if (camCtrl.isIntroActive()) camCtrl.setPreset('street', true);
+    // 시나리오가 시작되면 보행 시점은 해제한다(스펙 §1.1 — 보행 중 '건물 이동')
+    if (camCtrl.isWalkMode()) camCtrl.setWalkMode(false);
     scenario.start(stepId).catch((err) => console.error('[nowhere] 투어 오류', err));
   }
 
