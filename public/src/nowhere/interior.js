@@ -114,7 +114,12 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
   tourBtn.addEventListener('click', () => {
     // 포커스를 풀어 Enter 를 누르고 있을 때 키 반복이 버튼을 다시 눌러 둘러보기를 처음부터 시작하지 않게
     tourBtn.blur();
-    if (active && !busy && floorDef?.tour?.length) tour.play(floorDef.tour);
+    if (!active || busy || !floorDef?.tour?.length) return;
+    const floorId = floorDef.id;
+    tour.play(floorDef.tour).then((r) => {
+      // 끝까지 보면 마지막 지점에서 보행으로 돌아간다(지점은 전시물 밖 — 보행이 지면 눈높이로 붙임). 입력으로 멈췄으면(stopped) 그 자리에서 보행 꺼진 채
+      if (r === 'done' && active && !busy && floorDef?.id === floorId && !modal.isOpen()) camCtrl.setWalkMode(true);
+    });
   });
   exitBtn.addEventListener('click', () => exit());
   // 둘러보기 중 아무 입력(키 · 화면 클릭 · 휠)이면 멈추고 그 자리에서 자유 이동 — 비행 중 입력은 camera.js 가 먼저 끊는다
