@@ -235,7 +235,8 @@ async function boot() {
     if (interior.isActive()) return;
     modal.close();
     camCtrl.stopFlight();
-    camCtrl.cancelIntro();   // 인트로 중 '건물 이동' → 모달 뒤에서 인트로가 계속 돌다 거리 시점으로 튀지 않게
+    // 인트로 중 '건물 이동' · '투어 시작' → 인트로를 끝내고 건너뛰기와 같이 거리 시점(시야각 포함)으로 내려온 뒤 시작
+    if (camCtrl.isIntroActive()) camCtrl.setPreset('street', true);
     scenario.start(stepId).catch((err) => console.error('[nowhere] 투어 오류', err));
   }
 
