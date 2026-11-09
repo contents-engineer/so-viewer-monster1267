@@ -235,6 +235,7 @@ async function boot() {
     if (interior.isActive()) return;
     modal.close();
     camCtrl.stopFlight();
+    camCtrl.cancelIntro();   // 인트로 중 '건물 이동' → 모달 뒤에서 인트로가 계속 돌다 거리 시점으로 튀지 않게
     scenario.start(stepId).catch((err) => console.error('[nowhere] 투어 오류', err));
   }
 
@@ -242,6 +243,8 @@ async function boot() {
   window.addEventListener(
     'keydown',
     (e) => {
+      // 조작 안내가 이미 받은 Esc(같은 창 캡처 단계라 stopPropagation 으로는 안 막힘)는 투어를 끝내지 않는다
+      if (e.defaultPrevented || help.isOpen()) return;
       if (e.key !== 'Escape' || !scenario.isRunning() || interior.isActive()) return;
       if (!camCtrl.isIntroActive() && !camCtrl.isFlying()) return;
       e.preventDefault();

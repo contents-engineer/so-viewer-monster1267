@@ -98,7 +98,11 @@ export function createModal({ onShow = null } = {}) {
       const help = document.querySelector('.nw-help');
       if (help && !help.hidden) return;
       let id = resolveModalKey(e.key, current.buttons);
-      if (id === undefined) return;
+      if (id === undefined) {
+        // 그 밖의 키(V · WASD 등)가 모달 뒤 카메라로 가지 않게 전파만 막는다(keydown 만 — keyup 은 지나가 누른 키가 남지 않음, Tab 이동은 그대로)
+        e.stopPropagation();
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
       // 키 반복(꾹 누름)은 삼키기만 한다 — 연쇄 모달이 자동 확정되거나 카메라로 새지 않게.
