@@ -97,3 +97,12 @@ test('(i) 어댑터가 예외를 던져도 실행기는 정리된다(onEnd 한 �
   assert.equal(r.isRunning(), false);
   assert.equal(r.current(), null);
 });
+
+test('(j) 시나리오가 쓰는 건물 id 는 모두 TOUR_BUILDINGS 에 있다', async () => {
+  const { TOUR_BUILDINGS } = await import('../public/src/nowhere/tour-config.js');
+  const ids = Object.values(SCENARIO.steps)
+    .flatMap((s) => [s.building, ...(s.buttons || []).map((b) => b.building)])
+    .filter(Boolean);
+  assert.ok(ids.length >= 4, `건물 id ${ids.length}개`);
+  for (const id of ids) assert.ok(TOUR_BUILDINGS[id], `TOUR_BUILDINGS 에 '${id}' 없음`);
+});
