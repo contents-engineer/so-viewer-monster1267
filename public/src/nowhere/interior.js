@@ -116,8 +116,10 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     const groundAt = createGroundQuery([grid], 0);
     const occ = createOccupancyGrid({ x0: x0 - 1, z0: z0 - 1, x1: x1 + 1, z1: z1 + 1, cell: 0.25 });
     markObstacleMeshes(occ, solids, groundAt);
+    // 층 영역(벽 안쪽) 밖은 막는다 — 1F 정문 열림으로 걸어 나가면 바닥 없는 바깥으로 빠지므로(나가기는 출구 모달 · 버튼으로)
+    const insideFloor = (x, z, r) => x >= x0 + r && x <= x1 - r && z >= z0 + r && z <= z1 - r;
     const blocker = {
-      isBlocked: (x, z, clearance = 0, radius = 0.35) => isBlockedAt(occ, x, z, radius, clearance),
+      isBlocked: (x, z, clearance = 0, radius = 0.35) => !insideFloor(x, z, radius) || isBlockedAt(occ, x, z, radius, clearance),
       topAt: (x, z, radius = 0.2) => obstacleTopAt(occ, x, z, radius),
     };
     const entry = { root, groundAt, blocker };
