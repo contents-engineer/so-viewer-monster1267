@@ -53,3 +53,29 @@ test('(d) 실내 진입 추가 다운로드(스펙 §2.7): 데스크톱 1F GLB +
   const src = readFileSync(new URL('src/nowhere/interior.js', PUB), 'utf8');
   assert.match(src, /quality\.tier !== 'mobile'\) await loadEnv\(\)/);
 });
+
+test('(e) 층마다 엘리베이터 · 시작점 · 둘러보기(2곳 이상)가 있고, 시작점은 엘리베이터 반경 밖, 진입점은 출구 반경 밖', () => {
+  const L = JSON.parse(readFileSync(layoutUrl, 'utf8'));
+  for (const f of L.floors) {
+    assert.ok(f.elevator && f.spawn, `${f.id}: elevator · spawn`);
+    assert.ok(f.tour.length >= 2, `${f.id}: tour ${f.tour.length}곳`);
+    const d = Math.hypot(f.spawn.pos[0] - f.elevator.pos[0], f.spawn.pos[2] - f.elevator.pos[2]);
+    assert.ok(d > f.elevator.radius, `${f.id}: 시작점이 엘리베이터 반경 안(${d.toFixed(2)} ≤ ${f.elevator.radius})`);
+    if (f.exit) {
+      const s = (f.entry ?? f.spawn).pos;
+      const e = Math.hypot(s[0] - f.exit.pos[0], s[2] - f.exit.pos[2]);
+      assert.ok(e > f.exit.radius, `${f.id}: 진입점이 출구 반경 안`);
+    }
+  }
+});
+
+test('(f) B1F 카페: 지하(elevation −4.5) · 층고 4 m · 출구 없음', () => {
+  const L = JSON.parse(readFileSync(layoutUrl, 'utf8'));
+  const f = L.floors.find((x) => x.id === 'b1');
+  assert.ok(f, 'B1F 없음');
+  assert.equal(f.label, 'B1F 카페');
+  assert.equal(f.elevation, -4.5);
+  assert.equal(f.ceiling, 4);
+  assert.equal(f.exit, undefined);
+  assert.equal(f.glb, 'assets/nowhere-inner/inner-b1.glb');
+});

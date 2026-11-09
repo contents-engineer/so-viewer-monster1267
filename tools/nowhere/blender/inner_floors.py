@@ -55,7 +55,47 @@ def build_floor_1(c, M):
     import_prop('main/display.glb', 'EX_display', c, (-16.4, 6.0, 0.0), width=6.0, rz=90)
 
 
+# ═════════════ B1F 카페 ═════════════
+# Blender 평면: x −13…13, y −13…13, 층고 4 m, 창 없음(지하). 북측 엘리베이터 코어(앞면 y 11.5).
+FLOOR_B1 = {
+    'id': 'b1', 'label': 'B1F 카페',
+    'glb': 'assets/nowhere-inner/inner-b1.glb', 'mobileGlb': 'assets/nowhere-inner/mobile/inner-b1.glb',
+    'elevation': -4.5, 'bounds_bl': (-13.0, -13.0, 13.0, 13.0), 'ceiling': 4.0,
+    'floor_tex': {'dir': 'b1f', 'diffuse': 'floor_b1_diffuse.png', 'normal': 'floor_b1_normal.png', 'tile': 1.5, 'rough': 0.85},
+    'spawn': ((0.0, 7.5, 1.7), (0.0, 0.0, 1.5)),
+    'elevator': ((0.0, 11.0, 0.0), 2.5),
+    'exhibits': [
+        ('cafe', '지하 카페', '테이블 여섯 개와 버섯 몬스터 손님', (0.0, -2.5, 1.0)),
+    ],
+    'tour': [
+        ((-9.0, -10.0, 2.0), (0.0, -2.5, 0.8), '지하 카페 — 버섯 몬스터 손님이 앉은 테이블', 5),
+        ((9.0, -10.0, 2.2), (3.5, 4.0, 0.9), '버섯 손님 — 오늘의 주문을 기다리는 중', 4),
+    ],
+}
+TABLES_B1 = ((-7.0, -6.0), (0.0, -6.0), (7.0, -6.0), (-7.0, 1.0), (0.0, 1.0), (7.0, 1.0))
+
+
+def build_floor_b1(c, M):
+    X0, Y0, X1, Y1 = FLOOR_B1['bounds_bl']
+    H = FLOOR_B1['ceiling']
+    T = 0.3
+    plane('IN_floor', c, X0 - T, Y0 - T, X1 + T, Y1 + T, 0.0, M['floor'])
+    box('IN_ceiling', c, X0 - T, Y0 - T, H, X1 + T, Y1 + T, H + 0.2, M['ceiling'])
+    # 지하라 창 없는 콘크리트 벽
+    box('IN_wall_s', c, X0 - T, Y0 - T, 0.0, X1 + T, Y0, H, M['concrete'])
+    box('IN_wall_n', c, X0 - T, Y1, 0.0, X1 + T, Y1 + T, H, M['concrete'])
+    box('IN_wall_w', c, X0 - T, Y0, 0.0, X0, Y1, H, M['concrete'])
+    box('IN_wall_e', c, X1, Y0, 0.0, X1 + T, Y1, H, M['concrete'])
+    elevator_core(c, M, 11.5, Y1, H)
+    columns(c, M, ((-10.5, 0.0), (10.5, 0.0)), H)
+    for i, (x, y) in enumerate(TABLES_B1):
+        import_prop('b1f/table.glb', f'EX_table_{i}', c, (x, y, 0.0), height=0.75, rz=0.0)
+    import_prop('etc/Mushroom.glb', 'EX_guest_0', c, (-3.5, -2.5, 0.0), height=1.2, rz=0.0)
+    import_prop('etc/Monster1_room.glb', 'EX_guest_1', c, (3.5, 4.0, 0.0), height=1.2, rz=180.0)
+
+
 # 빌드 순서 = inner-layout.json 의 floors 순서
 FLOORS = [
+    (FLOOR_B1, build_floor_b1),
     (FLOOR_1, build_floor_1),
 ]

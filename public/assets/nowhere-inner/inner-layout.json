@@ -4,6 +4,82 @@
   "env": "assets/nowhere-inner/env-1k.hdr",
   "floors": [
     {
+      "id": "b1",
+      "label": "B1F 카페",
+      "glb": "assets/nowhere-inner/inner-b1.glb",
+      "mobileGlb": "assets/nowhere-inner/mobile/inner-b1.glb",
+      "elevation": -4.5,
+      "bounds": [
+        -13.0,
+        -13.0,
+        13.0,
+        13.0
+      ],
+      "ceiling": 4.0,
+      "spawn": {
+        "pos": [
+          0.0,
+          1.7,
+          -7.5
+        ],
+        "target": [
+          0.0,
+          1.5,
+          -0.0
+        ]
+      },
+      "elevator": {
+        "pos": [
+          0.0,
+          0.0,
+          -11.0
+        ],
+        "radius": 2.5
+      },
+      "exhibits": [
+        {
+          "id": "cafe",
+          "title": "지하 카페",
+          "desc": "테이블 여섯 개와 버섯 몬스터 손님",
+          "pos": [
+            0.0,
+            1.0,
+            2.5
+          ]
+        }
+      ],
+      "tour": [
+        {
+          "pos": [
+            -9.0,
+            2.0,
+            10.0
+          ],
+          "target": [
+            0.0,
+            0.8,
+            2.5
+          ],
+          "caption": "지하 카페 — 버섯 몬스터 손님이 앉은 테이블",
+          "duration": 5
+        },
+        {
+          "pos": [
+            9.0,
+            2.2,
+            10.0
+          ],
+          "target": [
+            3.5,
+            0.9,
+            -4.0
+          ],
+          "caption": "버섯 손님 — 오늘의 주문을 기다리는 중",
+          "duration": 4
+        }
+      ]
+    },
+    {
       "id": "1",
       "label": "1F 로비",
       "glb": "assets/nowhere-inner/inner-1.glb",
