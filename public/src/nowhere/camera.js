@@ -139,9 +139,20 @@ export function createCameraController({
   };
   canvas.addEventListener('pointerdown', onUserInterrupt, { passive: true });
   canvas.addEventListener('wheel', onUserInterrupt, { passive: true });
+  // 끊을 수 있는 비행(실내 층 둘러보기)은 마우스 · 휠 입력으로도 멈춘다
+  const onFlightInterrupt = () => {
+    if (flight?.interruptible) stopFlight();
+  };
+  canvas.addEventListener('pointerdown', onFlightInterrupt, { passive: true });
+  canvas.addEventListener('wheel', onFlightInterrupt, { passive: true });
   window.addEventListener('keydown', (e) => {
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
-    if (flight) return;   // 시나리오 비행 중 키 입력 무시(Esc 는 main.js 가 캡처 단계에서 먼저 받아 투어를 끝낸다)
+    if (flight) {
+      // 시나리오 비행 중 키 입력은 무시(Esc 는 main.js 가 캡처 단계에서 먼저 받아 투어를 끝낸다).
+      // 끊을 수 있는 비행(실내 층 둘러보기)은 아무 키로 멈추고 그 자리에서 자유 이동
+      if (flight.interruptible && !e.metaKey && !e.ctrlKey) stopFlight();
+      return;
+    }
     if (introActive && !e.metaKey && !e.ctrlKey) {
       // 건너뛰기에 쓴 Enter · Space · Tab 의 기본 동작을 막는다 — 곧바로 뜨는 건물 선택 모달의 포커스된 버튼이
       // 같은 키의 keypress 로 눌리거나(Enter · Space) 포커스가 밀리지(Tab) 않게
@@ -244,8 +255,17 @@ export function createCameraController({
     finishFlight('cancelled');
   }
 
-  /** 시나리오 비행: buildFlightPath 결과({ points, targets, duration })를 따라 이동. 끝나면 'done', 끊기면 'cancelled'. */
-  function flyTo(path) {
+  /** 누르고 있던 이동 · 시선 키와 점프 예약을 비운다(모달이 뜰 때 — 질문 중에 계속 걷지 않게). */
+  function clearInput() {
+    walkKeys.clear();
+    jumpQueued = false;
+  }
+
+  /**
+   * 시나리오 비행: buildFlightPath 결과({ points, targets, duration })를 따라 이동. 끝나면 'done', 끊기면 'cancelled'.
+   * interruptible(실내 층 둘러보기)이면 키 · 캔버스 포인터 · 휠 입력으로 멈추고 그 자리에서 자유 이동한다.
+   */
+  function flyTo(path, { interruptible = false } = {}) {
     cancelIntro();
     if (walkMode) setWalkMode(false);
     stopFlight();
@@ -258,6 +278,7 @@ export function createCameraController({
         duration: Math.max(0.1, path.duration),
         elapsed: 0,
         resolve,
+        interruptible,
       };
       controls.enabled = false;   // 비행 중에는 드래그 · 휠 입력을 받지 않는다
     });
@@ -502,6 +523,7 @@ export function createCameraController({
     flyTo,
     stopFlight,
     isFlying: () => Boolean(flight),
+    clearInput,
     placeAt,
     setTerrain,
     setBounds,
