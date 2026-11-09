@@ -32,20 +32,25 @@ export function createDisplayScreen({ THREE, mesh, getWeather, width = 1024, hei
   mesh.material = new THREE.MeshBasicMaterial({ map: texture, toneMapped: false });
   let lastKey = null;
 
+  // 글자 크기 · 세로 위치는 캔버스 높이에 비례(512 px 기준값), 왼쪽 여백은 폭에 비례(1024 px 기준) — 화면 비율에 맞춘 캔버스에서도 같은 배치
+  const u = height / 512;
+  const px = (n) => Math.round(n * u);
+  const left = Math.round(64 * (width / 1024));
+
   function draw(date, weatherName) {
     const [title, time, wx] = displayLines(date, weatherName);
     ctx.fillStyle = '#05070A';
     ctx.fillRect(0, 0, width, height);
     ctx.textBaseline = 'top';
     ctx.fillStyle = '#6FD3FF';
-    ctx.font = '600 56px ui-monospace, "SFMono-Regular", Menlo, monospace';
-    ctx.fillText(title, 64, 64);
+    ctx.font = `600 ${px(56)}px ui-monospace, "SFMono-Regular", Menlo, monospace`;
+    ctx.fillText(title, left, px(64));
     ctx.fillStyle = '#F4F1EA';
-    ctx.font = '700 180px ui-monospace, "SFMono-Regular", Menlo, monospace';
-    ctx.fillText(time, 64, 150);
+    ctx.font = `700 ${px(180)}px ui-monospace, "SFMono-Regular", Menlo, monospace`;
+    ctx.fillText(time, left, px(150));
     ctx.fillStyle = '#B9C7CC';
-    ctx.font = '500 56px system-ui, sans-serif';
-    ctx.fillText(wx, 64, 370);
+    ctx.font = `500 ${px(56)}px system-ui, sans-serif`;
+    ctx.fillText(wx, left, px(370));
     texture.needsUpdate = true;
   }
 

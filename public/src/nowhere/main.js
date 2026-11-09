@@ -200,7 +200,13 @@ async function boot() {
   const help = createHelpOverlay({ onOpen: () => camCtrl.releasePointer() });
 
   // ── 시나리오 투어: 인트로 → 건물 선택 → 정면 비행 → 입장(성수 → 실내) / 준비중(몽골) ──
-  const modal = createModal({ onShow: () => camCtrl.releasePointer() });
+  // 모달이 뜨면 마우스 고정을 풀고, 누르던 이동 키를 비운다(질문 중에 계속 걷지 않게)
+  const modal = createModal({
+    onShow: () => {
+      camCtrl.releasePointer();
+      camCtrl.clearInput();
+    },
+  });
   const interior = createInterior({
     renderer,
     camera,
@@ -209,6 +215,7 @@ async function boot() {
     world,
     quality,
     modal,
+    weather,
     exteriorScene: scene,
   });
   const scenario = createScenarioRunner({

@@ -1,5 +1,6 @@
-// HAUS NOWHERE — 성수(HAUS NOWHERE) 실내 뷰: 별도 실내 씬 · 층 GLB/HDRI 불러오기 · 진입/나가기 화면 전환 ·
-// 실내 보행 지형(바닥 = 높이 격자, 바닥 · 천장 밖 = 장애물) · 1F 정문 출구 모달 · 실내 HUD.
+// HAUS NOWHERE — 성수(HAUS NOWHERE) 실내 뷰(B1F · 1F · 12F · 13F): 별도 실내 씬 · 층 GLB/HDRI 불러오기 · 진입/나가기 ·
+// 엘리베이터 층 이동(HUD 층 버튼 · 엘리베이터 문 앞 「층 선택」) · 층 둘러보기(tour 지점 비행 + 자막) · 창밖(외관 CubeCamera 캡처) ·
+// 밤 조명 · 1F 디스플레이 화면 · 실내 보행 지형(바닥 = 높이 격자, 바닥 · 천장 밖 = 장애물, 층 영역 밖 막힘) · 1F 정문 출구 · 실내 HUD.
 // 외관과 같은 후처리(composer)를 쓰고 renderPass.scene 만 바꿔 끼운다. 레이아웃: assets/nowhere-inner/inner-layout.json
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -8,10 +9,17 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { createHeightGrid, createGroundQuery, createOccupancyGrid, isBlockedAt, obstacleTopAt } from './terrain.js';
 import { rasterizeMeshes, markObstacleMeshes } from './terrain-mesh.js';
 import { approachFor } from './tour-config.js';
+import { floorOrder, shortLabel, elevatorButtons, inArea, createAreaTrigger, isFloorChain, isCeilingChain } from './inner-nav.js';
+import { createTourPlayer } from './inner-tour.js';
+import { createWindowView, hasWindowView, viewKey, interiorLighting, VIEW_SETTLE_MS } from './inner-view.js';
+import { createDisplayScreen } from './inner-display.js';
 
 export const INNER_LAYOUT_URL = 'assets/nowhere-inner/inner-layout.json';
 const FADE_MS = 600;
+const FLOOR_FADE_MS = 400;
 const EXTERIOR_WALK_FALLBACK = [-72.0, 36.5];
+const BG_COLOR = '#C9CECD';
+const HOME_ICON = 'assets/inner/icons/home.svg';
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -20,27 +28,28 @@ function el(tag, cls, text) {
   return e;
 }
 
-// 노드 이름(자기 + 조상)에 규칙 이름이 있는지 — glTF 메시는 이름 붙은 노드 아래 자식으로 올 수 있다
+// 노드 이름 사슬(자기 + 조상) — glTF 메시는 이름 붙은 노드 아래 자식으로 올 수 있다
 function nameChain(n) {
   let s = '';
   for (let p = n; p; p = p.parent) s += `${p.name || ''}|`;
   return s;
 }
 
-export function createInterior({ renderer, camera, camCtrl, post, world, quality, modal, exteriorScene, onChange = null }) {
+export function createInterior({ renderer, camera, camCtrl, post, world, quality, modal, weather = null, exteriorScene, onChange = null }) {
+  const mobile = quality.tier === 'mobile';
   const scene = new THREE.Scene();
   scene.name = 'NW_Interior';
-  scene.background = new THREE.Color('#C9CECD');
-  scene.add(new THREE.HemisphereLight('#F4F1EA', '#3A2A26', 1.1));
+  scene.background = new THREE.Color(BG_COLOR);
+  const hemi = new THREE.HemisphereLight('#F4F1EA', '#3A2A26', 1.1);
   // 모바일은 HDRI 환경광을 받지 않으므로(진입 예산) 고른 채움광으로 천장 · 바닥이 어둡게 가라앉지 않게 한다
-  if (quality.tier === 'mobile') scene.add(new THREE.AmbientLight('#EDEAE4', 1.2));
+  const ambient = new THREE.AmbientLight('#EDEAE4', mobile ? 1.2 : 0);
   const key = new THREE.DirectionalLight('#FFF4E6', 1.2);
   key.position.set(-8, 14, 10);
-  scene.add(key);
+  scene.add(hemi, ambient, key);
 
-  const pmrem = new THREE.PMREMGenerator(renderer);
   const loader = new GLTFLoader();
   loader.setMeshoptDecoder(MeshoptDecoder);
+  const view = createWindowView({ THREE, renderer, exteriorScene, world, far: camera.far });
 
   let layout = null;
   let envReady = false;
@@ -49,33 +58,70 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
   let busy = false;
   let floorDef = null;
   let floorRoot = null;
-  let exitArmed = true;
-  let exitPrompt = false;   // 출구 질문 모달이 떠 있는지
-  let fovBefore = null;     // 진입 직전 외관 카메라 시야각
+  let fovBefore = null;    // 진입 직전 외관 카메라 시야각
+  let promptOpen = false;  // 출구 · 층 선택 질문이 떠 있는지
+  let display = null;      // 1F 디스플레이 화면
+  let lastNight = -1;
+  let lastViewKey = null;
+  let viewDirtyAt = 0;
+  const exitTrigger = createAreaTrigger();
+  const elevatorTrigger = createAreaTrigger();
 
-  // 화면 전환(검게) + 실내 HUD
+  // 화면 전환(검게)
   const fade = el('div', 'nw-fade');
   const fadeText = el('div', 'nw-fade-text');
   fade.append(fadeText);
   document.body.append(fade);
+
+  // 실내 HUD: 층 이름 · 층 버튼 · 이 층 둘러보기 · 밖으로 나가기 + 하단 둘러보기 자막
   const hud = el('div', 'nw-interior-hud');
   hud.hidden = true;
   const floorLabel = el('div', 'nw-interior-floor');
+  const floorNav = el('div', 'nw-interior-floors');
+  floorNav.setAttribute('role', 'group');
+  floorNav.setAttribute('aria-label', '층 이동');
+  const tourBtn = el('button', 'nw-btn nw-interior-tour', '이 층 둘러보기');
+  tourBtn.type = 'button';
   const exitBtn = el('button', 'nw-btn nw-interior-exit');
   exitBtn.type = 'button';
   const icon = document.createElement('img');
-  icon.src = 'assets/inner/icons/home.svg';
   icon.alt = '';
   exitBtn.append(icon, document.createTextNode('밖으로 나가기'));
-  hud.append(floorLabel, exitBtn);
-  document.body.append(hud);
-  exitBtn.addEventListener('click', () => exit());
+  hud.append(floorLabel, floorNav, tourBtn, exitBtn);
+  const caption = el('div', 'nw-interior-caption');
+  caption.hidden = true;
+  caption.setAttribute('aria-live', 'polite');
+  document.body.append(hud, caption);
+  const floorBtns = new Map();
 
-  const fadeTo = (on, text = '') =>
+  const tour = createTourPlayer({
+    camCtrl,
+    getView: () => ({ pos: camera.position.toArray(), target: camCtrl.controls.target.toArray() }),
+    showCaption: (text) => {
+      caption.textContent = text;
+      caption.hidden = !text;
+    },
+  });
+  tourBtn.addEventListener('click', () => {
+    // 포커스를 풀어 Enter 를 누르고 있을 때 키 반복이 버튼을 다시 눌러 둘러보기를 처음부터 시작하지 않게
+    tourBtn.blur();
+    if (active && !busy && floorDef?.tour?.length) tour.play(floorDef.tour);
+  });
+  exitBtn.addEventListener('click', () => exit());
+  // 둘러보기 중 아무 입력(키 · 화면 클릭 · 휠)이면 멈추고 그 자리에서 자유 이동 — 비행 중 입력은 camera.js 가 먼저 끊는다
+  const stopTourOnInput = () => {
+    if (tour.isPlaying()) tour.stop();
+  };
+  window.addEventListener('keydown', stopTourOnInput);
+  renderer.domElement.addEventListener('pointerdown', stopTourOnInput);
+  renderer.domElement.addEventListener('wheel', stopTourOnInput, { passive: true });
+
+  const fadeTo = (on, text = '', ms = FADE_MS) =>
     new Promise((res) => {
       fadeText.textContent = text;
+      fade.style.transitionDuration = `${ms}ms`;
       fade.classList.toggle('is-on', on);
-      setTimeout(res, FADE_MS);
+      setTimeout(res, ms);
     });
 
   async function loadLayout() {
@@ -91,9 +137,11 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     if (envReady) return;
     const hdr = await new RGBELoader().loadAsync(layout.env);
     hdr.mapping = THREE.EquirectangularReflectionMapping;
+    const pmrem = new THREE.PMREMGenerator(renderer);
     scene.environment = pmrem.fromEquirectangular(hdr).texture;
     scene.environmentIntensity = 0.9;
     hdr.dispose();
+    pmrem.dispose();
     envReady = true;
   }
 
@@ -111,8 +159,14 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     root.traverse((n) => {
       if (!n.isMesh) return;
       const chain = nameChain(n);
-      if (/IN_floor/.test(chain)) floors.push(n);
-      else if (!/IN_ceiling/.test(chain)) solids.push(n);
+      if (isFloorChain(chain)) floors.push(n);
+      else if (!isCeilingChain(chain)) solids.push(n);
+      // 전시물(EX_*) 원본 재질이 BLEND 로 들어오면(텍스처 알파는 불투명) 깊이를 쓰지 않아 뒷면 · 먼 면이 앞에 그려지므로 불투명으로 바꾼다
+      const m = n.material;
+      if (/(^|\|)EX_/.test(chain) && m && m.transparent && m.opacity >= 1) {
+        m.transparent = false;
+        m.depthWrite = true;
+      }
     });
     const [x0, z0, x1, z1] = def.bounds;
     const grid = createHeightGrid({ x0: x0 - 1, z0: z0 - 1, x1: x1 + 1, z1: z1 + 1, cell: 0.5 });
@@ -126,9 +180,70 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
       isBlocked: (x, z, clearance = 0, radius = 0.35) => !insideFloor(x, z, radius) || isBlockedAt(occ, x, z, radius, clearance),
       topAt: (x, z, radius = 0.2) => obstacleTopAt(occ, x, z, radius),
     };
+    // 1F 디스플레이 화면(빌드가 만든 EX_display_screen)에 시각 · 기상 캔버스를 입힌다
+    if (!display) {
+      const s = root.getObjectByName('EX_display_screen');
+      const mesh = s?.isMesh ? s : s?.children.find((m) => m.isMesh);
+      if (mesh) {
+        // 캔버스 비율을 화면 사각형(가로 = 수평 폭, 세로 = 높이)에 맞춘다 — 2:1 기본 캔버스면 글자가 세로로 늘어나 보이므로
+        const size = new THREE.Box3().setFromObject(mesh).getSize(new THREE.Vector3());
+        const aspect = Math.max(size.x, size.z) / Math.max(size.y, 1e-3);
+        display = createDisplayScreen({
+          THREE,
+          mesh,
+          getWeather: () => weather?.getWeather?.() ?? '',
+          width: 1024,
+          height: Math.round(1024 / aspect),
+        });
+      }
+    }
     const entry = { root, groundAt, blocker };
     floorCache.set(def.id, entry);
     return entry;
+  }
+
+  function buildFloorNav() {
+    if (floorBtns.size) return;
+    for (const f of floorOrder(layout)) {
+      const b = el('button', 'nw-btn nw-interior-floor-btn', shortLabel(f));
+      b.type = 'button';
+      b.title = f.label;
+      b.addEventListener('click', () => {
+        b.blur();   // 키 반복 · Space 가 포커스 남은 층 버튼을 다시 누르지 않게
+        goToFloor(f.id);
+      });
+      floorNav.append(b);
+      floorBtns.set(f.id, b);
+    }
+  }
+
+  function markCurrent() {
+    for (const [id, b] of floorBtns) {
+      const cur = id === floorDef?.id;
+      b.classList.toggle('is-active', cur);
+      b.setAttribute('aria-pressed', String(cur));
+    }
+  }
+
+  // 밤 조명: uNight 에 따라 따뜻하게 · 밝게(스펙 §2.6). 값이 바뀔 때만 다시 넣는다
+  function applyLighting() {
+    const night = world.uniforms?.uNight?.value ?? 0;
+    if (Math.abs(night - lastNight) < 0.002) return;
+    lastNight = night;
+    const L = interiorLighting(night, mobile);
+    hemi.color.set(L.hemiSky);
+    hemi.groundColor.set(L.hemiGround);
+    hemi.intensity = L.hemiIntensity;
+    key.color.set(L.keyColor);
+    key.intensity = L.keyIntensity;
+    ambient.intensity = L.ambient;
+  }
+
+  // 창밖: 그 층 높이에서 외관을 캡처해 배경으로(지하는 단색)
+  function refreshView() {
+    scene.background = hasWindowView(floorDef) ? view.capture(floorDef.elevation) : new THREE.Color(BG_COLOR);
+    lastViewKey = weather ? viewKey(weather.getWeather(), weather.getHour()) : null;
+    viewDirtyAt = 0;
   }
 
   function showFloor(def, entry) {
@@ -137,6 +252,7 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     scene.add(floorRoot);
     floorDef = def;
     floorLabel.textContent = def.label;
+    markCurrent();
     camCtrl.setTerrain({
       groundHeightAt: entry.groundAt,
       getWalkBlocker: () => entry.blocker,
@@ -144,6 +260,13 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     });
     const [x0, z0, x1, z1] = def.bounds;
     camCtrl.setBounds({ x0, z0, x1, z1, yMin: 0.4, yMax: def.ceiling - 0.3 });
+    refreshView();
+    exitTrigger.reset();
+    elevatorTrigger.reset();
+  }
+
+  function closePrompt() {
+    if (promptOpen) modal.close();
   }
 
   /** 성수 실내 1F 로 들어간다. 성공하면 true, 실패 후 닫으면 false. */
@@ -154,8 +277,10 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
       await fadeTo(true, '실내로 들어가는 중…');
       await loadLayout();
       if (layout.building !== buildingId) throw new Error(`실내 없음: ${buildingId}`);
+      buildFloorNav();
+      if (!icon.getAttribute('src')) icon.src = HOME_ICON;   // 실내에 처음 들어갈 때 받는다(외관 첫 로딩 변화 없음)
       const def = layout.floors.find((f) => f.id === layout.defaultFloor);
-      // 모바일은 외관처럼 HDRI 를 받지 않는다(진입 추가 다운로드 ≤ 4 MB — 1F 모바일 GLB 만). 반구광 · 방향광으로 비춘다
+      // 모바일은 외관처럼 HDRI 를 받지 않는다(진입 추가 다운로드 ≤ 4 MB — 1F 모바일 GLB 만). 반구광 · 채움광으로 비춘다
       if (quality.tier !== 'mobile') await loadEnv();
       const entry = await loadFloor(def, (r) => {
         fadeText.textContent = `실내 불러오는 중… ${Math.round(r * 100)}%`;
@@ -166,7 +291,6 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
       showFloor(def, entry);
       post.renderPass.scene = scene;
       active = true;
-      exitArmed = true;
       document.body.classList.add('is-interior');
       hud.hidden = false;
       const start = def.entry || def.spawn;
@@ -192,11 +316,47 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     }
   }
 
+  /** 엘리베이터: 다른 층으로(0.4 초 어둡게 → 그 층 GLB · 창밖 → 그 층 spawn 에서 보행). 성공하면 true. */
+  async function goToFloor(id) {
+    if (!active || busy || id === floorDef?.id) return false;
+    const def = layout.floors.find((f) => f.id === id);
+    if (!def) return false;
+    busy = true;
+    tour.stop();
+    closePrompt();
+    try {
+      await fadeTo(true, '층 이동 중…', FLOOR_FADE_MS);
+      const entry = await loadFloor(def, (r) => {
+        fadeText.textContent = `층 불러오는 중… ${Math.round(r * 100)}%`;
+      });
+      camCtrl.setWalkMode(false);
+      showFloor(def, entry);
+      camCtrl.placeAt(def.spawn.pos, def.spawn.target);
+      camCtrl.setWalkMode(true);
+      await fadeTo(false, '', FLOOR_FADE_MS);
+      busy = false;
+      return true;
+    } catch (err) {
+      console.error('[nowhere] 층 불러오기 실패', err);
+      await fadeTo(false, '', FLOOR_FADE_MS);
+      const choice = await modal.show({
+        title: '층을 불러오지 못했습니다',
+        buttons: [
+          { id: 'retry', label: '다시 시도', primary: true },
+          { id: 'close', label: '닫기', cancel: true },
+        ],
+      });
+      busy = false;
+      return choice === 'retry' ? goToFloor(id) : false;
+    }
+  }
+
   /** 실내에서 나와 외관 HAUS 정면(카메라 시점)으로 돌아간다. */
   async function exit() {
     if (!active || busy) return;
     busy = true;
-    if (exitPrompt) modal.close();   // 출구 질문이 떠 있으면 닫는다(외관에 남거나 다음 방문에 응답되지 않게)
+    tour.stop();
+    closePrompt();   // 출구 · 층 선택 질문이 떠 있으면 닫는다(외관에 남거나 다음 방문에 응답되지 않게)
     try {
       await fadeTo(true);
       camCtrl.setWalkMode(false);
@@ -224,31 +384,61 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     }
   }
 
-  // 1F 정문 출구 영역: 보행 중 들어가면 한 번 묻고, 영역을 벗어났다 다시 들어오면 또 묻는다
-  function update() {
-    if (!active || busy || !floorDef?.exit || modal.isOpen()) return;
-    const p = camera.position;
-    const e = floorDef.exit;
-    const inside = Math.hypot(p.x - e.pos[0], p.z - e.pos[2]) <= e.radius;
-    if (inside && exitArmed && camCtrl.isWalkMode()) {
-      exitArmed = false;
-      exitPrompt = true;
-      modal
-        .show({
-          title: '밖으로 나가시겠습니까?',
-          buttons: [
-            { id: 'yes', label: '예', primary: true },
-            { id: 'no', label: '아니오', cancel: true },
-          ],
-        })
-        .then((c) => {
-          exitPrompt = false;
-          if (c === 'yes' && active) exit();
-        });
-    } else if (!inside) {
-      exitArmed = true;
-    }
+  function askExit() {
+    promptOpen = true;
+    modal
+      .show({
+        title: '밖으로 나가시겠습니까?',
+        buttons: [
+          { id: 'yes', label: '예', primary: true },
+          { id: 'no', label: '아니오', cancel: true },
+        ],
+      })
+      .then((c) => {
+        promptOpen = false;
+        if (c === 'yes' && active) exit();
+      });
   }
 
-  return { enter, exit, update, isActive: () => active, currentFloor: () => (active ? floorDef?.id ?? null : null), scene };
+  function askFloor() {
+    promptOpen = true;
+    modal.show({ title: '층 선택', buttons: elevatorButtons(layout, floorDef.id) }).then((c) => {
+      promptOpen = false;
+      if (c && c !== 'close' && active) goToFloor(c);
+    });
+  }
+
+  function update() {
+    if (!active) return;
+    applyLighting();
+    if (display && floorDef?.id === '1') display.update(new Date());
+    // 기상 · 시각이 바뀌면 전환이 끝난 뒤(VIEW_SETTLE_MS) 창밖을 다시 캡처한다
+    if (weather && !busy && hasWindowView(floorDef)) {
+      const k = viewKey(weather.getWeather(), weather.getHour());
+      const now = performance.now();
+      if (k !== lastViewKey) {
+        lastViewKey = k;
+        viewDirtyAt = now;
+      } else if (viewDirtyAt && now - viewDirtyAt >= VIEW_SETTLE_MS) {
+        refreshView();
+      }
+    }
+    // 보행 중 1F 정문 출구 · 엘리베이터 문 앞에 들어가면 한 번 묻고, 영역을 벗어났다 다시 들어오면 또 묻는다
+    if (busy || !floorDef || modal.isOpen()) return;
+    const p = camera.position;
+    const walking = camCtrl.isWalkMode();
+    if (floorDef.exit && exitTrigger.update(inArea(p, floorDef.exit), walking)) askExit();
+    else if (floorDef.elevator && elevatorTrigger.update(inArea(p, floorDef.elevator), walking)) askFloor();
+  }
+
+  return {
+    enter,
+    exit,
+    goToFloor,
+    update,
+    isActive: () => active,
+    currentFloor: () => (active ? floorDef?.id ?? null : null),
+    isTouring: () => tour.isPlaying(),
+    scene,
+  };
 }

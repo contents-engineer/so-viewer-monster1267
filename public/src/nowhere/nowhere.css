@@ -603,3 +603,44 @@ body.is-interior #nw-btn-buildings,
 body.is-interior .nw-dock-camera {
   display: none;
 }
+
+/* ── 실내 HUD: 층 버튼 · 이 층 둘러보기 · 둘러보기 자막 ── */
+.nw-interior-floors {
+  display: inline-flex;
+  gap: 4px;
+}
+.nw-interior-floor-btn {
+  min-width: 38px;
+  justify-content: center;
+}
+.nw-interior-caption {
+  position: fixed;
+  left: 50%;
+  bottom: 120px;
+  z-index: 21;
+  transform: translateX(-50%);
+  max-width: min(720px, calc(100vw - 32px));
+  padding: 10px 16px;
+  border: 1px solid var(--nw-line-struct);
+  border-left: 2px solid var(--nw-accent);
+  border-radius: 2px;
+  background: var(--nw-bg-panel);
+  color: var(--nw-text);
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+}
+.nw-interior-caption[hidden] {
+  display: none;
+}
+@media (max-width: 720px) {
+  .nw-interior-hud {
+    top: 88px;   /* 좁은 화면 상단 바(브랜드 + 보행 시점 · 조작 안내 줄, 아래 끝 약 81px) 아래로 */
+    left: 8px;
+    right: 8px;
+    flex-wrap: wrap;
+  }
+  .nw-interior-caption {
+    bottom: 150px;
+  }
+}
