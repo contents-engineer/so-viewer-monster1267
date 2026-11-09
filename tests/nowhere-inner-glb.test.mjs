@@ -62,3 +62,18 @@ test('(d) 층 삼각형 예산: 데스크톱 ≤ 60만 · 모바일 ≤ 30만(�
     }
   }
 });
+
+test('(e) 바닥 AO: IN_floor 재질에 occlusionTexture(texCoord 1)와 TEXCOORD_1 이 있다', () => {
+  for (const f of L.floors) {
+    for (const [key] of TIERS) {
+      const j = load(f[key]);
+      const node = j.nodes.find((n) => n.name === 'IN_floor' && n.mesh != null);
+      assert.ok(node, `${f[key]}: IN_floor 노드 없음`);
+      for (const p of j.meshes[node.mesh].primitives) {
+        const m = j.materials[p.material];
+        assert.equal(m.occlusionTexture?.texCoord, 1, `${f[key]}: occlusionTexture.texCoord`);
+        assert.ok('TEXCOORD_1' in p.attributes, `${f[key]}: TEXCOORD_1 없음`);
+      }
+    }
+  }
+});

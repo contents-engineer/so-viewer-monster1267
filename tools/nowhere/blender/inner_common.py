@@ -101,6 +101,77 @@ def box(name, c, x0, y0, z0, x1, y1, z1, mat):
     return o
 
 
+def plane(name, c, x0, y0, x1, y1, z, mat):
+    """위를 보는 수평 사각형 한 장(UV 'UVMap' = x, y m 단위). 바닥 — AO 굽기는 면이 겹치지 않는 평면이어야 한다."""
+    me = bpy.data.meshes.new(name)
+    me.from_pydata([(x0, y0, z), (x1, y0, z), (x1, y1, z), (x0, y1, z)], [], [(0, 1, 2, 3)])
+    uv = me.uv_layers.new(name='UVMap')
+    for lp in me.loops:
+        co = me.vertices[lp.vertex_index].co
+        uv.data[lp.index].uv = (co.x, co.y)
+    me.materials.append(mat)
+    o = bpy.data.objects.new(name, me)
+    c.objects.link(o)
+    return o
+
+
+def gltf_output_group():
+    """glTF 내보내기가 occlusion 을 읽는 노드 그룹('glTF Material Output', 입력 Occlusion)."""
+    g = bpy.data.node_groups.get('glTF Material Output')
+    if g is None:
+        g = bpy.data.node_groups.new('glTF Material Output', 'ShaderNodeTree')
+        g.interface.new_socket(name='Occlusion', in_out='INPUT', socket_type='NodeSocketFloat')
+    return g
+
+
+def bake_floor_ao(floor, tag, size=1024, samples=48, distance=2.5):
+    """바닥(IN_floor 평면)에 AO 를 굽는다: 두 번째 UV 'AO'(바닥 전체 0…1) + 이미지 → glTF occlusionTexture(texCoord 1).
+    벽 · 기둥 · 전시물 아래 접지 그늘만 굽고, 실시간 조명(반구광 · 방향광)은 웹에서 그대로 쓴다."""
+    sc = bpy.context.scene
+    sc.render.engine = 'CYCLES'
+    sc.cycles.samples = samples
+    sc.cycles.device = 'CPU'
+    sc.render.bake.target = 'IMAGE_TEXTURES'
+    w = sc.world or bpy.data.worlds.new('IN_bake_world')
+    sc.world = w
+    w.light_settings.distance = distance   # AO 거리(m)
+    me = floor.data
+    xs = [v.co.x for v in me.vertices]
+    ys = [v.co.y for v in me.vertices]
+    x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+    uv = me.uv_layers.new(name='AO')
+    for lp in me.loops:
+        co = me.vertices[lp.vertex_index].co
+        uv.data[lp.index].uv = ((co.x - x0) / (x1 - x0), (co.y - y0) / (y1 - y0))
+    img = bpy.data.images.new(f'IN_floor_ao_{tag}', size, size, alpha=False)
+    img.colorspace_settings.name = 'Non-Color'
+    nt = me.materials[0].node_tree
+    tex = nt.nodes.new('ShaderNodeTexImage')
+    tex.image = img
+    uvn = nt.nodes.new('ShaderNodeUVMap')
+    uvn.uv_map = 'AO'
+    nt.links.new(uvn.outputs['UV'], tex.inputs['Vector'])
+    for n in nt.nodes:
+        n.select = False
+    tex.select = True
+    nt.nodes.active = tex          # 굽기 대상 이미지(바닥 무늬 텍스처가 아니라 이 노드)
+    bpy.ops.object.select_all(action='DESELECT')
+    floor.select_set(True)
+    bpy.context.view_layer.objects.active = floor
+    bpy.ops.object.bake(type='AO', margin=4, use_clear=True, uv_layer='AO')   # 굽기는 활성 UV(UVMap)를 쓰므로 'AO' 로 지정
+    path = os.path.join(RAW, 'ao', f'inner-{tag}-ao.png')
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    img.filepath_raw = path
+    img.file_format = 'PNG'
+    img.save()
+    sep = nt.nodes.new('ShaderNodeSeparateColor')
+    nt.links.new(tex.outputs['Color'], sep.inputs['Color'])
+    grp = nt.nodes.new('ShaderNodeGroup')
+    grp.node_tree = gltf_output_group()
+    nt.links.new(sep.outputs['Red'], grp.inputs['Occlusion'])
+    print(f'[inner_build] AO baked {path}')
+
+
 def tri_count(obj):
     return sum(len(p.vertices) - 2 for p in obj.data.polygons)
 

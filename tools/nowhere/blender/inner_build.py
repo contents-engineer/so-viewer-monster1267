@@ -100,6 +100,7 @@ def main():
         M = materials(F)
         c = K.coll(f"INNER_{F['id']}")
         builder(c, M)
+        K.bake_floor_ao(bpy.data.objects['IN_floor'], F['id'])
         export_glb(c, os.path.join(K.RAW, f"inner-{F['id']}.glb"))
         render_preview(F, os.path.join(K.ROOT, 'build', 'nowhere', 'renders', f"inner-{F['id']}.png"))
         mobile_variant(c)
