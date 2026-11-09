@@ -129,11 +129,13 @@ export function createCameraController({
   }
 
   // 아무 입력(마우스/터치/휠/키보드)으로 인트로 즉시 건너뛰기
+  // 콜백은 거리 시점 배치가 끝난 뒤 부른다('complete' 와 같은 순서) — 콜백이 곧바로 flyTo 를 불러도 setPreset 이 끊지 않게.
   const onUserInterrupt = () => {
-    if (introActive) {
-      cancelIntro('skipped');
-      setPreset('street', true);
-    }
+    if (!introActive) return;
+    const cb = introOnEnd;
+    introOnEnd = null;            // setPreset 안의 cancelIntro 가 'cancelled' 로 부르지 않게 미리 떼어 둔다
+    setPreset('street', true);    // cancelIntro() → introActive false · controls 복구
+    if (typeof cb === 'function') cb('skipped');
   };
   canvas.addEventListener('pointerdown', onUserInterrupt, { passive: true });
   canvas.addEventListener('wheel', onUserInterrupt, { passive: true });
@@ -261,6 +263,7 @@ export function createCameraController({
   /** 카메라를 즉시 그 자리 · 그 시선으로 옮긴다(실내 진입 · 나가기). */
   function placeAt(pos, target) {
     cancelIntro();
+    if (walkMode) setWalkMode(false);   // 보행 중이면 다음 프레임에 walkEye 로 되돌아가므로 궤도 카메라로 바꾼 뒤 옮긴다
     stopFlight();
     transition = null;
     camera.position.fromArray(pos);
@@ -268,11 +271,14 @@ export function createCameraController({
     controls.update();
   }
 
-  /** 지면 높이 · 보행 장애물 · 보행 대체 시작점(x, z)을 바꿔 끼운다(실내 ↔ 외관). */
+  /**
+   * 지면 높이 · 보행 장애물 · 보행 대체 시작점(x, z)을 바꿔 끼운다(실내 ↔ 외관).
+   * getWalkBlocker 를 빼면 장애물 없음으로 바뀐다(지면만 바꿀 때도 다시 넘긴다). 보행 중이면 새 장애물을 바로 받아 충돌을 유지한다.
+   */
   function setTerrain({ groundHeightAt: g, getWalkBlocker: gb = null, walkFallback: wf = null }) {
     if (typeof g === 'function') groundHeightAt = g;
     getWalkBlocker = gb;
-    walkBlocker = null;
+    walkBlocker = walkMode && typeof getWalkBlocker === 'function' ? getWalkBlocker() : null;
     if (Array.isArray(wf)) walkFallback = wf;
   }
 
