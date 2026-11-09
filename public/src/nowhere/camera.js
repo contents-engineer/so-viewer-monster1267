@@ -30,6 +30,12 @@ export function createCameraController({
   let currentPresetId = 'street';
   let walkMode = false;
   let walkBlocker = null;
+  // 실내 뷰가 지형 · 장애물 · 보행 대체 위치 · 카메라 영역을 바꿔 끼운다(setTerrain/setBounds)
+  let walkFallback = [-72.0, 36.5];
+  let bounds = null;
+  // 시나리오 비행(flyTo) 상태와 인트로 종료 콜백
+  let flight = null;
+  let introOnEnd = null;
   // 보행 위치의 기준값. OrbitControls 는 포인터 이벤트 안에서도 update() 로 카메라를 공전시키므로
   // 매 프레임 camera.position 이 아니라 이 값으로 몸 위치를 되돌린다(드래그해도 제자리에서 고개만 돌아감).
   const walkEye = new THREE.Vector3();
@@ -101,15 +107,21 @@ export function createCameraController({
   // 보행 모드(1.7m 눈높이) 키 입력 상태
   const walkKeys = new Set();
 
-  function cancelIntro() {
+  // reason: 'complete'(끝까지 재생) | 'skipped'(사용자 입력으로 건너뜀) | 'cancelled'(프리셋 · 보행 등 다른 동작이 끊음)
+  function cancelIntro(reason = 'cancelled') {
     if (!introActive) return;
     introActive = false;
     controls.enabled = true;
+    const cb = introOnEnd;
+    introOnEnd = null;
+    if (typeof cb === 'function') cb(reason);
   }
 
-  function startIntro() {
+  function startIntro(onEnd = null) {
     if (walkMode) setWalkMode(false);
+    stopFlight();
     transition = null;
+    introOnEnd = onEnd;
     introActive = true;
     introElapsed = 0;
     camera.fov = 44;
@@ -119,7 +131,7 @@ export function createCameraController({
   // 아무 입력(마우스/터치/휠/키보드)으로 인트로 즉시 건너뛰기
   const onUserInterrupt = () => {
     if (introActive) {
-      cancelIntro();
+      cancelIntro('skipped');
       setPreset('street', true);
     }
   };
@@ -127,6 +139,7 @@ export function createCameraController({
   canvas.addEventListener('wheel', onUserInterrupt, { passive: true });
   window.addEventListener('keydown', (e) => {
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+    if (flight) return;   // 시나리오 비행 중 키 입력 무시(Esc 는 main.js 가 캡처 단계에서 먼저 받아 투어를 끝낸다)
     if (introActive && !e.metaKey && !e.ctrlKey) {
       onUserInterrupt();
       return;
@@ -160,6 +173,7 @@ export function createCameraController({
 
   function setWalkMode(enabled) {
     cancelIntro();
+    stopFlight();
     transition = null;
     walkMode = Boolean(enabled);
     if (walkMode && !walkBlocker && typeof getWalkBlocker === 'function') {
@@ -176,7 +190,7 @@ export function createCameraController({
       // 지면 기준 높이로 판단(DS2 는 지형 기복이 커서 절대 높이 1.7 m 가 언덕 속으로 들어간다)
       const above = camera.position.y - groundHeightAt(camera.position.x, camera.position.z);
       if (above > 6 || above < 0.8) {
-        camera.position.set(-72.0, 0, 36.5);
+        camera.position.set(walkFallback[0], 0, walkFallback[1]);
       }
       camera.position.y = groundHeightAt(camera.position.x, camera.position.z) + EYE_HEIGHT;
       controls.target.copy(camera.position).addScaledVector(forward, 2.5);
@@ -213,8 +227,79 @@ export function createCameraController({
     return walkMode;
   }
 
+  function finishFlight(result) {
+    if (!flight) return;
+    const done = flight.resolve;
+    flight = null;
+    controls.enabled = true;
+    done(result);
+  }
+
+  function stopFlight() {
+    finishFlight('cancelled');
+  }
+
+  /** 시나리오 비행: buildFlightPath 결과({ points, targets, duration })를 따라 이동. 끝나면 'done', 끊기면 'cancelled'. */
+  function flyTo(path) {
+    cancelIntro();
+    if (walkMode) setWalkMode(false);
+    stopFlight();
+    transition = null;
+    const toVecs = (arr) => arr.map((p) => new THREE.Vector3(p[0], p[1], p[2]));
+    return new Promise((resolve) => {
+      flight = {
+        posCurve: new THREE.CatmullRomCurve3(toVecs(path.points), false, 'centripetal'),
+        tgtCurve: new THREE.CatmullRomCurve3(toVecs(path.targets), false, 'centripetal'),
+        duration: Math.max(0.1, path.duration),
+        elapsed: 0,
+        resolve,
+      };
+      controls.enabled = false;   // 비행 중에는 드래그 · 휠 입력을 받지 않는다
+    });
+  }
+
+  /** 카메라를 즉시 그 자리 · 그 시선으로 옮긴다(실내 진입 · 나가기). */
+  function placeAt(pos, target) {
+    cancelIntro();
+    stopFlight();
+    transition = null;
+    camera.position.fromArray(pos);
+    controls.target.fromArray(target);
+    controls.update();
+  }
+
+  /** 지면 높이 · 보행 장애물 · 보행 대체 시작점(x, z)을 바꿔 끼운다(실내 ↔ 외관). */
+  function setTerrain({ groundHeightAt: g, getWalkBlocker: gb = null, walkFallback: wf = null }) {
+    if (typeof g === 'function') groundHeightAt = g;
+    getWalkBlocker = gb;
+    walkBlocker = null;
+    if (Array.isArray(wf)) walkFallback = wf;
+  }
+
+  /** 실내 궤도 카메라 영역(층 벽 · 천장 안쪽). null 이면 해제. */
+  function setBounds(b) {
+    bounds = b || null;
+  }
+
+  // 실내 궤도 카메라: 층 영역(벽 0.3 m 안쪽) · 천장 아래로 카메라와 시선 타깃을 묶는다
+  function clampInsideBounds() {
+    const m = 0.3;
+    let moved = false;
+    for (const v of [camera.position, controls.target]) {
+      const x = Math.min(bounds.x1 - m, Math.max(bounds.x0 + m, v.x));
+      const y = Math.min(bounds.yMax, Math.max(bounds.yMin, v.y));
+      const z = Math.min(bounds.z1 - m, Math.max(bounds.z0 + m, v.z));
+      if (x !== v.x || y !== v.y || z !== v.z) {
+        v.set(x, y, z);
+        moved = true;
+      }
+    }
+    return moved;
+  }
+
   function setPreset(id, instant = false) {
     cancelIntro();
+    stopFlight();
     if (walkMode) setWalkMode(false);
     const camDef = cameras.find((c) => c.id === id) || cameras[0];
     if (!camDef) return null;
@@ -277,9 +362,22 @@ export function createCameraController({
     if (!walkMode && clampAboveGround(camera.position, groundHeightAt, ORBIT_CLEARANCE)) {
       controls.update();
     }
+    if (bounds && !walkMode && clampInsideBounds()) {
+      controls.update();
+    }
   }
 
   function stepCamera(dt) {
+    if (flight) {
+      flight.elapsed += dt;
+      const t = Math.min(1, flight.elapsed / flight.duration);
+      const u = t * t * (3 - 2 * t);
+      flight.posCurve.getPoint(u, camera.position);
+      flight.tgtCurve.getPoint(u, controls.target);
+      controls.update();
+      if (t >= 1) finishFlight('done');
+      return;
+    }
     if (introActive) {
       introElapsed += dt;
       const t = Math.min(1, introElapsed / INTRO_DURATION);
@@ -291,7 +389,11 @@ export function createCameraController({
       controls.update();
       if (t >= 1) {
         introActive = false;
+        controls.enabled = true;
         setPreset('street', true);
+        const cb = introOnEnd;
+        introOnEnd = null;
+        if (typeof cb === 'function') cb('complete');
       }
       return;
     }
@@ -381,6 +483,12 @@ export function createCameraController({
     startIntro,
     cancelIntro,
     focusWorldPoint,
+    flyTo,
+    stopFlight,
+    isFlying: () => Boolean(flight),
+    placeAt,
+    setTerrain,
+    setBounds,
     update,
   };
 }
