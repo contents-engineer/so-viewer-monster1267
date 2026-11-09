@@ -44,8 +44,8 @@
         <button type="button" class="nw-btn is-active" data-world-ver="seongsu">성수 2041</button>
         <button type="button" class="nw-btn" data-world-ver="ds2">DS2 산악</button>
       </div>
-      <button id="nw-btn-analysis" type="button" class="nw-btn" aria-pressed="false">
-        분석 모드<span class="nw-btn-kbd">F</span>
+      <button id="nw-btn-buildings" type="button" class="nw-btn">
+        건물 이동
       </button>
       <button id="nw-btn-walk" type="button" class="nw-btn" aria-pressed="false">
         보행 시점<span class="nw-btn-kbd">V</span>
@@ -55,38 +55,6 @@
       </button>
     </div>
   </header>
-
-  <!-- 분석 모드 레이어 필터 -->
-  <nav id="nw-filter-bar" class="nw-filter-bar" aria-label="분석 레이어 필터">
-    <button type="button" class="nw-btn is-active" data-layer-filter="all">전체</button>
-    <button type="button" class="nw-btn" data-layer-filter="building">건물</button>
-    <button type="button" class="nw-btn" data-layer-filter="present">현재</button>
-    <button type="button" class="nw-btn" data-layer-filter="future">근미래</button>
-    <button type="button" class="nw-btn" data-layer-filter="nature">자연</button>
-  </nav>
-
-  <!-- 분석 모드 라벨 & 리더선 레이어 -->
-  <div id="nw-analysis-layer" class="nw-analysis-layer" aria-hidden="true">
-    <svg id="nw-analysis-svg" class="nw-analysis-svg"></svg>
-    <div id="nw-anchor-labels" class="nw-anchor-labels"></div>
-  </div>
-
-  <!-- 분석 기록 카드 -->
-  <aside id="nw-card" class="nw-card" aria-live="polite">
-    <div class="nw-card-header">
-      <div>
-        <div id="nw-card-kicker" class="nw-card-kicker">BUILDING</div>
-        <h2 id="nw-card-title" class="nw-card-title">HAUS NOWHERE</h2>
-      </div>
-      <button id="nw-card-close" type="button" class="nw-card-close" aria-label="카드 닫기">ESC</button>
-    </div>
-    <img id="nw-card-thumb" class="nw-card-thumb" src="assets/nowhere/renders/hero-street.webp" alt="구간 렌더">
-    <div class="nw-card-section-tag is-fact">기록 · 사실</div>
-    <dl id="nw-card-facts" class="nw-card-facts"></dl>
-    <div class="nw-card-section-tag is-lore">서사 · 허구 (2041)</div>
-    <p id="nw-card-lore" class="nw-card-lore"></p>
-    <div id="nw-card-sources" class="nw-card-sources"></div>
-  </aside>
 
   <!-- 하단 컨트롤 독 -->
   <footer class="nw-dock">

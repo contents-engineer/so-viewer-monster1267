@@ -6,7 +6,6 @@ import { createPostPipeline } from './post.js';
 import { createWeatherController, getPresets, parseTimeParam, TIME_QUICK } from './weather.js';
 import { createRainSystem } from './rain.js';
 import { createCameraController, updateDroneActors } from './camera.js';
-import { createAnalysisController } from './analysis.js';
 import { createHelpOverlay, createWalkHud } from './help.js';
 
 async function boot() {
@@ -39,10 +38,6 @@ async function boot() {
     if (loaderTitleEl) loaderTitleEl.textContent = 'HAUS NOWHERE — DS2 산악 고원';
     if (brandKickerEl) brandKickerEl.textContent = 'HIGHLAND BASIN · DS2 MOUNTAIN WORLD';
     if (brandTitleEl) brandTitleEl.textContent = 'HAUS NOWHERE — 초록 이끼 & 현무암 산악 월드';
-    const cardThumbEl = document.getElementById('nw-card-thumb');
-    if (cardThumbEl) cardThumbEl.src = 'assets/nowhere-ds2/renders/hero-street.webp';
-    const loreTagEl = document.querySelector('.nw-card-section-tag.is-lore');
-    if (loreTagEl) loreTagEl.textContent = '서사 · 허구 (DS2 고원)';
 
     const camLabels = {
       street: '개척로',
@@ -199,15 +194,6 @@ async function boot() {
   // 조작 안내(? 키 · 상단 버튼). 열 때 보행 마우스 고정을 풀어 안내를 클릭으로 닫을 수 있게 한다.
   const help = createHelpOverlay({ onOpen: () => camCtrl.releasePointer() });
 
-  const analysis = await createAnalysisController({
-    scene,
-    camera,
-    renderer,
-    world,
-    camCtrl,
-    quality,
-  });
-
   const initialCam = params.get('cam') || 'street';
   camCtrl.setPreset(initialCam, true);
   syncWeatherUI();
@@ -320,7 +306,6 @@ async function boot() {
     rain.update();
     updateDroneActors(world.droneActors, elapsed);
     camCtrl.update(dt);
-    analysis.update(dt);
 
     renderer.info.reset();
     post.composer.render();
@@ -336,7 +321,6 @@ async function boot() {
     camCtrl,
     weather,
     rain,
-    analysis,
     help,
     world,
     post,
@@ -354,8 +338,6 @@ async function boot() {
         camera: camCtrl.getPresetId(),
         walkMode: camCtrl.isWalkMode(),
         introActive: camCtrl.isIntroActive(),
-        analysisActive: analysis.isActive(),
-        selectedAnchor: analysis.getSelectedId(),
         fps: currentFps,
         calls: renderer.info.render.calls,
         triangles: renderer.info.render.triangles,
