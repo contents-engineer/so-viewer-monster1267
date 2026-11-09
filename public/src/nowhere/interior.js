@@ -1,5 +1,5 @@
 // HAUS NOWHERE — 성수(HAUS NOWHERE) 실내 뷰(B1F · 1F · 12F · 13F): 별도 실내 씬 · 층 GLB/HDRI 불러오기 · 진입/나가기 ·
-// 엘리베이터 층 이동(HUD 층 버튼 · 엘리베이터 문 앞 「층 선택」) · 층 둘러보기(tour 지점 비행 + 자막) · 창밖(외관 CubeCamera 캡처) ·
+// 엘리베이터 층 이동(HUD 층 버튼 · 엘리베이터 문 앞 「층 선택」) · 층 둘러보기(첫 지점 컷 · tour 지점 비행 + 자막) · 창밖(외관 CubeCamera 캡처) ·
 // 밤 조명 · 1F 디스플레이 화면 · 실내 보행 지형(바닥 = 높이 격자, 바닥 · 천장 밖 = 장애물, 층 영역 밖 막힘) · 1F 정문 출구 · 실내 HUD.
 // 외관과 같은 후처리(composer)를 쓰고 renderPass.scene 만 바꿔 끼운다. 레이아웃: assets/nowhere-inner/inner-layout.json
 import * as THREE from 'three';
@@ -17,6 +17,7 @@ import { createDisplayScreen } from './inner-display.js';
 export const INNER_LAYOUT_URL = 'assets/nowhere-inner/inner-layout.json';
 const FADE_MS = 600;
 const FLOOR_FADE_MS = 400;
+const TOUR_CUT_MS = 300;   // 둘러보기 첫 지점으로 옮길 때 어둡게 · 밝게 각각
 const EXTERIOR_WALK_FALLBACK = [-72.0, 36.5];
 const BG_COLOR = '#C9CECD';
 const HOME_ICON = 'assets/inner/icons/home.svg';
@@ -100,6 +101,14 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     showCaption: (text) => {
       caption.textContent = text;
       caption.hidden = !text;
+    },
+    // 첫 지점은 비행 대신 짧은 화면 전환 컷 — 사용자가 걸어간 어느 자리에서 시작해도 직선 비행이 전시물(1F 도시 모형 등)을 뚫지 않게
+    cut: async ({ pos, target }) => {
+      camCtrl.setWalkMode(false);   // 비행(flyTo)처럼 둘러보기 시작에 보행을 끈다 — 컷 도중 멈춰도 같은 상태
+      await fadeTo(true, '', TOUR_CUT_MS);
+      if (busy) return;   // 그사이 층 이동 · 나가기가 화면 전환을 넘겨받았다(밝히지 않는다)
+      if (tour.isPlaying()) camCtrl.placeAt(pos, target);   // 입력으로 멈췄으면 옮기지 않고 그 자리에서 밝힌다
+      await fadeTo(false, '', TOUR_CUT_MS);
     },
   });
   tourBtn.addEventListener('click', () => {

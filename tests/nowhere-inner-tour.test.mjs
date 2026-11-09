@@ -73,3 +73,45 @@ test('(d) stop(): 머무는 중에 멈추면 비행을 끊고 자막을 지우�
   assert.equal(cam.stopped, 1);
   assert.equal(p.isPlaying(), false);
 });
+
+test('(e) cut 이 있으면 첫 지점은 비행 대신 cut 으로 옮기고(지점 0 한 번), 나머지 구간은 그대로 비행한다', async () => {
+  const cam = fakeCam();
+  const cuts = [];
+  const captions = [];
+  const p = createTourPlayer({
+    camCtrl: cam,
+    getView: () => start,
+    showCaption: (t) => captions.push(t),
+    wait: () => Promise.resolve(),
+    cut: (to) => { cuts.push(to); return Promise.resolve(); },
+  });
+  assert.equal(await p.play(stops), 'done');
+  assert.deepEqual(cuts, [{ pos: stops[0].pos, target: stops[0].target }]);
+  assert.equal(cam.flights.length, stops.length - 1, '첫 구간은 비행하지 않는다');
+  assert.deepEqual(cam.flights[0].path.points, [stops[0].pos, stops[1].pos]);
+  assert.ok(cam.flights.every((f) => f.opts.interruptible === true));
+  assert.deepEqual(captions, ['도시 모형', 'DJ', '', '']);
+  assert.equal(p.isPlaying(), false);
+});
+
+test('(f) cut 도중 stop() 이면 stopped, 비행 없이 자막을 지우고 멈춘다', async () => {
+  const cam = fakeCam();
+  let release;
+  const captions = [];
+  const p = createTourPlayer({
+    camCtrl: cam,
+    getView: () => start,
+    showCaption: (t) => captions.push(t),
+    wait: () => Promise.resolve(),
+    cut: () => new Promise((r) => { release = r; }),
+  });
+  const run = p.play(stops);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(p.isPlaying(), true);
+  p.stop();
+  release();
+  assert.equal(await run, 'stopped');
+  assert.equal(cam.flights.length, 0);
+  assert.equal(captions.at(-1), '');
+  assert.equal(p.isPlaying(), false);
+});
