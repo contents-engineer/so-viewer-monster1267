@@ -158,12 +158,12 @@ FLOOR_1 = {
     'elevator': ((0.0, 19.0, 0.0), 2.5),
     'exhibits': [
         ('city_model', '성수 도시 모형', 'HAUS NOWHERE 미니어처와 성수의 그래피티 건물들', (0.0, 0.0, 1.5)),
-        ('dj', 'DJ 부스', '로비의 사운드 설치물', (10.5, 9.0, 1.2)),
+        ('dj', 'DJ 부스', '로비의 사운드 설치물', (8.8, 7.2, 1.2)),
         ('display', '디스플레이 월', 'HAUS NOWHERE SEOUL · 현재 시각 · 기상', (-16.4, 6.0, 2.4)),
     ],
     'tour': [
         ((6.0, -8.0, 2.2), (0.0, 0.0, 1.8), '성수 도시 모형 — HAUS NOWHERE 와 성수 골목', 5),
-        ((4.0, 3.0, 1.8), (10.5, 9.0, 1.2), 'DJ 부스 — 로비의 사운드 설치물', 4),
+        ((4.0, 3.0, 1.8), (8.8, 7.2, 1.2), 'DJ 부스 — 로비의 사운드 설치물', 4),
         ((-8.0, 2.0, 2.4), (-16.4, 6.0, 2.4), '디스플레이 월', 4),
     ],
 }
@@ -204,10 +204,10 @@ def build_floor_1(c, M):
     import_prop('etc/building_1.glb', 'EX_city_b1', c, (-2.9, -1.2, P), height=1.6, rz=-90)
     import_prop('etc/building_2.glb', 'EX_city_b2', c, (2.9, -1.5, P), height=1.4, rz=90)
     import_prop('etc/building_3.glb', 'EX_city_b3', c, (2.8, 1.7, P), height=1.9, rz=180)
-    import_prop('main/DJ.glb', 'EX_dj', c, (10.5, 9.0, 0.0), height=2.4, rz=-45)
+    import_prop('main/DJ.glb', 'EX_dj', c, (8.8, 7.2, 0.0), height=2.4, rz=-45)
     import_prop('main/display.glb', 'EX_display', c, (-16.4, 6.0, 0.0), width=6.0, rz=90)
-    import_prop('main/door_1.glb', 'EX_elevator_l', c, (-2.5, 19.45, 0.0), height=2.6)
-    import_prop('main/door_1.glb', 'EX_elevator_r', c, (2.5, 19.45, 0.0), height=2.6)
+    import_prop('main/door_1.glb', 'EX_elevator_l', c, (-2.5, 19.3, 0.0), height=2.6)
+    import_prop('main/door_1.glb', 'EX_elevator_r', c, (2.5, 19.3, 0.0), height=2.6)
 
 
 def floor_json(F):
