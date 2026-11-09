@@ -79,17 +79,21 @@ export function createScenarioRunner({ scenario = SCENARIO, adapters, onEnd = nu
     const my = ++token;
     running = true;
     let id = stepId;
-    while (id && id !== 'end') {
-      const step = scenario.steps[id];
-      if (!step) break;
-      currentId = id;
-      const fn = adapters[step.type];
-      const result = typeof fn === 'function' ? await fn(step) : undefined;
-      if (my !== token) return 'cancelled';
-      if (result === CANCEL) break;
-      id = nextStepId(step, result);
+    try {
+      while (id && id !== 'end') {
+        const step = scenario.steps[id];
+        if (!step) break;
+        currentId = id;
+        const fn = adapters[step.type];
+        const result = typeof fn === 'function' ? await fn(step) : undefined;
+        if (my !== token) return 'cancelled';
+        if (result === CANCEL) break;
+        id = nextStepId(step, result);
+      }
+    } finally {
+      // 정상 종료 · CANCEL · 어댑터 예외 모두 이 실행이 아직 유효하면 정리(onEnd 한 번). 예외는 그대로 호출자에게 던진다.
+      if (my === token) stop();
     }
-    if (my === token) stop();
     return 'done';
   }
 

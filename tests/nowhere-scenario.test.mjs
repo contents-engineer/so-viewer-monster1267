@@ -85,3 +85,15 @@ test('(h) nextStepId: 모달은 버튼의 next, 모르는 결과는 end, 나머�
   assert.equal(nextStepId(SCENARIO.steps.chooseBuilding, null), 'end');
   assert.equal(nextStepId(SCENARIO.steps.intro, 'skipped'), 'chooseBuilding');
 });
+
+test('(i) 어댑터가 예외를 던져도 실행기는 정리된다(onEnd 한 번 · isRunning false), 예외는 호출자에게 전달', async () => {
+  const log = [];
+  const a = fakeAdapters(['haus', 'yes'], log);
+  a.fly = async () => { throw new Error('flight failed'); };
+  let ended = 0;
+  const r = createScenarioRunner({ adapters: a, onEnd: () => ended++ });
+  await assert.rejects(r.start(), /flight failed/);
+  assert.equal(ended, 1);
+  assert.equal(r.isRunning(), false);
+  assert.equal(r.current(), null);
+});
