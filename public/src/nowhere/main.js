@@ -79,6 +79,7 @@ async function boot() {
       if (targetVer === worldVer) return;
       const nextParams = new URLSearchParams(window.location.search);
       nextParams.set('ver', targetVer);
+      nextParams.set('noIntro', '1');   // 월드만 바꿀 때는 투어(인트로 · 건물 선택)를 처음부터 다시 돌리지 않는다
       const basePath = window.location.pathname.includes('nowhere-mountain') && targetVer === 'seongsu'
         ? '/nowhere'
         : window.location.pathname.replace(/\.html$/, '');

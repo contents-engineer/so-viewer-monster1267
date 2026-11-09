@@ -271,7 +271,7 @@ body[data-world-ver="ds2"] .nw-loader {
   cursor: pointer;
 }
 
-/* ── 모바일 반응형 (≤ 720px: 하단 시트 60vh) ── */
+/* ── 모바일 반응형 (≤ 720px) ── */
 @media (max-width: 720px) {
   .nw-topbar {
     top: 8px;

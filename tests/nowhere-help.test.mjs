@@ -39,3 +39,10 @@ test('(c) 투어가 main.js 에 연결되어 있다(자동 시작 · 투어 시�
   assert.match(descs, /투어 시작/);
   assert.match(descs, /밖으로 나가기/);
 });
+
+test('(d) 실내 조작 안내: 층 버튼 · 층 선택 · 이 층 둘러보기', () => {
+  const descs = CONTROL_SECTIONS.flatMap((s) => s.rows.map((r) => r.desc)).join('\n');
+  assert.match(descs, /B1 · 1 · 12 · 13/);
+  assert.match(descs, /층 선택/);
+  assert.match(descs, /이 층 둘러보기/);
+});
