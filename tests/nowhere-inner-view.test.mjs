@@ -17,19 +17,31 @@ test('(b) 색 보간: 양 끝 · 가운데', () => {
   assert.equal(lerpHex('#F4F1EA', '#FFE2BC', 2), '#ffe2bc', '1 을 넘으면 끝 색');
 });
 
-test('(c) 밤 조명: uNight 0.5 이하는 낮과 같고, 1 이면 따뜻하게 · 밝게. 모바일은 채움광', () => {
+test('(c) 밤 조명: uNight 0.5 이하는 낮과 같고, 1 이면 따뜻하게 · 어둡게(대비 큼). 낮은 간접광 위주(AO 가 보이게). 모바일은 채움광', () => {
   const day = interiorLighting(0);
   assert.deepEqual(interiorLighting(0.5), day);
   assert.equal(day.hemiSky, '#f4f1ea');
+  assert.equal(day.hemiGround, '#3a2a26');
   assert.equal(day.keyColor, '#fff4e6');
-  assert.equal(day.hemiIntensity, 1.1);
-  assert.equal(day.keyIntensity, 1.2);
+  assert.equal(day.hemiIntensity, 1.6);
+  assert.equal(day.keyIntensity, 0.6);
+  assert.equal(day.envIntensity, 0.9);
   assert.equal(day.ambient, 0);
+  assert.ok(day.hemiIntensity > day.keyIntensity, 'aoMap 은 간접광만 어둡게 하므로 반구광 > 방향광');
   const night = interiorLighting(1);
-  assert.equal(night.keyColor, '#ffc27a');
-  assert.ok(night.keyIntensity > day.keyIntensity && night.hemiIntensity > day.hemiIntensity);
+  assert.equal(night.hemiSky, '#e0ae80');
+  assert.equal(night.hemiGround, '#2a1d18');
+  assert.equal(night.keyColor, '#ffa552');
+  assert.equal(night.hemiIntensity, 0.9);
+  assert.equal(night.keyIntensity, 0.6);
+  assert.equal(night.envIntensity, 0.45);
+  assert.ok(night.hemiIntensity < day.hemiIntensity && night.envIntensity < day.envIntensity, '밤은 채움(반구 · 환경)이 어둡다');
+  assert.ok(night.keyIntensity <= day.keyIntensity, '방향광은 낮보다 세지 않다');
+  assert.ok(night.keyIntensity / night.hemiIntensity > day.keyIntensity / day.hemiIntensity, '밤은 방향광 대비가 크다');
   assert.equal(interiorLighting(0, true).ambient, 1.2);
-  assert.ok(interiorLighting(1, true).ambient > 1.2);
+  assert.equal(interiorLighting(1, true).ambient, 0.6);
+  const mid = interiorLighting(0.75);
+  assert.ok(mid.hemiIntensity < day.hemiIntensity && mid.hemiIntensity > night.hemiIntensity, '사이는 보간');
 });
 
 test('(d) 캡처: HAUS 를 숨긴 채 그 층 높이 + 1.7 m 에서 외관 씬을 찍고, 숨김을 되돌린다', () => {

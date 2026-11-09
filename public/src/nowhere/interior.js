@@ -41,10 +41,12 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
   const scene = new THREE.Scene();
   scene.name = 'NW_Interior';
   scene.background = new THREE.Color(BG_COLOR);
-  const hemi = new THREE.HemisphereLight('#F4F1EA', '#3A2A26', 1.1);
+  // 처음 값은 낮 조명(applyLighting 이 uNight 에 따라 바꾼다)
+  const L0 = interiorLighting(0, mobile);
+  const hemi = new THREE.HemisphereLight(L0.hemiSky, L0.hemiGround, L0.hemiIntensity);
   // 모바일은 HDRI 환경광을 받지 않으므로(진입 예산) 고른 채움광으로 천장 · 바닥이 어둡게 가라앉지 않게 한다
-  const ambient = new THREE.AmbientLight('#EDEAE4', mobile ? 1.2 : 0);
-  const key = new THREE.DirectionalLight('#FFF4E6', 1.2);
+  const ambient = new THREE.AmbientLight('#EDEAE4', L0.ambient);
+  const key = new THREE.DirectionalLight(L0.keyColor, L0.keyIntensity);
   key.position.set(-8, 14, 10);
   scene.add(hemi, ambient, key);
 
@@ -157,7 +159,7 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     hdr.mapping = THREE.EquirectangularReflectionMapping;
     const pmrem = new THREE.PMREMGenerator(renderer);
     scene.environment = pmrem.fromEquirectangular(hdr).texture;
-    scene.environmentIntensity = 0.9;
+    scene.environmentIntensity = L0.envIntensity;   // 첫 update 의 applyLighting 이 지금 uNight 값으로 맞춘다
     hdr.dispose();
     pmrem.dispose();
     envReady = true;
@@ -243,7 +245,7 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     }
   }
 
-  // 밤 조명: uNight 에 따라 따뜻하게 · 밝게(스펙 §2.6). 값이 바뀔 때만 다시 넣는다
+  // 밤 조명: uNight 에 따라 따뜻하게 · 어둡게(환경광 세기 포함). 값이 바뀔 때만 다시 넣는다
   function applyLighting() {
     const night = world.uniforms?.uNight?.value ?? 0;
     if (Math.abs(night - lastNight) < 0.002) return;
@@ -255,6 +257,7 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     key.color.set(L.keyColor);
     key.intensity = L.keyIntensity;
     ambient.intensity = L.ambient;
+    scene.environmentIntensity = L.envIntensity;   // 모바일은 environment 가 없어 영향 없음
   }
 
   // 창밖: 그 층 높이에서 외관을 캡처해 배경으로(지하는 단색).
