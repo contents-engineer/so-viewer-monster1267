@@ -208,6 +208,116 @@
         ],
         "radius": 2.0
       }
+    },
+    {
+      "id": "12",
+      "label": "12F",
+      "glb": "assets/nowhere-inner/inner-12.glb",
+      "mobileGlb": "assets/nowhere-inner/mobile/inner-12.glb",
+      "elevation": 55.0,
+      "bounds": [
+        -15.0,
+        -11.0,
+        15.0,
+        11.0
+      ],
+      "ceiling": 4.2,
+      "spawn": {
+        "pos": [
+          0.0,
+          1.7,
+          -6.0
+        ],
+        "target": [
+          0.0,
+          1.7,
+          4.0
+        ]
+      },
+      "elevator": {
+        "pos": [
+          0.0,
+          0.0,
+          -9.0
+        ],
+        "radius": 2.5
+      },
+      "exhibits": [
+        {
+          "id": "cowboy",
+          "title": "카우보이 디오라마",
+          "desc": "받침대 위 서부 마을 디오라마",
+          "pos": [
+            -6.0,
+            1.5,
+            2.0
+          ]
+        },
+        {
+          "id": "smoking",
+          "title": "흡연 부스",
+          "desc": "커튼월 앞 흡연 부스",
+          "pos": [
+            8.0,
+            1.2,
+            3.0
+          ]
+        },
+        {
+          "id": "portal",
+          "title": "붉은 커튼 포털",
+          "desc": "석조 포털과 붉은 커튼",
+          "pos": [
+            -10.0,
+            1.6,
+            -10.1
+          ]
+        }
+      ],
+      "tour": [
+        {
+          "pos": [
+            -1.0,
+            2.0,
+            7.0
+          ],
+          "target": [
+            -6.0,
+            1.2,
+            2.0
+          ],
+          "caption": "카우보이 디오라마 — 받침대 위 서부 마을",
+          "duration": 5
+        },
+        {
+          "pos": [
+            3.0,
+            1.8,
+            8.0
+          ],
+          "target": [
+            8.0,
+            1.2,
+            3.0
+          ],
+          "caption": "흡연 부스 — 커튼월 너머 성수",
+          "duration": 4
+        },
+        {
+          "pos": [
+            -5.0,
+            1.8,
+            -4.0
+          ],
+          "target": [
+            -10.0,
+            1.6,
+            -10.1
+          ],
+          "caption": "붉은 커튼 포털",
+          "duration": 4
+        }
+      ]
     }
   ]
 }

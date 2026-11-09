@@ -79,3 +79,13 @@ test('(f) B1F 카페: 지하(elevation −4.5) · 층고 4 m · 출구 없음', 
   assert.equal(f.exit, undefined);
   assert.equal(f.glb, 'assets/nowhere-inner/inner-b1.glb');
 });
+
+test('(g) 12F: 타워 층(elevation 55 · 층고 4.2 m · 30 × 22 m)', () => {
+  const L = JSON.parse(readFileSync(layoutUrl, 'utf8'));
+  const f = L.floors.find((x) => x.id === '12');
+  assert.ok(f, '12F 없음');
+  assert.equal(f.label, '12F');
+  assert.equal(f.elevation, 55);
+  assert.equal(f.ceiling, 4.2);
+  assert.deepEqual(f.bounds, [-15, -11, 15, 11]);
+});

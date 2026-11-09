@@ -94,8 +94,55 @@ def build_floor_b1(c, M):
     import_prop('etc/Monster1_room.glb', 'EX_guest_1', c, (3.5, 4.0, 0.0), height=1.2, rz=180.0)
 
 
+# ═════════════ 타워 층 공용 껍데기 ═════════════
+# 타워 평면: x −15…15, y −11…11. 남 · 동 · 서 커튼월(외관 타워의 유리 커튼월), 북측 콘크리트 벽 + 엘리베이터 코어(앞면 y 9.5), 기둥 2개.
+def tower_shell(c, M, F):
+    X0, Y0, X1, Y1 = F['bounds_bl']
+    H = F['ceiling']
+    T = 0.3
+    plane('IN_floor', c, X0 - T, Y0 - T, X1 + T, Y1 + T, 0.0, M['floor'])
+    box('IN_ceiling', c, X0 - T, Y0 - T, H, X1 + T, Y1 + T, H + 0.2, M['ceiling'])
+    curtain(c, M, 's', X0 - T, Y0 - T, X1 + T, Y0, H)
+    curtain(c, M, 'w', X0 - T, Y0, X0, Y1, H)
+    curtain(c, M, 'e', X1, Y0, X1 + T, Y1, H)
+    box('IN_wall_n', c, X0 - T, Y1, 0.0, X1 + T, Y1 + T, H, M['concrete'])
+    elevator_core(c, M, 9.5, Y1, H)
+    columns(c, M, ((-7.5, 2.0), (7.5, 2.0)), H)
+
+
+# ═════════════ 12F ═════════════
+FLOOR_12 = {
+    'id': '12', 'label': '12F',
+    'glb': 'assets/nowhere-inner/inner-12.glb', 'mobileGlb': 'assets/nowhere-inner/mobile/inner-12.glb',
+    'elevation': 55.0, 'bounds_bl': (-15.0, -11.0, 15.0, 11.0), 'ceiling': 4.2,
+    'floor_tex': {'dir': '12f', 'diffuse': 'floor_12_diffuse.png', 'normal': 'floor_12_normal.png', 'tile': 2.0, 'rough': 0.9},
+    'spawn': ((0.0, 6.0, 1.7), (0.0, -4.0, 1.7)),
+    'elevator': ((0.0, 9.0, 0.0), 2.5),
+    'exhibits': [
+        ('cowboy', '카우보이 디오라마', '받침대 위 서부 마을 디오라마', (-6.0, -2.0, 1.5)),
+        ('smoking', '흡연 부스', '커튼월 앞 흡연 부스', (8.0, -3.0, 1.2)),
+        ('portal', '붉은 커튼 포털', '석조 포털과 붉은 커튼', (-10.0, 10.1, 1.6)),
+    ],
+    'tour': [
+        ((-1.0, -7.0, 2.0), (-6.0, -2.0, 1.2), '카우보이 디오라마 — 받침대 위 서부 마을', 5),
+        ((3.0, -8.0, 1.8), (8.0, -3.0, 1.2), '흡연 부스 — 커튼월 너머 성수', 4),
+        ((-5.0, 4.0, 1.8), (-10.0, 10.1, 1.6), '붉은 커튼 포털', 4),
+    ],
+}
+
+
+def build_floor_12(c, M):
+    tower_shell(c, M, FLOOR_12)
+    box('EX_plinth_cowboy', c, -8.5, -4.5, 0.0, -3.5, 0.5, 0.6, M['plinth'])
+    import_prop('12f/Cowboy.glb', 'EX_cowboy', c, (-6.0, -2.0, 0.6), width=4.0, rz=0.0)
+    import_prop('12f/Smoking.glb', 'EX_smoking', c, (8.0, -3.0, 0.0), height=2.1, rz=0.0)
+    # 포털 깊이 1.66 m — y 10.4 면 뒤쪽이 북쪽 벽(y 11)에 0.23 m 박혀서 10.1 로 당김(벽까지 7 cm)
+    import_prop('12f/door_2.glb', 'EX_portal', c, (-10.0, 10.1, 0.0), height=2.9, rz=0.0)
+
+
 # 빌드 순서 = inner-layout.json 의 floors 순서
 FLOORS = [
     (FLOOR_B1, build_floor_b1),
     (FLOOR_1, build_floor_1),
+    (FLOOR_12, build_floor_12),
 ]
