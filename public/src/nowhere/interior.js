@@ -48,6 +48,7 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
   let floorDef = null;
   let floorRoot = null;
   let exitArmed = true;
+  let exitPrompt = false;   // 출구 질문 모달이 떠 있는지
 
   // 화면 전환(검게) + 실내 HUD
   const fade = el('div', 'nw-fade');
@@ -173,7 +174,7 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     } catch (err) {
       console.error('[nowhere] 실내 불러오기 실패', err);
       await fadeTo(false);
-      busy = false;
+      // 실패 모달이 떠 있는 동안에도 busy 를 유지한다 — 그 사이 enter 가 다시 불려 진입이 겹치지 않게
       const choice = await modal.show({
         title: '실내를 불러오지 못했습니다',
         buttons: [
@@ -181,6 +182,7 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
           { id: 'close', label: '닫기', cancel: true },
         ],
       });
+      busy = false;
       return choice === 'retry' ? enter(buildingId) : false;
     }
   }
@@ -189,23 +191,28 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
   async function exit() {
     if (!active || busy) return;
     busy = true;
-    await fadeTo(true);
-    camCtrl.setWalkMode(false);
-    post.renderPass.scene = exteriorScene;
-    camCtrl.setTerrain({
-      groundHeightAt: world.groundHeightAt,
-      getWalkBlocker: world.getWalkBlocker,
-      walkFallback: EXTERIOR_WALK_FALLBACK,
-    });
-    camCtrl.setBounds(null);
-    const a = approachFor(world.layout, 'haus');
-    if (a) camCtrl.placeAt(a.pos, a.target);
-    active = false;
-    document.body.classList.remove('is-interior');
-    hud.hidden = true;
-    if (typeof onChange === 'function') onChange(false);
-    await fadeTo(false);
-    busy = false;
+    if (exitPrompt) modal.close();   // 출구 질문이 떠 있으면 닫는다(외관에 남거나 다음 방문에 응답되지 않게)
+    try {
+      await fadeTo(true);
+      camCtrl.setWalkMode(false);
+      post.renderPass.scene = exteriorScene;
+      camCtrl.setTerrain({
+        groundHeightAt: world.groundHeightAt,
+        getWalkBlocker: world.getWalkBlocker,
+        walkFallback: EXTERIOR_WALK_FALLBACK,
+      });
+      camCtrl.setBounds(null);
+      const a = approachFor(world.layout, 'haus');
+      if (a) camCtrl.placeAt(a.pos, a.target);
+      active = false;
+      document.body.classList.remove('is-interior');
+      hud.hidden = true;
+      if (typeof onChange === 'function') onChange(false);
+    } finally {
+      // 중간에 예외가 나도 검은 화면 · busy 에 갇히지 않게
+      await fadeTo(false);
+      busy = false;
+    }
   }
 
   // 1F 정문 출구 영역: 보행 중 들어가면 한 번 묻고, 영역을 벗어났다 다시 들어오면 또 묻는다
@@ -216,6 +223,7 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     const inside = Math.hypot(p.x - e.pos[0], p.z - e.pos[2]) <= e.radius;
     if (inside && exitArmed && camCtrl.isWalkMode()) {
       exitArmed = false;
+      exitPrompt = true;
       modal
         .show({
           title: '밖으로 나가시겠습니까?',
@@ -225,7 +233,8 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
           ],
         })
         .then((c) => {
-          if (c === 'yes') exit();
+          exitPrompt = false;
+          if (c === 'yes' && active) exit();
         });
     } else if (!inside) {
       exitArmed = true;

@@ -456,6 +456,13 @@ export function createCameraController({
           const next = resolveWalkStep(here, move.x, move.z, canStand);
           camera.position.x = next.x;
           camera.position.z = next.z;
+          // 실내(setBounds)에서는 보행도 층 영역(벽 안쪽, 몸 반경 0.35 m) 안으로 묶는다 —
+          // 막힌 자리(궤도 카메라가 벽 쪽에 붙은 채 보행 시작 등)에서 빠져나오는 이동이 벽 밖으로 새지 않게
+          if (bounds) {
+            const r = 0.35;
+            camera.position.x = Math.min(bounds.x1 - r, Math.max(bounds.x0 + r, camera.position.x));
+            camera.position.z = Math.min(bounds.z1 - r, Math.max(bounds.z0 + r, camera.position.z));
+          }
         }
       }
       // 4) 수직: 발밑 표면(지면 또는 발이 닿는 장애물 윗면)에 붙거나, 점프·낙하 중이면 중력으로 진행
