@@ -13,15 +13,8 @@ import {
   patchSurfaceMaterial,
 } from './surface.js';
 import { createSkyDome } from './sky.js';
-import {
-  createHeightGrid,
-  rasterizeTriangle,
-  createGroundQuery,
-  createOccupancyGrid,
-  markObstacleTriangle,
-  isBlockedAt,
-  obstacleTopAt,
-} from './terrain.js';
+import { createHeightGrid, createGroundQuery, createOccupancyGrid, isBlockedAt, obstacleTopAt } from './terrain.js';
+import { rasterizeMeshes, markObstacleMeshes } from './terrain-mesh.js';
 
 export async function createWorld({
   renderer,
@@ -362,34 +355,15 @@ export async function createWorld({
   const fineGrid = createHeightGrid({ x0: -420, z0: -1300, x1: 520, z1: 420, cell: 2 });
   const coarseGrid = createHeightGrid({ x0: -6300, z0: -6300, x1: 6300, z1: 6300, cell: 24 });
   const BACKDROP_GROUND = /^BD_(ground|tors|stream|river|roads|park)/;
-  const _va = new THREE.Vector3();
-  const _vb = new THREE.Vector3();
-  const _vc = new THREE.Vector3();
-  function rasterizeMesh(mesh) {
-    const pos = mesh.geometry?.attributes?.position;
-    if (!pos) return;
-    mesh.updateWorldMatrix(true, false);
-    const mw = mesh.matrixWorld;
-    const idx = mesh.geometry.index;
-    const triCount = idx ? idx.count / 3 : pos.count / 3;
-    for (let t = 0; t < triCount; t++) {
-      const ia = idx ? idx.getX(t * 3) : t * 3;
-      const ib = idx ? idx.getX(t * 3 + 1) : t * 3 + 1;
-      const ic = idx ? idx.getX(t * 3 + 2) : t * 3 + 2;
-      _va.fromBufferAttribute(pos, ia).applyMatrix4(mw);
-      _vb.fromBufferAttribute(pos, ib).applyMatrix4(mw);
-      _vc.fromBufferAttribute(pos, ic).applyMatrix4(mw);
-      for (const g of (Math.max(Math.abs(_va.x), Math.abs(_va.z)) < 1400 ? [fineGrid, coarseGrid] : [coarseGrid])) {
-        rasterizeTriangle(g, _va.x, _va.y, _va.z, _vb.x, _vb.y, _vb.z, _vc.x, _vc.y, _vc.z);
-      }
-    }
-  }
+  const pickGrids = (ax, az) => (Math.max(Math.abs(ax), Math.abs(az)) < 1400 ? [fineGrid, coarseGrid] : [coarseGrid]);
+  const groundMeshes = [];
   layerGroups.ground?.traverse((n) => {
-    if (n.isMesh && !n.isInstancedMesh) rasterizeMesh(n);
+    if (n.isMesh && !n.isInstancedMesh) groundMeshes.push(n);
   });
   layerGroups.backdrop?.traverse((n) => {
-    if (n.isMesh && !n.isInstancedMesh && BACKDROP_GROUND.test(n.name)) rasterizeMesh(n);
+    if (n.isMesh && !n.isInstancedMesh && BACKDROP_GROUND.test(n.name)) groundMeshes.push(n);
   });
+  rasterizeMeshes(groundMeshes, pickGrids);
   const groundHeightAt = createGroundQuery([fineGrid, coarseGrid], 0);
 
   // 보행 충돌용 장애물 점유 격자(0.5 m): 건물·바위·전주·교량·원경 암괴 등의 몸통 높이 부분.
@@ -400,42 +374,19 @@ export async function createWorld({
     const t0 = performance.now();
     const occ = createOccupancyGrid({ x0: -300, z0: -1300, x1: 420, z1: 300, cell: 0.5 });
     const PASS_SURFACES = new Set(['foliage', 'holo', 'water', 'emissive']);
-    const tmpM = new THREE.Matrix4();
-    const instM = new THREE.Matrix4();
-    let tris = 0;
-    const markMesh = (mesh) => {
-      const surf = mesh.userData?.nw_surface;
-      if (PASS_SURFACES.has(surf) || /^FU_drone/.test(mesh.name) || !mesh.visible) return;
-      const pos = mesh.geometry?.attributes?.position;
-      if (!pos) return;
-      mesh.updateWorldMatrix(true, false);
-      const idx = mesh.geometry.index;
-      const triCount = idx ? idx.count / 3 : pos.count / 3;
-      const count = mesh.isInstancedMesh ? mesh.count : 1;
-      for (let k = 0; k < count; k++) {
-        if (mesh.isInstancedMesh) {
-          mesh.getMatrixAt(k, instM);
-          tmpM.multiplyMatrices(mesh.matrixWorld, instM);
-        } else {
-          tmpM.copy(mesh.matrixWorld);
-        }
-        for (let t = 0; t < triCount; t++) {
-          _va.fromBufferAttribute(pos, idx ? idx.getX(t * 3) : t * 3).applyMatrix4(tmpM);
-          _vb.fromBufferAttribute(pos, idx ? idx.getX(t * 3 + 1) : t * 3 + 1).applyMatrix4(tmpM);
-          _vc.fromBufferAttribute(pos, idx ? idx.getX(t * 3 + 2) : t * 3 + 2).applyMatrix4(tmpM);
-          markObstacleTriangle(occ, _va.x, _va.y, _va.z, _vb.x, _vb.y, _vb.z, _vc.x, _vc.y, _vc.z, groundHeightAt);
-          tris++;
-        }
-      }
+    const obstacleMeshes = [];
+    const pick = (n) => {
+      if (!n.isMesh || !n.visible) return;
+      if (PASS_SURFACES.has(n.userData?.nw_surface) || /^FU_drone/.test(n.name)) return;
+      obstacleMeshes.push(n);
     };
     for (const key of ['ground', 'present', 'future', 'building_haus', 'building_facearch']) {
-      layerGroups[key]?.traverse((n) => {
-        if (n.isMesh) markMesh(n);
-      });
+      layerGroups[key]?.traverse(pick);
     }
     layerGroups.backdrop?.traverse((n) => {
-      if (n.isMesh && /^BD_(tors|mid_)/.test(n.name)) markMesh(n);
+      if (/^BD_(tors|mid_)/.test(n.name)) pick(n);
     });
+    const tris = markObstacleMeshes(occ, obstacleMeshes, groundHeightAt);
     walkBlocker = {
       // clearance: 발 높이 + 오를 수 있는 턱(지면 위 m). 그보다 높은 장애물이 몸 반경 안에 있으면 막힘
       isBlocked: (x, z, clearance = 0, radius = 0.35) => isBlockedAt(occ, x, z, radius, clearance),
