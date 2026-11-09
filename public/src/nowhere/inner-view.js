@@ -50,9 +50,12 @@ export function createWindowView({ THREE, renderer, exteriorScene, world, near =
     const haus = world.layerGroups?.building_haus;
     const was = haus ? haus.visible : null;
     if (haus) haus.visible = false;   // HAUS 안에서 찍으므로 자기 벽이 가리지 않게
-    cam.position.set(0, elevation + 1.7, 0);
-    cam.update(renderer, exteriorScene);
-    if (haus) haus.visible = was;
+    try {
+      cam.position.set(0, elevation + 1.7, 0);
+      cam.update(renderer, exteriorScene);
+    } finally {
+      if (haus) haus.visible = was;   // 캡처가 던져도 외관 HAUS 가 숨겨진 채 남지 않게 반드시 되돌림
+    }
     return rt.texture;
   }
 

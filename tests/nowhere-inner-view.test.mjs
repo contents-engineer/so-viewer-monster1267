@@ -68,3 +68,15 @@ test('(e) HAUS 그룹이 없어도 캡처한다', () => {
   assert.ok(v.capture(0));
   assert.equal(VIEW_SIZE, 256);
 });
+
+test('(f) 캡처가 던져도 HAUS 표시를 되돌리고 예외는 그대로 올린다', () => {
+  const haus = { visible: true };
+  class WebGLCubeRenderTarget { constructor() { this.texture = {}; } dispose() {} }
+  class CubeCamera {
+    constructor() { this.position = { set() {} }; }
+    update() { throw new Error('render 실패'); }
+  }
+  const v = createWindowView({ THREE: { WebGLCubeRenderTarget, CubeCamera, HalfFloatType: 1 }, renderer: {}, exteriorScene: {}, world: { layerGroups: { building_haus: haus } } });
+  assert.throws(() => v.capture(10), /render 실패/);
+  assert.equal(haus.visible, true, '던져도 되돌림');
+});
