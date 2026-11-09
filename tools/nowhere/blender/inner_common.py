@@ -172,6 +172,33 @@ def bake_floor_ao(floor, tag, size=1024, samples=48, distance=2.5):
     print(f'[inner_build] AO baked {path}')
 
 
+def quad_x(name, c, x, y0, z0, y1, z1, mat):
+    """+x 를 향하는 세로 사각형 한 장(UV: 왼→오 = +y, 아래→위 = +z, 0…1) — 1F 디스플레이 화면."""
+    me = bpy.data.meshes.new(name)
+    me.from_pydata([(x, y0, z0), (x, y1, z0), (x, y1, z1), (x, y0, z1)], [], [(0, 1, 2, 3)])
+    uv = me.uv_layers.new(name='UVMap')
+    for lp, (u, v) in zip(me.loops, ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0))):
+        uv.data[lp.index].uv = (u, v)
+    me.materials.append(mat)
+    o = bpy.data.objects.new(name, me)
+    c.objects.link(o)
+    return o
+
+
+def display_screen(disp, c, mat, inset=0.04, slab=0.05):
+    """display 소품(rz=90 으로 화면이 +x 를 봄)의 가장 앞(+x) slab m 안 정점 범위에, 1 cm 앞으로 화면 사각형 EX_display_screen 을 붙인다.
+    inset 비율만큼 테두리를 남긴다. 웹(inner-display.js)이 이 메시에 CanvasTexture 를 입힌다."""
+    bpy.context.view_layer.update()
+    mw = disp.matrix_world
+    pts = [mw @ v.co for v in disp.data.vertices]
+    front = max(p.x for p in pts)
+    face = [p for p in pts if p.x >= front - slab]
+    y0, y1 = min(p.y for p in face), max(p.y for p in face)
+    z0, z1 = min(p.z for p in face), max(p.z for p in face)
+    dy, dz = (y1 - y0) * inset, (z1 - z0) * inset
+    return quad_x('EX_display_screen', c, front + 0.01, y0 + dy, z0 + dz, y1 - dy, z1 - dz, mat)
+
+
 def tri_count(obj):
     return sum(len(p.vertices) - 2 for p in obj.data.polygons)
 

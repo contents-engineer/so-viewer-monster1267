@@ -1,6 +1,6 @@
 # HAUS NOWHERE — 성수 실내 층 정의(배치 값 · 둘러보기 · 전시)와 층별 배치 함수. inner_build.py 가 FLOORS 를 차례로 빌드한다.
 # Blender 좌표(Z-up m). 층 JSON 은 inner_common.floor_json 이 Three 좌표로 바꾼다.
-from inner_common import box, plane, import_prop, ribbon, curtain, elevator_core, columns
+from inner_common import box, plane, import_prop, ribbon, curtain, elevator_core, columns, display_screen
 
 # ═════════════ 1F 로비 ═════════════
 # Blender 평면: x −17…17, y −17…21(남측 y −17 정문, 북측 y +21 엘리베이터 코어), 층고 6 m.
@@ -52,7 +52,8 @@ def build_floor_1(c, M):
     import_prop('etc/building_2.glb', 'EX_city_b2', c, (2.9, -1.5, P), height=1.4, rz=90)
     import_prop('etc/building_3.glb', 'EX_city_b3', c, (2.8, 1.7, P), height=1.9, rz=180)
     import_prop('main/DJ.glb', 'EX_dj', c, (8.8, 7.2, 0.0), height=2.4, rz=-45)
-    import_prop('main/display.glb', 'EX_display', c, (-16.4, 6.0, 0.0), width=6.0, rz=90)
+    disp = import_prop('main/display.glb', 'EX_display', c, (-16.4, 6.0, 0.0), width=6.0, rz=90)
+    display_screen(disp, c, M['screen'])
 
 
 # ═════════════ B1F 카페 ═════════════

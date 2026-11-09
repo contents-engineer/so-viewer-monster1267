@@ -77,3 +77,17 @@ test('(e) 바닥 AO: IN_floor 재질에 occlusionTexture(texCoord 1)와 TEXCOORD
     }
   }
 });
+
+test('(f) 1F 디스플레이 화면: EX_display_screen 은 디스플레이 앞(+x)의 얇은 세로 사각형이고 UV 가 있다', () => {
+  const f1 = L.floors.find((f) => f.id === '1');
+  const j = load(f1.glb);
+  const boxes = meshNodeBoxes(j);
+  const scr = boxes.find((b) => b.name === 'EX_display_screen');
+  const disp = boxes.find((b) => b.name === 'EX_display');
+  assert.ok(scr && disp, 'EX_display_screen · EX_display 없음');
+  assert.ok(scr.max[0] - scr.min[0] < 0.02, `두께 ${scr.max[0] - scr.min[0]}`);
+  assert.ok(scr.min[0] >= disp.max[0] - 0.001, '화면이 디스플레이 앞(+x)에 있지 않음');
+  assert.ok(scr.max[2] - scr.min[2] > 2 && scr.max[1] - scr.min[1] > 1, '화면이 너무 작음');
+  const node = j.nodes.find((n) => n.name === 'EX_display_screen');
+  assert.ok('TEXCOORD_0' in j.meshes[node.mesh].primitives[0].attributes, 'UV 없음');
+});
