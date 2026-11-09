@@ -140,9 +140,49 @@ def build_floor_12(c, M):
     import_prop('12f/door_2.glb', 'EX_portal', c, (-10.0, 10.1, 0.0), height=2.9, rz=0.0)
 
 
+# ═════════════ 13F 몬스터 룸 ═════════════
+FLOOR_13 = {
+    'id': '13', 'label': '13F 몬스터 룸',
+    'glb': 'assets/nowhere-inner/inner-13.glb', 'mobileGlb': 'assets/nowhere-inner/mobile/inner-13.glb',
+    'elevation': 60.0, 'bounds_bl': (-15.0, -11.0, 15.0, 11.0), 'ceiling': 4.2,
+    'floor_tex': {'dir': '13f', 'diffuse': 'floor_13_diffuse.png', 'normal': 'floor_13_normal.png', 'tile': 2.0, 'rough': 0.3},
+    'spawn': ((0.0, 6.0, 1.7), (0.0, -4.0, 1.7)),
+    'elevator': ((0.0, 9.0, 0.0), 2.5),
+    'exhibits': [
+        ('nail', '거대한 손', '네일 아트를 한 높이 4 m 의 손', (-6.0, -4.0, 2.0)),
+        ('sphinx', '스핑크스', '길이 3.8 m 의 스핑크스', (6.0, -4.0, 1.2)),
+        ('monsters', '버섯 몬스터', '이름 명판 받침대 위의 버섯 몬스터 네 종', (0.0, 4.0, 1.0)),
+    ],
+    'tour': [
+        ((-1.0, -9.0, 2.2), (-6.0, -4.0, 2.0), '거대한 손 — 네일 아트를 한 4 m 손', 5),
+        ((1.0, -9.0, 1.8), (6.0, -4.0, 1.0), '스핑크스', 4),
+        ((0.0, 0.5, 1.8), (-9.25, 4.0, 1.0), '버섯 몬스터 — 이름 명판 받침대', 5),
+    ],
+}
+# (에셋, x) — 북쪽 줄 y 4.0, 받침대 1.4 × 1.4 × 0.4 m, 앞면(−y)에 황동 명판
+MONSTERS_13 = (
+    ('etc/Monster1_room.glb', -11.0),
+    ('etc/Monster849_room.glb', -7.5),
+    ('etc/Monster1083_room.glb', 7.5),
+    ('etc/Mushroom.glb', 11.0),
+)
+
+
+def build_floor_13(c, M):
+    tower_shell(c, M, FLOOR_13)
+    # 원본은 손톱(네일 아트) 면이 −x(서쪽 커튼월) · 스핑크스 얼굴이 −y(남쪽 커튼월)를 봐서 둘 다 방 가운데 쪽으로 돌림
+    import_prop('13f/nail.glb', 'EX_nail', c, (-6.0, -4.0, 0.0), height=4.0, rz=180.0)
+    import_prop('13f/sphinx.glb', 'EX_sphinx', c, (6.0, -4.0, 0.0), width=3.8, rz=-90.0)
+    for i, (rel, x) in enumerate(MONSTERS_13):
+        box(f'EX_plinth_m{i}', c, x - 0.7, 3.3, 0.0, x + 0.7, 4.7, 0.4, M['plinth'])
+        box(f'EX_nameplate_m{i}', c, x - 0.35, 3.26, 0.12, x + 0.35, 3.3, 0.3, M['brass'])
+        import_prop(rel, f'EX_monster_{i}', c, (x, 4.0, 0.4), height=1.6, rz=180.0)
+
+
 # 빌드 순서 = inner-layout.json 의 floors 순서
 FLOORS = [
     (FLOOR_B1, build_floor_b1),
     (FLOOR_1, build_floor_1),
     (FLOOR_12, build_floor_12),
+    (FLOOR_13, build_floor_13),
 ]

@@ -89,3 +89,11 @@ test('(g) 12F: 타워 층(elevation 55 · 층고 4.2 m · 30 × 22 m)', () => {
   assert.equal(f.ceiling, 4.2);
   assert.deepEqual(f.bounds, [-15, -11, 15, 11]);
 });
+
+test('(h) 4개 층: 순서 B1 · 1 · 12 · 13, 층 높이 −4.5 · 0 · 55 · 60, 이름', () => {
+  const L = JSON.parse(readFileSync(layoutUrl, 'utf8'));
+  assert.deepEqual(L.floors.map((f) => f.id), ['b1', '1', '12', '13']);
+  assert.deepEqual(L.floors.map((f) => f.elevation), [-4.5, 0, 55, 60]);
+  assert.deepEqual(L.floors.map((f) => f.label), ['B1F 카페', '1F 로비', '12F', '13F 몬스터 룸']);
+  assert.equal(L.defaultFloor, '1');
+});

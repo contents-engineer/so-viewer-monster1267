@@ -318,6 +318,116 @@
           "duration": 4
         }
       ]
+    },
+    {
+      "id": "13",
+      "label": "13F 몬스터 룸",
+      "glb": "assets/nowhere-inner/inner-13.glb",
+      "mobileGlb": "assets/nowhere-inner/mobile/inner-13.glb",
+      "elevation": 60.0,
+      "bounds": [
+        -15.0,
+        -11.0,
+        15.0,
+        11.0
+      ],
+      "ceiling": 4.2,
+      "spawn": {
+        "pos": [
+          0.0,
+          1.7,
+          -6.0
+        ],
+        "target": [
+          0.0,
+          1.7,
+          4.0
+        ]
+      },
+      "elevator": {
+        "pos": [
+          0.0,
+          0.0,
+          -9.0
+        ],
+        "radius": 2.5
+      },
+      "exhibits": [
+        {
+          "id": "nail",
+          "title": "거대한 손",
+          "desc": "네일 아트를 한 높이 4 m 의 손",
+          "pos": [
+            -6.0,
+            2.0,
+            4.0
+          ]
+        },
+        {
+          "id": "sphinx",
+          "title": "스핑크스",
+          "desc": "길이 3.8 m 의 스핑크스",
+          "pos": [
+            6.0,
+            1.2,
+            4.0
+          ]
+        },
+        {
+          "id": "monsters",
+          "title": "버섯 몬스터",
+          "desc": "이름 명판 받침대 위의 버섯 몬스터 네 종",
+          "pos": [
+            0.0,
+            1.0,
+            -4.0
+          ]
+        }
+      ],
+      "tour": [
+        {
+          "pos": [
+            -1.0,
+            2.2,
+            9.0
+          ],
+          "target": [
+            -6.0,
+            2.0,
+            4.0
+          ],
+          "caption": "거대한 손 — 네일 아트를 한 4 m 손",
+          "duration": 5
+        },
+        {
+          "pos": [
+            1.0,
+            1.8,
+            9.0
+          ],
+          "target": [
+            6.0,
+            1.0,
+            4.0
+          ],
+          "caption": "스핑크스",
+          "duration": 4
+        },
+        {
+          "pos": [
+            0.0,
+            1.8,
+            -0.5
+          ],
+          "target": [
+            -9.25,
+            1.0,
+            -4.0
+          ],
+          "caption": "버섯 몬스터 — 이름 명판 받침대",
+          "duration": 5
+        }
+      ]
     }
   ]
 }
