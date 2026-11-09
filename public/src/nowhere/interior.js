@@ -252,9 +252,15 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     ambient.intensity = L.ambient;
   }
 
-  // 창밖: 그 층 높이에서 외관을 캡처해 배경으로(지하는 단색)
+  // 창밖: 그 층 높이에서 외관을 캡처해 배경으로(지하는 단색).
+  // 캡처가 던져도 단색 배경으로 두고 계속한다 — 층 전환(showFloor)이 반쯤 바뀐 채 멈추거나 매 프레임 다시 던지지 않게
   function refreshView() {
-    scene.background = hasWindowView(floorDef) ? view.capture(floorDef.elevation) : new THREE.Color(BG_COLOR);
+    try {
+      scene.background = hasWindowView(floorDef) ? view.capture(floorDef.elevation) : new THREE.Color(BG_COLOR);
+    } catch (err) {
+      scene.background = new THREE.Color(BG_COLOR);
+      console.error('[nowhere] 창밖 캡처 실패', err);
+    }
     lastViewKey = weather ? viewKey(weather.getWeather(), weather.getHour()) : null;
     viewDirtyAt = 0;
   }
