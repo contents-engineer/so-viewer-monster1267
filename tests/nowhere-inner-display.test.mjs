@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DISPLAY_TITLE, displayLines, displayKey, createDisplayScreen } from '../public/src/nowhere/inner-display.js';
+import { DISPLAY_TITLE, displayLines, displayKey, createDisplayScreen, worldHourDate } from '../public/src/nowhere/inner-display.js';
+import { timeLabel } from '../public/src/nowhere/weather.js';
 
 test('(a) 문구: 제목 · 24시 HH:MM(두 자리) · 기상 이름', () => {
   assert.deepEqual(displayLines(new Date(2026, 10, 9, 7, 5), 'rain'), [DISPLAY_TITLE, '07:05', '비']);
@@ -40,4 +41,18 @@ test('(c) 화면: 메시에 캔버스 텍스처 재질을 입히고, 분 · 기�
   assert.equal(scr.update(new Date(2026, 10, 9, 7, 6, 10)), true, '기상이 바뀌면 다시 그림');
   assert.ok(texts.includes('07:06') && texts.includes('눈'));
   delete globalThis.document;
+});
+
+test('(d) 월드 시각: 시간 슬라이더 hour(소수) → HUD 와 같은 HH:MM(분 반올림, 60 분은 다음 시)', () => {
+  assert.equal(displayLines(worldHourDate(9.25), 'rain')[1], '09:15');
+  assert.equal(displayLines(worldHourDate(14), 'rain')[1], '14:00');
+  assert.equal(displayLines(worldHourDate(21.75), 'rain')[1], '21:45');
+  assert.equal(displayLines(worldHourDate(9.999), 'rain')[1], '10:00', '59.94 분 → 다음 시 00 분');
+  // 슬라이더 칸(0.25 시간) · 임의 소수 모두 HUD(timeLabel) 의 HH:MM 과 같다
+  for (let h = 0; h < 24; h += 0.25) assert.equal(displayLines(worldHourDate(h))[1], timeLabel(h).slice(0, 5), `hour ${h}`);
+  for (const h of [0.01, 7.4, 13.333, 18.9917, 23.99]) assert.equal(displayLines(worldHourDate(h))[1], timeLabel(h).slice(0, 5), `hour ${h}`);
+  // Date 는 24:00 을 못 나타내므로 슬라이더 끝(24)은 같은 순간인 00:00 으로 보인다(HUD 는 24:00)
+  assert.equal(displayLines(worldHourDate(24))[1], '00:00');
+  // 분이 바뀌면 다시 그리는 키도 달라진다
+  assert.notEqual(displayKey(worldHourDate(9.25), 'rain'), displayKey(worldHourDate(9.5), 'rain'));
 });

@@ -12,7 +12,7 @@ import { approachFor } from './tour-config.js';
 import { floorOrder, shortLabel, elevatorButtons, inArea, createAreaTrigger, isFloorChain, isCeilingChain } from './inner-nav.js';
 import { createTourPlayer } from './inner-tour.js';
 import { createWindowView, hasWindowView, viewKey, interiorLighting, VIEW_SETTLE_MS } from './inner-view.js';
-import { createDisplayScreen } from './inner-display.js';
+import { createDisplayScreen, worldHourDate } from './inner-display.js';
 
 export const INNER_LAYOUT_URL = 'assets/nowhere-inner/inner-layout.json';
 const FADE_MS = 600;
@@ -193,7 +193,7 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
       isBlocked: (x, z, clearance = 0, radius = 0.35) => !insideFloor(x, z, radius) || isBlockedAt(occ, x, z, radius, clearance),
       topAt: (x, z, radius = 0.2) => obstacleTopAt(occ, x, z, radius),
     };
-    // 1F 디스플레이 화면(빌드가 만든 EX_display_screen)에 시각 · 기상 캔버스를 입힌다
+    // 1F 디스플레이 화면(빌드가 만든 EX_display_screen)에 월드 시각 · 기상 캔버스를 입힌다
     if (!display) {
       const s = root.getObjectByName('EX_display_screen');
       const mesh = s?.isMesh ? s : s?.children.find((m) => m.isMesh);
@@ -432,7 +432,8 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
   function update() {
     if (!active) return;
     applyLighting();
-    if (display && floorDef?.id === '1') display.update(new Date());
+    // 1F 디스플레이는 월드 시각(HUD 시간 슬라이더와 같은 값) · 기상을 보여 준다
+    if (display && floorDef?.id === '1') display.update(weather ? worldHourDate(weather.getHour()) : new Date());
     // 기상 · 시각이 바뀌면 전환이 끝난 뒤(VIEW_SETTLE_MS) 창밖을 다시 캡처한다
     if (weather && !busy && hasWindowView(floorDef)) {
       const k = viewKey(weather.getWeather(), weather.getHour());

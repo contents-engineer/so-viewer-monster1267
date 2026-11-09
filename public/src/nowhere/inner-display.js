@@ -11,6 +11,22 @@ export function displayLines(date, weatherName) {
   return [DISPLAY_TITLE, `${hh}:${mm}`, WEATHER_LABEL[weatherName] ?? (weatherName || '')];
 }
 
+/**
+ * 월드 시각(시간 슬라이더 hour, 0~24 소수) → 오늘 날짜의 그 시 · 분 Date. HUD(weather.js timeLabel)처럼 분은 반올림하고
+ * 60 분이면 다음 시로 넘긴다. Date 는 24:00 을 못 나타내므로 24 는 같은 순간인 다음 날 00:00 이 된다.
+ */
+export function worldHourDate(hour, base = new Date()) {
+  let hh = Math.floor(hour);
+  let mm = Math.round((hour - hh) * 60);
+  if (mm === 60) {
+    hh += 1;
+    mm = 0;
+  }
+  const d = new Date(base.getTime());
+  d.setHours(hh, mm, 0, 0);
+  return d;
+}
+
 /** 같은 분 · 같은 기상이면 다시 그리지 않도록 쓰는 키 */
 export function displayKey(date, weatherName) {
   return `${Math.floor(date.getTime() / 60000)}|${weatherName || ''}`;
