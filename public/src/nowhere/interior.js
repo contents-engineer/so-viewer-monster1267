@@ -112,7 +112,11 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
   const stopTourOnInput = () => {
     if (tour.isPlaying()) tour.stop();
   };
-  window.addEventListener('keydown', stopTourOnInput);
+  // ⌘ · Ctrl 조합(스크린샷 · 탭 전환 등)은 camera.js 처럼 둘러보기를 멈추지 않는다
+  window.addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey) return;
+    stopTourOnInput();
+  });
   renderer.domElement.addEventListener('pointerdown', stopTourOnInput);
   renderer.domElement.addEventListener('wheel', stopTourOnInput, { passive: true });
 
@@ -261,6 +265,8 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     const [x0, z0, x1, z1] = def.bounds;
     camCtrl.setBounds({ x0, z0, x1, z1, yMin: 0.4, yMax: def.ceiling - 0.3 });
     refreshView();
+    // 진입 · 층 이동 중(busy)에는 기상 · 시각 변화를 못 보므로, 방금 캡처가 전환 도중이었을 수 있다 — 도착 뒤 VIEW_SETTLE_MS 에 한 번 더 찍는다
+    if (hasWindowView(def)) viewDirtyAt = performance.now();
     exitTrigger.reset();
     elevatorTrigger.reset();
   }
