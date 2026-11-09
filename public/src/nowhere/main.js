@@ -235,7 +235,7 @@ async function boot() {
     if (interior.isActive()) return;
     modal.close();
     camCtrl.stopFlight();
-    scenario.start(stepId);
+    scenario.start(stepId).catch((err) => console.error('[nowhere] 투어 오류', err));
   }
 
   // Esc: 모달 · 조작 안내가 먼저 받고(캡처 단계), 남은 Esc 는 인트로 · 비행 중인 투어를 끝낸다
@@ -246,9 +246,12 @@ async function boot() {
       if (!camCtrl.isIntroActive() && !camCtrl.isFlying()) return;
       e.preventDefault();
       e.stopPropagation();
+      const wasIntro = camCtrl.isIntroActive();
       scenario.cancel();
       camCtrl.stopFlight();
       camCtrl.cancelIntro();
+      // 인트로를 Esc 로 끝내면 공중에 멈추지 않고 건너뛰기와 같이 거리 시점으로 내려온다(비행은 그 자리에서 멈춤)
+      if (wasIntro) camCtrl.setPreset('street', true);
     },
     true,
   );
