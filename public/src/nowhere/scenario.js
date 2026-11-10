@@ -1,6 +1,7 @@
 // HAUS NOWHERE — 시나리오 투어: 단계 그래프(문구 포함) · 검증 · 실행기(순수, 테스트: tests/nowhere-scenario.test.mjs).
 // 실제 동작(인트로 · 모달 · 비행 · 실내 진입)은 main.js 가 어댑터로 넣는다.
 // 인트로를 사용자 입력으로 건너뛰어도('skipped') 건물 선택 모달로 이어지고, CANCEL · 모달 Esc(null) 는 시나리오를 끝낸다.
+// 건물에 도착한 뒤의 모달(성수 입장 질문 · 몽골 준비중)에서 다른 건물로 바로 날아갈 수 있다(성수 ↔ 몽골).
 
 export const CANCEL = Symbol('scenario-cancel');
 
@@ -23,6 +24,7 @@ export const SCENARIO = {
       title: '입장하시겠습니까?',
       buttons: [
         { id: 'yes', label: '예', primary: true, next: 'enterHaus' },
+        { id: 'toFacearch', label: '하우스노웨어 몽골로 이동', next: 'flyFacearch' },
         { id: 'no', label: '아니오', cancel: true, next: 'end' },
       ],
     },
@@ -31,7 +33,10 @@ export const SCENARIO = {
     notReady: {
       type: 'modal',
       title: '준비중입니다',
-      buttons: [{ id: 'ok', label: '확인', primary: true, cancel: true, next: 'end' }],
+      buttons: [
+        { id: 'toHaus', label: '하우스노웨어 성수로 이동', next: 'flyHaus' },
+        { id: 'ok', label: '확인', primary: true, cancel: true, next: 'end' },
+      ],
     },
     end: { type: 'end' },
   },

@@ -17,9 +17,9 @@ test('(a) 그래프가 유효하고 문구가 정확하다', () => {
   assert.equal(SCENARIO.steps.chooseBuilding.title, '어떤 건물로 이동하시겠습니까?');
   assert.deepEqual(SCENARIO.steps.chooseBuilding.buttons.map((b) => b.label), ['하우스노웨어 성수', '하우스노웨어 몽골', '닫기']);
   assert.equal(SCENARIO.steps.askEnter.title, '입장하시겠습니까?');
-  assert.deepEqual(SCENARIO.steps.askEnter.buttons.map((b) => b.label), ['예', '아니오']);
+  assert.deepEqual(SCENARIO.steps.askEnter.buttons.map((b) => b.label), ['예', '하우스노웨어 몽골로 이동', '아니오']);
   assert.equal(SCENARIO.steps.notReady.title, '준비중입니다');
-  assert.deepEqual(SCENARIO.steps.notReady.buttons.map((b) => b.label), ['확인']);
+  assert.deepEqual(SCENARIO.steps.notReady.buttons.map((b) => b.label), ['하우스노웨어 성수로 이동', '확인']);
 });
 
 test('(b) 성수 → 예: 인트로 → 선택 → 비행 → 입장 질문 → 실내 진입', async () => {
@@ -105,4 +105,25 @@ test('(j) 시나리오가 쓰는 건물 id 는 모두 TOUR_BUILDINGS 에 있다'
     .filter(Boolean);
   assert.ok(ids.length >= 4, `건물 id ${ids.length}개`);
   for (const id of ids) assert.ok(TOUR_BUILDINGS[id], `TOUR_BUILDINGS 에 '${id}' 없음`);
+});
+
+test('(k) 도착 모달에서 다른 건물로: 성수 → 몽골로 이동 → 준비중 → 성수로 이동 → 입장 질문 → 예', async () => {
+  const log = [];
+  await createScenarioRunner({ adapters: fakeAdapters(['haus', 'toFacearch', 'toHaus', 'yes'], log) }).start('chooseBuilding');
+  assert.deepEqual(log, [
+    'modal:어떤 건물로 이동하시겠습니까?',
+    'fly:haus',
+    'modal:입장하시겠습니까?',
+    'fly:facearch',
+    'modal:준비중입니다',
+    'fly:haus',
+    'modal:입장하시겠습니까?',
+    'enter:haus',
+  ]);
+  // Enter(기본) · Esc(취소)는 그대로: 성수 입장 질문은 예 · 아니오, 몽골 준비중은 확인
+  const { resolveModalKey } = await import('../public/src/nowhere/modal.js');
+  assert.equal(resolveModalKey('Enter', SCENARIO.steps.askEnter.buttons), 'yes');
+  assert.equal(resolveModalKey('Escape', SCENARIO.steps.askEnter.buttons), 'no');
+  assert.equal(resolveModalKey('Enter', SCENARIO.steps.notReady.buttons), 'ok');
+  assert.equal(resolveModalKey('Escape', SCENARIO.steps.notReady.buttons), 'ok');
 });
