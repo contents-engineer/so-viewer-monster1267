@@ -9,8 +9,9 @@ import { createCameraController, updateDroneActors } from './camera.js';
 import { createHelpOverlay, createWalkHud } from './help.js';
 import { createModal } from './modal.js';
 import { createScenarioRunner, CANCEL } from './scenario.js';
-import { approachFor, TOUR_BUILDINGS } from './tour-config.js';
+import { approachFor } from './tour-config.js';
 import { buildFlightPath } from './flight.js';
+import { SEONGSU_INTRO } from './intro-path.js';
 import { createInterior } from './interior.js';
 
 async function boot() {
@@ -182,6 +183,7 @@ async function boot() {
     layout: world.layout,
     groundHeightAt: world.groundHeightAt,
     getWalkBlocker: world.getWalkBlocker,
+    introPath: worldVer === 'seongsu' ? SEONGSU_INTRO : null,   // 성수는 길을 따라 나는 인트로, DS2 는 기본 경로
     onPresetChange(camDef) {
       syncCamUI(camDef.id);
     },
@@ -224,11 +226,7 @@ async function boot() {
     adapters: {
       // 끝까지 재생 · 사용자 입력으로 건너뜀 → 건물 선택으로, 다른 동작이 끊음 → 투어 종료
       intro: () => new Promise((resolve) => camCtrl.startIntro((reason) => resolve(reason === 'cancelled' ? CANCEL : reason))),
-      modal: (step) =>
-        modal.show({
-          title: step.title,
-          buttons: step.buttons.map((b) => ({ ...b, sub: b.building ? TOUR_BUILDINGS[b.building].summary : undefined })),
-        }),
+      modal: (step) => modal.show({ title: step.title, buttons: step.buttons }),
       fly: async (step) => {
         const to = approachFor(world.layout, step.building);
         if (!to) return CANCEL;

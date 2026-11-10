@@ -4,14 +4,12 @@
 export const TOUR_BUILDINGS = {
   haus: {
     label: '하우스노웨어 성수',
-    summary: '50 × 52 m · 높이 81 m',
     enterable: true,
     // 남측 전정(z +17…+31) 앞에서 포디움 입구를 바라본다
     approach: { pos: [0, 3.2, 46], target: [0, 10, 0] },
   },
   facearch: {
     label: '하우스노웨어 몽골',
-    summary: '22 × 18 m · 높이 31 m',
     enterable: false,
     // 얼굴 정면에서 두 눈과 필로티를 함께 본다. 얼굴은 로컬 축이 아니라 (−0.84, 0, 0.55) 쪽을 향한다(두 눈 메시 위치로 확인)
     approach: { pos: [-46, 7, 30], target: [0, 16, 0] },

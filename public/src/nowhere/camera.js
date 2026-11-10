@@ -18,6 +18,7 @@ export function createCameraController({
   groundHeightAt = () => 0,
   getWalkBlocker = null,   // 보행 충돌 (x, z) => 막힘 여부 (world.getWalkBlocker, 첫 보행 진입 때 생성)
   onPointerLockChange = null,   // 보행 마우스 시선 고정(포인터 잠금) 상태 변경 알림 (locked) => void
+  introPath = null,   // 월드별 인트로 경로 { points, targets }(같은 개수, points[i] 에서 targets[i] 를 봄 — intro-path.js). 없으면 기본 경로
 }) {
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
@@ -85,20 +86,13 @@ export function createCameraController({
     target: [-30, 5.0, 31.0],
     fov: 39.76,
   };
-  const introPosCurve = new THREE.CatmullRomCurve3([
-    new THREE.Vector3(148.0, 92.0, 138.0),
-    new THREE.Vector3(62.0, 26.0, -95.0),
-    new THREE.Vector3(13.0, 4.2, -148.0),
-    new THREE.Vector3(-58.0, 6.5, 42.0),
-    new THREE.Vector3(...streetCam.pos),
-  ]);
-  const introTgtCurve = new THREE.CatmullRomCurve3([
-    new THREE.Vector3(-18.0, 26.0, -68.0),
-    new THREE.Vector3(0.0, 18.0, -25.0),
-    new THREE.Vector3(8.0, 22.0, 0.0),
-    new THREE.Vector3(-10.0, 12.0, 15.0),
-    new THREE.Vector3(...streetCam.target),
-  ]);
+  // introPath(성수 2041)가 있으면 그 경로, 없으면 기본 경로(DS2)
+  const toCurve = (pts) => new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p)));
+  const introPosCurve = toCurve(introPath?.points || [[148.0, 92.0, 138.0], [62.0, 26.0, -95.0], [13.0, 4.2, -148.0], [-58.0, 6.5, 42.0], streetCam.pos]);
+  const introTgtCurve = toCurve(introPath?.targets || [[-18.0, 26.0, -68.0], [0.0, 18.0, -25.0], [8.0, 22.0, 0.0], [-10.0, 12.0, 15.0], streetCam.target]);
+  // introPath 는 시선을 위치와 같은 매개변수로 맞춘다(points[i] 를 지날 때 targets[i]) — 두 곡선을 따로 호 길이로 나누면
+  // 모양이 다를 때 시선이 앞서거나 늦어 길을 따라 날면서 옆을 보게 된다. 기본 경로는 예전처럼 각자 호 길이.
+  const introSyncTarget = Boolean(introPath);
 
   let introActive = false;
   let introElapsed = 0;
@@ -417,8 +411,14 @@ export function createCameraController({
       introElapsed += dt;
       const t = Math.min(1, introElapsed / INTRO_DURATION);
       const u = t * t * (3 - 2 * t);
-      introPosCurve.getPointAt(u, camera.position);
-      introTgtCurve.getPointAt(u, controls.target);
+      if (introSyncTarget) {
+        const s = introPosCurve.getUtoTmapping(u);   // 위치는 getPointAt(u) 와 같음
+        introPosCurve.getPoint(s, camera.position);
+        introTgtCurve.getPoint(s, controls.target);
+      } else {
+        introPosCurve.getPointAt(u, camera.position);
+        introTgtCurve.getPointAt(u, controls.target);
+      }
       camera.fov = THREE.MathUtils.lerp(44, streetCam.fov || 39.76, u);
       camera.updateProjectionMatrix();
       controls.update();

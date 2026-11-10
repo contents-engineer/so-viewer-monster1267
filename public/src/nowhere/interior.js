@@ -382,7 +382,7 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     }
   }
 
-  /** 실내에서 나와 외관 HAUS 정면(카메라 시점)으로 돌아간다. */
+  /** 실내에서 나와 외관 HAUS 정면으로 돌아간다. 보행 중이었으면 밖에서도 그 자리(정면 지면 눈높이)에서 보행을 이어 간다. */
   async function exit() {
     if (!active || busy) return;
     busy = true;
@@ -390,6 +390,8 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     closePrompt();   // 출구 · 층 선택 질문이 떠 있으면 닫는다(외관에 남거나 다음 방문에 응답되지 않게)
     try {
       await fadeTo(true);
+      // 실내 ↔ 외관 전환이 보행 여부를 바꾸지 않게(1F 출구는 보행 중에만 묻는다). placeAt 이 보행을 끄므로 옮긴 뒤 다시 켠다
+      const wasWalking = camCtrl.isWalkMode();
       camCtrl.setWalkMode(false);
       post.renderPass.scene = exteriorScene;
       camCtrl.setTerrain({
@@ -404,6 +406,7 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
         camera.fov = fovBefore;
         camera.updateProjectionMatrix();
       }
+      if (wasWalking) camCtrl.setWalkMode(true);   // 외관 지면 · 장애물로 바꾼 뒤라 정면 지면 위 1.7 m 에서 시작
       active = false;
       document.body.classList.remove('is-interior');
       hud.hidden = true;

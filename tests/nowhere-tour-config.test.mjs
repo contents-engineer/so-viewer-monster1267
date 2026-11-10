@@ -11,7 +11,8 @@ test('(a) 두 건물의 이름 · 입장 가능 여부(성수만 입장)', () =>
   assert.equal(TOUR_BUILDINGS.facearch.label, '하우스노웨어 몽골');
   assert.equal(TOUR_BUILDINGS.haus.enterable, true);
   assert.equal(TOUR_BUILDINGS.facearch.enterable, false);
-  for (const b of Object.values(TOUR_BUILDINGS)) assert.ok(b.summary.length > 0);
+  // 건물 선택 모달에는 이름만(크기 · 높이 안내 없음)
+  for (const b of Object.values(TOUR_BUILDINGS)) assert.equal('summary' in b, false);
 });
 
 test('(b) 두 월드 × 두 건물 모두 접근 시점이 나온다', () => {
