@@ -8,6 +8,7 @@ export function createSkyDome(sharedUniforms) {
     uSkyZenith: { value: new THREE.Color('#C5CFCF') },
     uSkyGround: { value: new THREE.Color('#3E423F') },
     uSkyCloudStrength: { value: 0.14 },
+    uSkyCumulus: { value: 0.0 },
     uFogColor: sharedUniforms.uFogColor,
     uFogFarColor: sharedUniforms.uFogFarColor,
     uTime: sharedUniforms.uTime,
@@ -35,6 +36,7 @@ export function createSkyDome(sharedUniforms) {
       uniform vec3 uSkyZenith;
       uniform vec3 uSkyGround;
       uniform float uSkyCloudStrength;
+      uniform float uSkyCumulus;
       uniform vec3 uFogColor;
       uniform vec3 uFogFarColor;
       uniform float uTime;
@@ -81,6 +83,19 @@ export function createSkyDome(sharedUniforms) {
           float c = fbm(uv) - 0.48;
           float fade = smoothstep(0.02, 0.28, y) * smoothstep(0.95, 0.35, y);
           sky *= 1.0 + c * uSkyCloudStrength * fade;
+        }
+
+        // 맑음의 흰 적운(성수 2041). 덮임 uSkyCumulus(0 = 없음). 가장자리는 밝고 밑면은 푸른 회색, 밤에는 어둡다.
+        if (uSkyCumulus > 0.001 && y > 0.0) {
+          vec2 cuv = dir.xz / (y + 0.12) * 0.55 + vec2(uTime * 0.005, uTime * 0.0025);
+          float n = fbm(cuv) * 0.62 + fbm(cuv * 2.9 + vec2(5.2, 1.3)) * 0.38;
+          float edge = 1.0 - uSkyCumulus;
+          float cov = smoothstep(edge, edge + 0.16, n);
+          float body = smoothstep(edge + 0.04, edge + 0.32, n);
+          float fade = smoothstep(0.012, 0.10, y) * (1.0 - smoothstep(0.60, 0.92, y));
+          vec3 cloud = mix(vec3(1.0, 0.995, 0.98), vec3(0.79, 0.82, 0.86), body * 0.75);
+          cloud *= mix(1.0, 0.16, uNight);
+          sky = mix(sky, cloud, cov * fade);
         }
 
         // 지평선 아래는 어두운 지면 반구색으로, 지평선 부근은 원경 안개색과 부드럽게 융합

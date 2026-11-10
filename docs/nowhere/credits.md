@@ -2,7 +2,7 @@
 
 HAUS NOWHERE 에 쓰는 외부 소재는 모두 [Poly Haven](https://polyhaven.com)의 CC0(퍼블릭 도메인) 자료다. CC0 는 표기 의무가 없지만, 출처를 남기고 작가를 기록해 둔다.
 
-- 이 표는 `tools/nowhere/sources.json` 에 적힌 소재 전체다(소재 41개, `urban_street_03` 은 1k·2k 두 해상도를 받으므로 받은 항목은 42개). 출하물에 실제로 들어가는 소재만 남기는 정리는 Blender 제작 태스크가 끝난 뒤에 한다.
+- 이 표는 `tools/nowhere/sources.json` 에 적힌 소재 전체다(소재 40개, `urban_street_03` 은 1k·2k 두 해상도를 받으므로 받은 항목은 41개). 출하물에 실제로 들어가는 소재만 남기는 정리는 Blender 제작 태스크가 끝난 뒤에 한다.
 - 작가는 Poly Haven API(`https://api.polyhaven.com/info/<id>`)의 `authors` 필드를 그대로 옮겼다. 역할이 `All` 이 아니면 괄호에 역할을 적었다.
 - 받은 파일과 md5 는 `build/nowhere-src/manifest.jsonl` 에 남는다. 이 폴더는 배포하지 않는다. 웹에는 GLB 안에 들어간 WebP(1024/512)만 나간다.
 - 게임 스크린샷·컨셉아트 등 CC0 가 아닌 자료는 이 목록에 없고, 출하물에도 쓰지 않는다.
@@ -21,6 +21,7 @@ HAUS NOWHERE 에 쓰는 외부 소재는 모두 [Poly Haven](https://polyhaven.c
 | `concrete_moss` | 텍스처 | Rob Tuytel | [polyhaven.com/a/concrete_moss](https://polyhaven.com/a/concrete_moss) | CC0 |
 | `mossy_cobblestone` | 텍스처 | Sơn Nguyễn | [polyhaven.com/a/mossy_cobblestone](https://polyhaven.com/a/mossy_cobblestone) | CC0 |
 | `coast_sand_rocks_02` | 텍스처 | Rob Tuytel | [polyhaven.com/a/coast_sand_rocks_02](https://polyhaven.com/a/coast_sand_rocks_02) | CC0 |
+| `aerial_grass_rock` | 텍스처 | Rob Tuytel | [polyhaven.com/a/aerial_grass_rock](https://polyhaven.com/a/aerial_grass_rock) | CC0 |
 | `dark_rock` | 텍스처 | Amal Kumar | [polyhaven.com/a/dark_rock](https://polyhaven.com/a/dark_rock) | CC0 |
 | `lichen_rock` | 텍스처 | Rico Cilliers | [polyhaven.com/a/lichen_rock](https://polyhaven.com/a/lichen_rock) | CC0 |
 | `dark_rock_02` | 텍스처 | Amal Kumar | [polyhaven.com/a/dark_rock_02](https://polyhaven.com/a/dark_rock_02) | CC0 |
@@ -30,10 +31,8 @@ HAUS NOWHERE 에 쓰는 외부 소재는 모두 [Poly Haven](https://polyhaven.c
 | `modern_buildings_night` | HDRI | Greg Zaal | [polyhaven.com/a/modern_buildings_night](https://polyhaven.com/a/modern_buildings_night) | CC0 |
 | `modular_factory_facade` | 모델 | James Ray Cock | [polyhaven.com/a/modular_factory_facade](https://polyhaven.com/a/modular_factory_facade) | CC0 |
 | `modular_fire_escape` | 모델 | Juniix | [polyhaven.com/a/modular_fire_escape](https://polyhaven.com/a/modular_fire_escape) | CC0 |
-| `exterior_aircon_unit` | 모델 | Monsta3D | [polyhaven.com/a/exterior_aircon_unit](https://polyhaven.com/a/exterior_aircon_unit) | CC0 |
 | `utility_box_01` | 모델 | James Ray Cock | [polyhaven.com/a/utility_box_01](https://polyhaven.com/a/utility_box_01) | CC0 |
 | `utility_box_02` | 모델 | James Ray Cock | [polyhaven.com/a/utility_box_02](https://polyhaven.com/a/utility_box_02) | CC0 |
-| `korean_public_payphone_01` | 모델 | UM JOORIN | [polyhaven.com/a/korean_public_payphone_01](https://polyhaven.com/a/korean_public_payphone_01) | CC0 |
 | `korean_fire_extinguisher_01` | 모델 | UM JOORIN | [polyhaven.com/a/korean_fire_extinguisher_01](https://polyhaven.com/a/korean_fire_extinguisher_01) | CC0 |
 | `water_manhole_cover` | 모델 | Raunox | [polyhaven.com/a/water_manhole_cover](https://polyhaven.com/a/water_manhole_cover) | CC0 |
 | `security_camera_01` | 모델 | Alexander Otterbeck (Modeling & Texturing), Yann Kervran (Rigging) | [polyhaven.com/a/security_camera_01](https://polyhaven.com/a/security_camera_01) | CC0 |

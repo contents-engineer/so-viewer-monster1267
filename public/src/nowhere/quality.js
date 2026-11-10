@@ -39,6 +39,7 @@ export function getQualityConfig(tier = 'desktop', worldVer = 'seongsu') {
       bloom: false,
       maxPixelRatio: 1.5,
       shadowMapSize: 1024,
+      sunShadows: false,
       maxLabels: 6,
     };
   }
@@ -55,6 +56,7 @@ export function getQualityConfig(tier = 'desktop', worldVer = 'seongsu') {
     bloom: true,
     maxPixelRatio: 1.75,
     shadowMapSize: 2048,
+    sunShadows: true,
     maxLabels: 24,
   };
 }

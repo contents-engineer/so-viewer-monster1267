@@ -174,21 +174,22 @@
       { "label": "Poly Haven CC0", "url": "https://polyhaven.com/a/modular_factory_facade" }
     ]
   },
-  "wires": {
+  "restored_brick": {
     "layer": "present",
-    "kicker": "PRESENT · STREETSCAPE",
-    "title": "전신주와 처진 전선 다발",
-    "summary": "12 m 전주 · 배전선 다발",
+    "kicker": "PRESENT · RESTORATION",
+    "title": "복원한 벽돌 — 오염을 걷어낸 공장 띠",
+    "summary": "그을음·빗물 얼룩 35 %",
     "priority": 70,
     "render": "assets/nowhere/renders/hero-viaduct.webp",
     "facts": [
-      ["구성", "12 m 콘크리트 전주 · 주상변압기 · 처진 전선 3–6가닥"],
-      ["하단 보호대", "황흑 사선 안전 표지 (#F2C200 / #1A1A1A)"],
-      ["구현", "현수선(catenary) 곡선 메시 + 인스턴스 전주"]
+      ["구현", "present.py AGE_SCALE 0.35 — 벽 정점 마스크의 그을음·빗물 얼룩·하단 이끼를 옛 세기의 35 %로"],
+      ["걷어낸 것", "옥상 물탱크·실외기·옥상 광고판, 내려진 셔터(1층은 유리 상점)"],
+      ["소재", "church_bricks_02 · brick_wall_001 · CC0"]
     ],
-    "lore": "간선도로와 달리 지중화되지 못한 이면도로의 가공 배전선과 통신선 다발이 흐린 하늘을 가로지르며 골목의 밀도를 만든다.",
+    "lore": "2041년 성수 도시재생 사업은 골목 위 전선 다발을 땅속으로 묻고(지중화), 공장 띠의 적벽돌은 헐지 않고 세척했다. 그을음과 빗물 자국을 걷어내자 붉은 벽이 다시 드러났고, 내려져 있던 셔터 자리에는 유리 상점이 들어섰다.",
     "sources": [
-      { "label": "성수 블록 리서치", "url": "docs/nowhere/research/seongsu.md" }
+      { "label": "성수 블록 리서치", "url": "docs/nowhere/research/seongsu.md" },
+      { "label": "Poly Haven CC0", "url": "https://polyhaven.com/a/church_bricks_02" }
     ]
   },
   "workshop": {
@@ -244,58 +245,55 @@
       { "label": "성수 블록 리서치", "url": "docs/nowhere/research/seongsu.md" }
     ]
   },
-  "lot_moss": {
+  "park_lawn": {
     "layer": "nature",
-    "kicker": "NATURE · VACANT LOT",
-    "title": "방치된 빈터 — 이끼 군락",
-    "summary": "concrete_moss · CC0",
+    "kicker": "NATURE · POCKET PARK",
+    "title": "포켓 공원 — 잔디와 산책로",
+    "summary": "aerial_grass_rock · CC0",
     "priority": 89,
     "render": "assets/nowhere/renders/hero-lot.webp",
     "facts": [
-      ["분포 규칙", "윗면 법선 · 오목한 틈새 · 물가 가장자리에만 집중 분포"],
-      ["색상 범위", "차분한 올리브 #3A461C ~ #5C652D"],
-      ["소재", "concrete_moss · moss_01 · CC0"]
+      ["잔디", "aerial_grass_rock 2k를 녹색으로 보정(NW_turf), 지면 기복 ±0.25 m"],
+      ["산책로", "닫힌 고리 폭 2.0 m, concrete_pavers_02 보도블록, 잔디 + 0.02 m"],
+      ["식재", "관목 화단 4곳(shrub_02 0.6배) · 벤치 6 · 느티나무 자리 8"]
     ],
-    "lore": "철거 후 멈춰 선 공사 부지의 노출 콘크리트 기초와 현무암 틈새마다 잦은 강우로 짙은 올리브빛 이끼 군락이 자라났다.",
+    "lore": "공사 가림막 뒤에 오래 방치됐던 철거 빈터는 2041년 주민 참여형 도시재생으로 잔디와 둘레 산책로를 갖춘 포켓 공원이 됐다. 점심이면 근처 공방 사람들이 벤치에 나와 앉는다.",
     "sources": [
-      { "label": "자연·대기 리서치", "url": "docs/nowhere/research/ds.md" },
-      { "label": "Poly Haven CC0", "url": "https://polyhaven.com/a/concrete_moss" }
+      { "label": "성수 블록 리서치", "url": "docs/nowhere/research/seongsu.md" },
+      { "label": "Poly Haven CC0", "url": "https://polyhaven.com/a/aerial_grass_rock" }
     ]
   },
-  "lot_water": {
+  "park_water": {
     "layer": "nature",
-    "kicker": "NATURE · HYDROLOGY",
-    "title": "빈터 고인 물과 얕은 물길",
-    "summary": "roughness 0.04 · 빗물 파문",
+    "kicker": "NATURE · WATER GARDEN",
+    "title": "물길 정원",
+    "summary": "웅덩이 3 · 얕은 물길 · 현무암 경계석",
     "priority": 85,
     "render": "assets/nowhere/renders/hero-lot.webp",
     "facts": [
-      ["구현", "±0.6 m 지형 기복 + 수평 수면 절단 + 2048 마스크 A채널"],
-      ["반사 특성", "웅덩이 거칠기 0.035 + 강우 시 동심원 파문 노멀"],
-      ["소재", "coast_sand_rocks_02 · nowhere-ground-mask.webp"]
+      ["구현", "웅덩이 3곳의 수평 수면 절단 + 얕은 물길, 지면 마스크 A채널(nowhere-ground-mask.webp)"],
+      ["경계석", "현무암 작은 기둥(직접 모델링) 0.4 m 간격, 물가와 물길 양쪽"],
+      ["산책로 교차", "물길은 산책로 밑에서 땅속으로(암거) 지나간다"]
     ],
-    "lore": "낮은 물길과 옛 지하 기초 자리를 따라 고인 얕은 웅덩이가 흐린 하늘과 HAUS NOWHERE의 매스를 거울처럼 비춘다.",
+    "lore": "빗물이 고이던 낮은 땅은 빗물을 모아 천천히 흘려보내는 물길 정원으로 다듬어졌다. 비가 오면 물길이 차오르고, 맑은 날에는 웅덩이가 하늘과 HAUS NOWHERE를 비춘다.",
     "sources": [
-      { "label": "자연·대기 리서치", "url": "docs/nowhere/research/ds.md" },
-      { "label": "Poly Haven CC0", "url": "https://polyhaven.com/a/coast_sand_rocks_02" }
+      { "label": "성수 블록 리서치", "url": "docs/nowhere/research/seongsu.md" }
     ]
   },
-  "lot_rocks": {
+  "park_stones": {
     "layer": "nature",
-    "kicker": "NATURE · LITHOLOGY",
-    "title": "바위·깨진 콘크리트 3단 스케일",
-    "summary": "대 1 : 중 5–8 : 소 다수",
+    "kicker": "NATURE · LANDSCAPE STONE",
+    "title": "현무암 조경석",
+    "summary": "주상절리 덩어리 3",
     "priority": 84,
     "render": "assets/nowhere/renders/hero-lot.webp",
     "facts": [
-      ["군집 비율", "대형 슬래브 1 : 중형 바위 5–8 : 소형 잔돌 다수"],
-      ["구성", "기울어진 철근 콘크리트 슬래브 4기 + 어두운 현무암 군집"],
-      ["소재", "dark_rock · boulder_01 · rock_moss_set_01 · CC0"]
+      ["구성", "주상절리 현무암 덩어리 3개(직접 모델링한 다각 기둥)"],
+      ["소재", "dark_rock · CC0"]
     ],
-    "lore": "3단 암석 군집 규칙을 따라 깨진 콘크리트 바닥판과 각진 현무암 덩어리가 물길 둘레에 자연스러운 침식 지형을 이룬다.",
+    "lore": "빈터 시절부터 있던 현무암 덩어리 가운데 큰 세 개는 치우지 않고 공원의 조경석으로 남겼다. 아이들이 기어오르는 자리가 됐다.",
     "sources": [
-      { "label": "자연·대기 리서치", "url": "docs/nowhere/research/ds.md" },
-      { "label": "Poly Haven CC0", "url": "https://polyhaven.com/a/rock_moss_set_01" }
+      { "label": "Poly Haven CC0", "url": "https://polyhaven.com/a/dark_rock" }
     ]
   },
   "ginkgo": {

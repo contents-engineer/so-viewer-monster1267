@@ -11,6 +11,7 @@
 #                                   한 장의 외벽 아틀라스(NWB_gen_city, 층마다 띠) + 한 장의 밤 창 발광(NWB_gen_city_night)
 #   BD_far                           0.7 ~ 3 km 저층 지붕 바다 + 아파트 판상·타워(서울의 수평선)
 #   BD_infra                         2호선 고가 연장(파란 LED 선은 future.py 가 같은 끝까지), 강변북로 고가
+#   BD_tube_w, BD_tube_e             고가 위 유리 튜브의 원경 외피(future.TUBE_PROFILE 단면, 장면 층 튜브 바깥 ~ VIA_EXT, NWB_tube)
 #   BD_layer1, BD_layer2, BD_lotte, BD_namsan_tower   스카이라인 1겹(1 ~ 1.5 km)·2겹(2.5 ~ 3 km) 실루엣
 #   BD_ridge_1 … BD_ridge_4, BD_park 능선 4겹(4.0 · 4.9 · 5.6 · 6.0 km)과 서울숲 수관
 # 방위·고도각(성수 리서치 §4): 장면 방위(+Y = 0°, 시계 방향)를 지키고 거리만 6 km 안으로 당긴다. 높이는 눈높이 15 m 에서
@@ -201,10 +202,20 @@ def paint_city():
                 rect(E, b * BW + 40, 18, b * BW + 88, 48, cool[0] * 0.5)
     rect(A, 0, 0, 30, SPX, _hx('#7E978C'))                                    # 색 띠(단지 도색, 글자 없음)
     # 업무·지식산업센터·타워(커튼월)
-    for nm, floors, glass, mull, p in (('office_up', 1, '#6E7F8C', '#A9B0B4', 0.35), ('tower4', 4, '#4F5D69', '#8E979D', 0.3),
-                                       ('tower4_b', 4, '#7D8B95', '#B5BCC0', 0.3)):
+    # 성수 2041(Task 7): 밝은 청유리 + 흰 멀리언. 띠 안 세로 위치 v(0 = 아래, 1 = 위)로 하늘 반사(glass → #D6E6F1, 0.35·v),
+    # 유리 칸 4개 중 하나는 블라인드로 10 % 어둡게. 블라인드는 따로 둔 난수(rb)로 고른다 — rng 순서가 그대로라 밤 발광
+    # 아틀라스(NWB_gen_city_night)와 다른 띠의 무늬는 바뀌지 않는다.
+    sky = _hx('#D6E6F1'); rb = np.random.default_rng(2041)
+    tv = 0.35 * (np.arange(SPX, dtype=np.float32) + 0.5) / SPX                # 행마다 0.35·v(행 0 = 아래)
+    for nm, floors, glass, mull, p in (('office_up', 1, '#7FA6C4', '#DDE3E7', 0.35), ('tower4', 4, '#8FB4CF', '#DDE3E7', 0.3),
+                                       ('tower4_b', 4, '#A9C6DA', '#E4E8EA', 0.3)):
         A, E = band(nm); fh = SPX / floors
         wallfill(A, _hx(glass), 0.05)
+        A[...] = A * (1.0 - tv)[:, None, None] + sky * tv[:, None, None]
+        for f in range(floors):
+            for b in range(16):
+                if rb.random() < 0.25:
+                    A[int(f * fh):int((f + 1) * fh), b * BW // 2:(b + 1) * BW // 2] *= 0.9
         for f in range(floors):
             y0 = f * fh
             rect(A, 0, y0, ATW, y0 + max(1, fh * 0.18), _hx('#3D4850'))      # 스팬드럴
@@ -335,10 +346,22 @@ def mat_paint(img):
     return m
 
 
+def mat_tube():
+    """2호선 유리 튜브의 원경 외피(Task 7): 불투명 청유리 금속. 멀리서는 하늘을 비추는 반사 띠로 읽힌다."""
+    m = _new_mat('NWB_tube'); b = lib.NB(m.node_tree)
+    out = b.node('ShaderNodeOutputMaterial'); bs = b.node('ShaderNodeBsdfPrincipled'); b.L.new(bs.outputs[0], out.inputs['Surface'])
+    bs.inputs['Base Color'].default_value = srgb('#9FC3D6'); bs.inputs['Roughness'].default_value = 0.15
+    bs.inputs['Metallic'].default_value = 0.6
+    m['nw_surface'] = 'glass'
+    m['nw_tex'] = json.dumps({'kind': 'flat', 'color': '#9FC3D6', 'rough': 0.15, 'metal': 0.6}, ensure_ascii=False)
+    return m
+
+
 def materials():
     ia, ie = paint_city()
     M = {
         'city': mat_city(ia, ie),
+        'tube': mat_tube(),
         'ground': lib.pbr(_guard('NWB_ground'), 'clean_asphalt', size_m=5.0, base_wet=0.35, moss_bias=-0.2, puddle_bias=-1.0,
                           sat=0.45, normal=0.6),
         'ridge': mat_ridge(paint_ridge()),
@@ -566,6 +589,14 @@ def build_mid(C, M):
     rnd = random.Random(2041)
     accs = {k: Acc() for k in ('n', 's', 'e', 'w')}
     stats = {}
+    # 성수 2041 신축 타워 대지(future.TOWERS + 12 m 여유): 걸린 필지는 지면만 남긴다. 그 필지의 건물은 버리는 누적기(void)에
+    # 지어 난수 순서를 지킨다 → 대지 밖 도시는 그대로다.
+    import future
+    sites = [(t['c'][0] - t['size'][0] / 2 - future.TOWER_SITE_MARGIN, t['c'][1] - t['size'][1] / 2 - future.TOWER_SITE_MARGIN,
+              t['c'][0] + t['size'][0] / 2 + future.TOWER_SITE_MARGIN, t['c'][1] + t['size'][1] / 2 + future.TOWER_SITE_MARGIN)
+             for t in future.TOWERS]
+    overlaps = lambda r: any(r[0] < s[2] and s[0] < r[2] and r[1] < s[3] and s[1] < r[3] for s in sites)
+    void = Acc(); cleared = {t['id']: 0 for t in future.TOWERS}
     for blk in blocks():
         cx, cy = (blk[0] + blk[2]) / 2, (blk[1] + blk[3]) / 2
         if math.hypot(cx, cy) > R_MID + 40:
@@ -613,21 +644,26 @@ def build_mid(C, M):
             r = rnd.random()
             if r < 0.07:
                 continue                                               # 빈 필지·주차장
+            pa = acc
+            if overlaps(p):                                            # 타워 대지: 지면만(건물은 void 로)
+                pa = void
+                for t, s in zip(future.TOWERS, sites):
+                    cleared[t['id']] += int(p[0] < s[2] and s[0] < p[2] and p[1] < s[3] and s[1] < p[3])
             L, D = max(w, h), min(w, h); ang = 0.0 if w >= h else math.pi / 2
             fp = rect_fp(bcx, bcy, w, h)
             if z == 'ind':
                 if w * h > 1100 and r > 0.72 and dr > 45:
-                    building(acc, rnd, 'office', rect_fp(bcx, bcy, w * 0.85, h * 0.85), rnd.randint(10, 17), near,
+                    building(pa, rnd, 'office', rect_fp(bcx, bcy, w * 0.85, h * 0.85), rnd.randint(10, 17), near,
                              rect=(bcx, bcy, w * 0.85, h * 0.85, 0.0)); stats['office'] = stats.get('office', 0) + 1
                 elif r > 0.6:
-                    building(acc, rnd, 'shop' if rnd.random() < 0.4 else 'factory', fp, rnd.randint(3, 5), near, rect=(bcx, bcy, w, h, 0.0))
+                    building(pa, rnd, 'shop' if rnd.random() < 0.4 else 'factory', fp, rnd.randint(3, 5), near, rect=(bcx, bcy, w, h, 0.0))
                 elif r > 0.45:                                          # 골함석 작업동(1층 6 m, 박공)
-                    walls(acc, fp, 0.0, 6.0, 'corrugated', 5.0, rnd.random())
-                    gable(acc, bcx, bcy, L, D, ang, 6.0, rnd.uniform(8, 14), 'corrugated', 'roof_dark')
+                    walls(pa, fp, 0.0, 6.0, 'corrugated', 5.0, rnd.random())
+                    gable(pa, bcx, bcy, L, D, ang, 6.0, rnd.uniform(8, 14), 'corrugated', 'roof_dark')
                     stats['shed'] = stats.get('shed', 0) + 1
                 else:
                     fl = rnd.randint(2, 4)
-                    building(acc, rnd, 'factory', fp, fl, near, roof='gable' if rnd.random() < 0.45 else 'flat', rect=(bcx, bcy, L, D, ang))
+                    building(pa, rnd, 'factory', fp, fl, near, roof='gable' if rnd.random() < 0.45 else 'flat', rect=(bcx, bcy, L, D, ang))
                     stats['factory'] = stats.get('factory', 0) + 1
             else:
                 if dr < 40:
@@ -639,12 +675,12 @@ def build_mid(C, M):
                 kind = 'shop' if (r > 0.62 or fl >= 8) else ('villa' if rnd.random() < 0.6 else 'villa_t')
                 if z == 'apt2' and r > 0.9:
                     kind = 'office'; fl = rnd.randint(9, 14)
-                building(acc, rnd, kind, fp, fl, near, rect=(bcx, bcy, w, h, 0.0)); stats[kind] = stats.get(kind, 0) + 1
+                building(pa, rnd, kind, fp, fl, near, rect=(bcx, bcy, w, h, 0.0)); stats[kind] = stats.get(kind, 0) + 1
     out = []
     for k, acc in accs.items():
         if acc.F:
             out.append(acc.to_obj(f'BD_mid_{k}', C, [M['city']], 'wall'))
-    print('mid ring', stats, {k: a.tris() for k, a in accs.items()})
+    print('mid ring', stats, {k: a.tris() for k, a in accs.items()}, 'tower sites cleared', cleared, void.tris())
     return out
 
 
@@ -758,7 +794,7 @@ def tower(acc, cx, cy, h, w, d, sides=8, strip='tower4', ang=0.0, taper=0.0, rou
             acc.poly([(A[i][0], A[i][1], z0), (A[j][0], A[j][1], z0), (B[j][0], B[j][1], z1), (B[i][0], B[i][1], z1)],
                      [(u0, lo), (u1, lo), (u1, hi), (u0, hi)])
     top = sec(1.0)
-    roof_flat(acc, top, h, 'roof_grey')
+    roof_flat(acc, top, h, 'roof_green' if (round(cx) + round(cy)) % 2 == 0 else 'roof_grey')   # 성수 2041: 옥상 녹화 절반
     if crown:
         crown(acc, top, h)
     if beacon:
@@ -1066,7 +1102,20 @@ def build_infra(C, M):
         x += 35.0
     o = acc.to_obj('BD_infra', C, [M['city']], 'wall')
     print('infra', acc.tris())
-    return o
+    # 2호선 유리 튜브 외피(Task 7): 장면 층 튜브(future.TUBE_SPANS) 바깥을 같은 단면으로 VIA_EXT 끝까지. 리브 · 끝 마개 없음
+    import future
+    out = [o]
+    for nm, xa, xb in (('BD_tube_w', VIA_EXT[0], future.TUBE_SPANS[0][0]), ('BD_tube_e', future.TUBE_SPANS[-1][1], VIA_EXT[1])):
+        ta = Acc(); P = future.TUBE_PROFILE; sv = 0.0
+        for (ya, za), (yb, zb) in zip(P, P[1:]):                    # 남쪽 아래 → 꼭대기 → 북쪽 아래(법선 바깥)
+            sl = math.hypot(yb - ya, zb - za); ya += future.TUBE_Y; yb += future.TUBE_Y
+            ta.poly([(xa, ya, za), (xb, ya, za), (xb, yb, zb), (xa, yb, zb)],
+                    [(xa / 20.0, sv), (xb / 20.0, sv), (xb / 20.0, sv + sl), (xa / 20.0, sv + sl)])
+            sv += sl
+        t = ta.to_obj(nm, C, [M['tube']], 'glass')
+        print('tube', nm, round(xb - xa, 1), 'm', ta.tris())
+        out.append(t)
+    return out
 
 
 # ═════════════════════════════ 조립 ═════════════════════════════

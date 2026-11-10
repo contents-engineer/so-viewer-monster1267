@@ -1,7 +1,8 @@
 # HAUS NOWHERE — 성수 2041 / Task 5: 헤드리스 전체 빌드 엔트리포인트.
 # 실행:
 #   /Applications/Blender.app/Contents/MacOS/Blender -b build/nowhere/nowhere.blend --python tools/nowhere/blender/build.py
-#   (전체 재구축 시 끝에 -- --rebuild, 강제 재굽기 시 -- --bake 전달)
+#   (전체 재구축 시 끝에 -- --rebuild, 강제 재굽기 시 -- --bake, 굽기를 건너뛰는 빠른 빌드는 -- --no-bake 전달.
+#    --no-bake 로 만든 장면은 nw_baked=False 로 저장되어 다음 일반 빌드가 굽는다)
 #
 # 단계:
 #   1) nowhere.blend 가 없거나 --rebuild 플래그가 있으면 ground → present → future → backdrop 순으로 장면을 구축한다.
@@ -28,7 +29,8 @@ def _save_blend(sc, blend_path):
 def main(argv=None):
     argv = list(sys.argv if argv is None else argv)
     rebuild = '--rebuild' in argv
-    force_bake = '--bake' in argv or rebuild
+    no_bake = '--no-bake' in argv
+    force_bake = ('--bake' in argv or rebuild) and not no_bake
 
     t0 = time.time()
     blend_path = os.path.join(lib.OUT, 'nowhere.blend')
@@ -40,9 +42,10 @@ def main(argv=None):
         importlib.reload(present)
         importlib.reload(future)
         importlib.reload(backdrop)
-        ground.build(reset=True, render_previews=False)
-        present.build(reset=False, render_previews=False)
-        future.build(reset=False, render_previews=False)
+        # 각 build() 는 인자가 없고 자기 컬렉션을 비운 뒤 다시 만든다(예전의 reset=/render_previews= 인자는 TypeError 였다)
+        ground.build()
+        present.build()
+        future.build()
         backdrop.build()
         _save_blend(lib.get_scene(True), blend_path)
     elif bpy.data.scenes.get(lib.SCENE_NAME) is None:
@@ -55,7 +58,11 @@ def main(argv=None):
     importlib.reload(bake)
     importlib.reload(export)
 
-    if force_bake or not sc.get('nw_baked') or not os.path.exists(bake.MASK_OUT):
+    if no_bake:
+        print('[nowhere:build] --no-bake: 굽기를 건너뛴다(새 메시 AO = 1). 확인 지점에서는 전체 굽기로 다시 만든다.')
+        sc['nw_baked'] = False                 # 다음 일반 빌드가 굽기를 하도록 표시
+        _save_blend(sc, blend_path)
+    elif force_bake or not sc.get('nw_baked') or not os.path.exists(bake.MASK_OUT):
         print('[nowhere:build] Running bake (ground mask + Cycles vertex AO)...')
         bake.bake()
         sc['nw_baked'] = True

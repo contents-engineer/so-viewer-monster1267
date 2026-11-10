@@ -321,6 +321,7 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
       fovBefore = camera.fov;   // 나갈 때 외관 구도의 시야각으로 되돌린다(보행 시야각 50° 가 남지 않게)
       showFloor(def, entry);
       post.renderPass.scene = scene;
+      weather?.setInterior?.(true);   // 실내는 맑은 낮 룩(노출 · 채도 · 그레이딩)을 쓰지 않는다
       active = true;
       document.body.classList.add('is-interior');
       hud.hidden = false;
@@ -394,6 +395,7 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
       const wasWalking = camCtrl.isWalkMode();
       camCtrl.setWalkMode(false);
       post.renderPass.scene = exteriorScene;
+      weather?.setInterior?.(false);
       camCtrl.setTerrain({
         groundHeightAt: world.groundHeightAt,
         getWalkBlocker: world.getWalkBlocker,

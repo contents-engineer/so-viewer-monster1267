@@ -18,8 +18,13 @@
 #     (6) FU_drone_*            보안 드론 1(서치라이트 원뿔 = holo) + 배송 드론 3(링크 복제), PATH_drone_<id>_<n> 경로 빈 객체
 #     보조: FU_smart_head.*(옛 가로등 기둥에 덧단 LED 헤드·센서 포드 3), FU_ev_post.*(EV 충전 기둥 2, LED 링),
 #           FU_shop_display(카페 진열창의 투명 디스플레이), FU_holo_ad(홀로그램 광고 한 곳, holo)
+#     (7) FU_tower_T1 … T4      성수 2041 신축 유리 타워 4동(TOWERS, 장면 밖 원경 대지). 커튼월 NWF_curtain(밤 창 35 %) + 셋백 테라스 ·
+#                               발코니 식재 띠 · 계단 정원 · 크라운 정원(유리 난간 NWF_glass_rail, 화단 NW_meadow, 관목 카드), T1 옥상
+#                               태양광 줄, T3 태양광 캐노피. nw_solid=1(layout.solids)
+#         FU_turbine_mast.<n> · FU_turbine_rotor.<n>   풍력 5기(T1 옥상 3 · T4 크라운 2, 방위 200°). 회전자 원점 = 허브, 축 = 로컬 +x
+#         FU_plaza · FU_plaza_tree.<n>                 타워 둘레 광장(Task 7 이 비운 필지): 보도블록 · 잔디 화단 · 느티나무
 #   NW_anchors   ANCHOR_<id>(nw_layer=future, nw_title) 6개 추가
-#   NW_layout    CAM_night(밤 히어로 컷)
+#   NW_layout    CAM_night(밤 히어로 컷) · CAM_future(2041 골목, 맑음)
 #   NW_fx_night  밤 무드 전용 조명(가로등 웅덩이, LED 반사광, HAUS 외벽 조명) — 내보내지 않는다. lib.apply_mood 가 켜고 끈다
 #
 # 규약(§5, lib.py 머리말)
@@ -74,7 +79,39 @@ DRONE_PATHS = {
 DRONE_SPEED = {'sec': 4.0, 'd1': 9.0, 'd2': 11.0, 'd3': 7.0}   # m/s(웹 애니메이션 기본값)
 
 CAM_NIGHT = ((56.0, 145.6, 1.5), (-4.0, 102.0, 14.8), 19.0)    # 고가 하부 가로에서 서남서: 오른쪽 위에서 이어지는 고가 파란 LED 선, 젖은 노면 반사, 카페·간판, 비계 스크린, 드론, HAUS
+CAM_FUTURE = ((70.0, 8.0, 1.7), (70.0, 150.0, 14.0), 22.0)   # 동쪽 골목에서 북쪽: 양쪽 벽돌, 스카이브리지, 고가 튜브, 뒤편 타워(레퍼런스 구도)
 BEAM_AIM = (12.0, 139.0, 0.0)                                   # 보안 드론 서치라이트가 비추는 고가 하부 가로
+
+# 신축 타워(§4.2): 장면 사각형 밖, 원경 BD_mid 를 비운 대지(backdrop.py 가 이 표로 비운다)
+TOWERS = [
+    dict(id='T1', c=(-40.0, 205.0), size=(32.0, 26.0), h=128.0, form='setback', setbacks=(40.0, 80.0), inset=2.0, turbines=3),
+    dict(id='T2', c=(30.0, 228.0), size=(28.0, 28.0), h=104.0, form='rounded', r=6.0, green_every=3, turbines=0),
+    dict(id='T3', c=(110.0, 196.0), size=(36.0, 22.0), h=84.0, form='stepped',
+         steps=((0.0, 40.0, 1.0), (40.0, 64.0, 2.0 / 3.0), (64.0, 84.0, 1.0 / 3.0)), turbines=0),
+    dict(id='T4', c=(205.0, 0.0), size=(30.0, 30.0), h=116.0, form='crown', crown=8.0, turbines=2),    # CP1 전: (205, 40) 은 거리 시점에서 HAUS 상부 뒤에 숨었다
+]
+TOWER_SITE_MARGIN = 12.0
+# 2호선 유리 튜브: 단면(y = 고가 중심 155 기준, z 절대), 장면 층 구간(승강장 22.8 … 91.2 은 기존 지붕)
+TUBE_Y = 155.0
+TUBE_PROFILE = [(-4.7, 9.0), (-4.7, 11.6), (-3.3, 13.9), (-1.2, 15.0), (1.2, 15.0), (3.3, 13.9), (4.7, 11.6), (4.7, 9.0)]
+TUBE_SPANS = [(-300.0, 22.8), (91.2, 420.0)]
+# 타워 공통(Task 8). 층 띠는 아틀라스 각 층 맨 위 0.3 m 라 z = 4k(테라스 · 옥상 · 크라운 바닥)가 슬래브 끝에 맞는다
+CW_TILE = (12.0, 8.0)                  # 커튼월 아틀라스 한 장 = 둘레 12 m × 높이 8 m(1 칸 1.5 × 4.0 m, 가로 8칸 × 2층). 1024² 라
+                                       # optimize(--texture-size 1024)를 지나도 85 × 128 px/m 를 지킨다(2048 변은 반으로 줄었다)
+FLOOR_GF = 6.0                         # 1층(로비) 층고. 로비는 아틀라스 한 층의 시야 유리(0.42 … 3.66 m)를 늘여 붙인다
+CURTAIN_PBR = (0.1, 0.5)               # 커튼월 NWF_curtain (거칠기, 금속성) — CP1: 0.35 · 0(창백한 회백색) → 하늘을 비추는 푸른 유리
+RAIL_H = 1.1                           # 테라스 · 옥상 · 크라운 유리 난간(NWF_glass_rail, 알파 0.3)
+BED_IN, BED_W, BED_H = 1.0, 1.2, 0.5   # 테라스 화단(윗면 NW_meadow): 가장자리에서 들임 · 폭 · 높이
+TURBINE_AZ = 200.0                     # 모든 풍력 터빈이 보는 방위(+Y = 0°, 시계 방향)
+MAST_R, MAST_H = 0.18, 8.0             # 마스트 원통 반지름 · 높이
+NACELLE = (1.2, 0.6, 0.6)              # 나셀 길이 · 폭 · 높이
+BLADE_L = 2.8                          # 날개 길이(허브 반지름 0.15 m 바깥)
+HUB = (0.85, 0.3)                      # 마스트 원점 → 허브 중심(앞 +x, 마스트 꼭대기 위 높이)
+# 타워 둘레 광장(Task 7 이 비운 필지 = backdrop.build_mid 의 void, CAM_aerial 로 정함): (x0, y0, x1, y1), 윗면 PLAZA_Z
+PLAZAS = [(-102.0, 176.0, 67.0, 250.0),                               # T1 · T2 블록 전체(필지 9개가 모두 비었다)
+          (73.0, 176.0, 143.9, 250.0),                                # T3: 블록 서쪽 필지 4
+          (166.0, -31.5, 230.0, 66.0)]                                # T4 (205, 0): 블록 전체(필지 5개가 모두 대지 + 12 m 와 겹친다)
+PLAZA_Z = 0.15                         # 보도블록 윗면(원경 지면 z 0 위 연석 높이 — 멀리서 깊이 다툼이 없다)
 
 
 # ═════════════════════════════ 작은 도우미 ═════════════════════════════
@@ -386,6 +423,77 @@ def paint_screen():
     return lib.save_image('NWF_gen_screen', out, os.path.join(GEN, 'NWF_gen_screen.png'), TAG)
 
 
+def _lowfreq(rng, h, w, lx, ly):
+    """이음 없는(주기 경계) 저주파 노이즈 h × w — 평균 0, 표준편차 1. lx, ly = 대략의 파장(px). 백색 잡음을 FFT 로 거른다."""
+    F = np.fft.rfft2(rng.standard_normal((h, w)))
+    fy = np.fft.fftfreq(h)[:, None]; fx = np.fft.rfftfreq(w)[None, :]
+    F *= np.exp(-((fx * lx) ** 2 + (fy * ly) ** 2))
+    r = np.fft.irfft2(F, s=(h, w)).astype(np.float32)
+    return (r - r.mean()) / (r.std() + 1e-9)
+
+
+CW_FLOORS = int(round(CW_TILE[1] / 4.0))    # 아틀라스 한 장의 층 수(2)
+
+
+def _curtain_px(W, H):
+    """커튼월 아틀라스 W × H 의 px/m(가로 · 세로)와 칸 크기(px): 1 칸 = 1.5 × 4.0 m, 가로 8칸 × CW_FLOORS 층(아래 행부터)."""
+    return W / CW_TILE[0], H / CW_TILE[1], W // 8, H // CW_FLOORS
+
+
+def paint_curtain():
+    """커튼월 낮 아틀라스 1024 × 1024. 1 칸 = 1.5 × 4.0 m, 가로 8칸 × 2층 → 둘레 12 m × 높이 8 m(u = 둘레 m / 12, v = z / 8).
+    (§5 의 1024 × 2048 · 4층은 optimize 가 512 × 1024 로 줄여 출하했다 → 한 장이 덮는 높이를 반으로 줄여 출하 해상도를 2 배로)
+    층마다 아래부터 스팬드럴 0 … 0.35 m, 가로 멀리언 0.35 … 0.40, 시야 유리 0.40 … 3.70, 층 띠 3.70 … 4.00(#3C4A55, 돌출 없음).
+    유리 #8FB4CF → #CFE0EC: 판마다 위로 밝아지는 하늘 반사 + 세로로 긴 저주파 노이즈 줄(이음 없이 반복). 어두운 칸 #5F7E96(블라인드 ·
+    깊은 실내) 20 %, 세로 멀리언 #DDE3E7 0.06 m. 바탕은 _canvas, 칸 · 띠 · 멀리언은 _rect, 유리 기울기만 numpy 로 칠한다."""
+    W, H = 1024, 1024
+    pu, pv, cw, fh = _curtain_px(W, H)
+    rng = np.random.default_rng(8041)
+    c0, c1, dark = _hexs('#8FB4CF'), _hexs('#CFE0EC'), _hexs('#5F7E96')
+    mull, band = _hexs('#DDE3E7'), _hexs('#3C4A55')
+    A = _canvas(W, H, c0)
+    streak = _lowfreq(rng, H, W, W / 2.5, H / 1.2)                 # 파장 ≈ 가로 4.8 m · 세로 13 m: 세로로 긴 반사 줄
+    zf = ((np.arange(H, dtype=np.float32) / pv) % 4.0)[:, None]
+    jit = np.repeat(np.repeat(rng.uniform(-0.1, 0.1, (CW_FLOORS, 8)).astype(np.float32), fh, 0), cw, 1)
+    t = np.clip(0.12 + 0.5 * np.clip((zf - 0.4) / 3.3, 0, 1) + 0.22 * streak + jit, 0, 1)[..., None]
+    A[..., :3] = c0 * (1 - t) + c1 * t
+    dk = rng.random((CW_FLOORS, 8)) < 0.2
+    for f in range(CW_FLOORS):
+        y0 = f * fh
+        for c in range(8):
+            if dk[f, c]:                                            # 어두운 칸
+                q = A[y0:y0 + fh, c * cw:(c + 1) * cw, :3]; q[...] = q * 0.35 + dark * 0.65
+        q = A[y0:y0 + int(0.35 * pv), :, :3]; q[...] = q * 0.5 + dark * 0.4            # 스팬드럴(슬래브 앞 불투명 유리)
+        _rect(A, 0, y0 + 0.35 * pv, W, y0 + 0.40 * pv, mull)                           # 가로 멀리언
+    for c in range(9):                                              # 세로 멀리언(양 끝은 반씩 → 이어 붙이면 한 줄)
+        _rect(A, c * cw - 0.03 * pu, 0, c * cw + 0.03 * pu, H, mull)
+    for f in range(CW_FLOORS):                                      # 층 띠(멀리언 위를 덮는다)
+        _rect(A, 0, f * fh + 3.70 * pv, W, (f + 1) * fh, band)
+    np.clip(A, 0, 1, out=A)
+    return lib.save_image('NWF_gen_curtain', A, os.path.join(GEN, 'NWF_gen_curtain.png'), TAG)
+
+
+def paint_curtain_night():
+    """커튼월 밤 발광 512 × 512(낮 아틀라스와 같은 칸): 16 칸 중 6 칸(≈ 35 %)의 시야 유리만 켠다(_rect). 따뜻한 흰빛 70 % ·
+    차가운 흰빛 30 %, 칸마다 세기 0.6 … 1.0, 천장 쪽이 조금 밝다. 멀리언 · 층 띠 · 스팬드럴 · 꺼진 칸은 0."""
+    W, H = 512, 512
+    pu, pv, cw, fh = _curtain_px(W, H)
+    rng = np.random.default_rng(8042)
+    E = _canvas(W, H, np.zeros(3, np.float32))
+    n = CW_FLOORS * 8
+    lit = rng.choice(n, int(round(0.35 * n)), replace=False)
+    warm = rng.random(n) < 0.7
+    k = rng.uniform(0.6, 1.0, n).astype(np.float32)
+    for i in lit:
+        f, c = divmod(int(i), 8)
+        _rect(E, c * cw + 0.04 * pu, f * fh + 0.42 * pv, (c + 1) * cw - 0.04 * pu, f * fh + 3.68 * pv,
+              (_hexs('#FFD9A0') if warm[i] else _hexs('#E6EEFF')) * k[i])
+    ramp = 0.78 + 0.22 * np.clip(((np.arange(H, dtype=np.float32) / pv) % 4.0 - 0.4) / 3.3, 0, 1)
+    E[..., :3] *= ramp[:, None, None]
+    np.clip(E, 0, 1, out=E)
+    return lib.save_image('NWF_gen_curtain_night', E, os.path.join(GEN, 'NWF_gen_curtain_night.png'), TAG)
+
+
 # ═════════════════════════════ 재질 ═════════════════════════════
 def mat_basic(name, col, rough, metal=0.0, surface='metal', spec=0.5, clearcoat=0.0):
     m = _new_mat(name); b = lib.NB(m.node_tree)
@@ -498,8 +606,19 @@ def materials():
         'screen': mat_ui('NWF_screen', scr, scr, 2.2, 7.0, rough=0.3),
         'holo': mat_holo('NWF_holo', ui_e, '#9FEAF5', 1.5, 5.0, falloff='img'),
         'beam': mat_holo('NWF_beam', None, '#DDEBFF', 0.15, 1.2, falloff='v'),
+        # 신축 타워(Task 8): 커튼월(밤 창 35 %), 유리 난간, 흰 알루미늄(난간대 · 크라운 틀 · 캐노피 · 화분 상자 · 태양광 뒷판 · 테라스 바닥 · 풍력)
+        'curtain': mat_ui('NWF_curtain', paint_curtain(), paint_curtain_night(), 0.0, 1.1, rough=CURTAIN_PBR[0], surface='glass'),
+        'rail': mat_glass('NWF_glass_rail', '#BFD8E6', 0.3),
+        'white': mat_basic('NWF_tower_white', '#E4E8EA', 0.35, 0.3),
+        'bark': mat_basic('NWF_bark_flat', '#5E544A', 0.85, 0.0, surface='foliage'),    # 광장 느티나무 줄기(원경: 텍스처 없이)
     }
     M['glass']['nw_surface'] = 'glass'
+    # 커튼월(CP1): 반금속 · 매끈 → 하늘을 비추는 푸른 유리(알베도 아틀라스가 반사를 물들인다). export 가 nw_pbr 을 읽는다
+    next(n for n in M['curtain'].node_tree.nodes if n.type == 'BSDF_PRINCIPLED').inputs['Metallic'].default_value = CURTAIN_PBR[1]
+    M['curtain']['nw_pbr'] = CURTAIN_PBR
+    # 현재 층(present.py · ground.py)이 만든 재질을 이름으로 다시 쓴다: 화단 윗면, 태양광, 보도블록(광장), 잎 덩이(관목 · 늘어진 잎 카드)
+    for k, nm in (('meadow', 'NW_meadow'), ('pv', 'NW_pv'), ('deck', 'NW_pavers'), ('leaves', 'NW_zelkova_leaves')):
+        M[k] = bpy.data.materials[nm]
     return M
 
 
@@ -906,6 +1025,444 @@ def build_helpers(C, M, gz):
     return out
 
 
+# ═════════════════════════════ (7) 신축 타워 4동 · 풍력 · 광장(§4.2, Task 8) ═════════════════════════════
+TOWER_MATS = ('curtain', 'rail', 'white', 'meadow', 'pv', 'leaves')
+CUR, RAIL, WHITE, MEAD, PVM, LEAF = range(len(TOWER_MATS))
+# 화분 상자 옆면 · 태양광 뒷판 · 테라스 바닥도 흰 알루미늄 한 재질: 웹은 (재질, 표면)마다 묶음 하나(그림자 패스까지 2 콜)라 재질 수 = 그리기 수
+BED = GALV = DECK = WHITE
+
+
+def _rrect(cx, cy, hx, hy, r=0.0, n=6):
+    """반시계(위에서 볼 때) 둥근 사각형 꼭짓점. r ≤ 0 이면 직사각형 4점, 아니면 모서리마다 n 마디(4·(n + 1)점).
+    r > 0 이고 n 이 같으면 점 수와 순서가 같아, 들인 둘레와 짝지어 테(띠 · 화단 · 소핏)를 만들 수 있다."""
+    if r <= 1e-6:
+        return [(cx - hx, cy - hy), (cx + hx, cy - hy), (cx + hx, cy + hy), (cx - hx, cy + hy)]
+    pts = []
+    for sx, sy, a0 in ((1, -1, -90.0), (1, 1, 0.0), (-1, 1, 90.0), (-1, -1, 180.0)):
+        ox, oy = cx + sx * (hx - r), cy + sy * (hy - r)
+        for j in range(n + 1):
+            a = math.radians(a0 + 90.0 * j / n)
+            pts.append((ox + r * math.cos(a), oy + r * math.sin(a)))
+    return pts
+
+
+def _box_rect(x0, y0, x1, y1):
+    return _rrect((x0 + x1) / 2, (y0 + y1) / 2, (x1 - x0) / 2, (y1 - y0) / 2)
+
+
+class _TB:
+    """타워 한 동의 메시 조립(월드 좌표, 재질 번호 = TOWER_MATS). 커튼월 UV: u = u0 + 둘레 누적 m / CW_TILE[0], v = z / CW_TILE[1](12 · 8)."""
+
+    def __init__(self, seed, meadow_tile):
+        self.mb = MB(); self.rnd = random.Random(seed); self.mt = meadow_tile
+
+    def walls(self, poly, z0, z1, u0=0.0):
+        """닫힌 둘레(반시계) 외벽: 변마다 quad. z0 = 0 이면 1층(0 … FLOOR_GF)은 로비 유리(아틀라스 한 층의 시야 유리를 늘인다)."""
+        su, sv = CW_TILE
+        spans = [(z0, z1, z0 / sv, z1 / sv)]
+        if z0 <= 0.0 < FLOOR_GF < z1:
+            spans = [(z0, FLOOR_GF, 0.42 / sv, 3.66 / sv), (FLOOR_GF, z1, FLOOR_GF / sv, z1 / sv)]
+        s = u0
+        for i, p in enumerate(poly):
+            q = poly[(i + 1) % len(poly)]
+            L = math.dist(p, q)
+            for za, zb, va, vb in spans:
+                self.mb.quad((p[0], p[1], za), (q[0], q[1], za), (q[0], q[1], zb), (p[0], p[1], zb), CUR, (s / su, va, (s + L) / su, vb))
+            s += L
+
+    def cap(self, poly, z, m, down=False, scale=1.0):
+        """수평 다각형 면(볼록). UV = (x, y) / scale(m)."""
+        P = poly[::-1] if down else poly
+        self.mb.face([(x, y, z) for x, y in P], m, [(x / scale, y / scale) for x, y in P])
+
+    def ring(self, outer, inner, z, m, down=False, scale=1.0):
+        """같은 점 수의 두 둘레 사이 수평 테."""
+        n = len(outer)
+        for i in range(n):
+            j = (i + 1) % n
+            P = [outer[i], outer[j], inner[j], inner[i]]
+            if down:
+                P = P[::-1]
+            self.mb.face([(x, y, z) for x, y in P], m, [(x / scale, y / scale) for x, y in P])
+
+    def side(self, poly, z0, z1, m, inward=False, closed=True):
+        """둘레를 따라 선 옆면(바깥을 본다, inward=True 면 안쪽을 본다). UV = m."""
+        s = 0.0
+        for i in range(len(poly) if closed else len(poly) - 1):
+            p, q = poly[i], poly[(i + 1) % len(poly)]
+            L = math.dist(p, q)
+            a, b = (q, p) if inward else (p, q)
+            self.mb.quad((a[0], a[1], z0), (b[0], b[1], z0), (b[0], b[1], z1), (a[0], a[1], z1), m, (s, z0, s + L, z1))
+            s += L
+
+    def rail(self, path, z, closed=True):
+        """유리 난간(RAIL_H, 양면 재질 한 장) + 흰 난간대(윗면 · 바깥면 띠). path 는 반시계 방향(바깥 = 진행 방향 오른쪽)."""
+        zt = z + RAIL_H; w = 0.035
+        for i in range(len(path) if closed else len(path) - 1):
+            p, q = path[i], path[(i + 1) % len(path)]
+            L = math.dist(p, q)
+            nx, ny = (q[1] - p[1]) / L, -(q[0] - p[0]) / L
+            self.mb.quad((p[0], p[1], z), (q[0], q[1], z), (q[0], q[1], zt - 0.05), (p[0], p[1], zt - 0.05), RAIL)
+            po, qo = (p[0] + nx * w, p[1] + ny * w), (q[0] + nx * w, q[1] + ny * w)
+            pi, qi = (p[0] - nx * w, p[1] - ny * w), (q[0] - nx * w, q[1] - ny * w)
+            self.mb.quad((po[0], po[1], zt), (qo[0], qo[1], zt), (qi[0], qi[1], zt), (pi[0], pi[1], zt), WHITE)
+            self.mb.quad((po[0], po[1], zt - 0.06), (qo[0], qo[1], zt - 0.06), (qo[0], qo[1], zt), (po[0], po[1], zt), WHITE)
+
+    def shrub(self, x, y, z, s=1.0):
+        """관목 카드: 엇갈린 세로 quad 2 장(폭 1.5·s, 높이 1.0·s), NW_zelkova_leaves 아틀라스 잎 덩이 4종 중 하나."""
+        a = self.rnd.uniform(0.0, math.pi)
+        q = self.rnd.randrange(4); cu, cv = (q % 2) * 0.5, (q // 2) * 0.5
+        w, h = 0.75 * s, 1.0 * s
+        for b in (a, a + math.pi / 2):
+            c, sn = math.cos(b) * w, math.sin(b) * w
+            self.mb.quad((x - c, y - sn, z - 0.08), (x + c, y + sn, z - 0.08), (x + c, y + sn, z + h), (x - c, y - sn, z + h), LEAF,
+                         (cu + 0.006, cv + 0.006, cu + 0.494, cv + 0.494))
+
+    def hang(self, path, z, drop, step, out=0.06, closed=True):
+        """늘어진 잎 카드: 둘레(반시계)를 따라 바깥 out m 에 세운 quad 한 장씩(z + 0.3 → z − drop·0.75 … 1.2, 폭 1.4·step 으로
+        겹친다). 화단 가장자리에서 넘쳐 흐르는 덩굴 — 멀리서 테라스 · 띠가 초록 선으로 읽힌다."""
+        acc = self.rnd.uniform(0.0, step)
+        for i in range(len(path) if closed else len(path) - 1):
+            p, q = path[i], path[(i + 1) % len(path)]
+            L = math.dist(p, q)
+            tx, ty = (q[0] - p[0]) / L, (q[1] - p[1]) / L
+            nx, ny = ty * out, -tx * out
+            while acc < L:
+                w = step * 0.7 * self.rnd.uniform(0.9, 1.15)
+                a0, a1 = max(0.0, acc - w), min(L, acc + w)
+                pa = (p[0] + tx * a0 + nx, p[1] + ty * a0 + ny); pb = (p[0] + tx * a1 + nx, p[1] + ty * a1 + ny)
+                zb = z - drop * self.rnd.uniform(0.75, 1.2)
+                k = self.rnd.randrange(4); cu, cv = (k % 2) * 0.5, (k // 2) * 0.5
+                self.mb.quad((pa[0], pa[1], zb), (pb[0], pb[1], zb), (pb[0], pb[1], z + 0.3), (pa[0], pa[1], z + 0.3), LEAF,
+                             (cu + 0.006, cv + 0.006, cu + 0.494, cv + 0.494))
+                acc += step * self.rnd.uniform(0.8, 1.2)
+            acc -= L
+
+    def shrubs_along(self, path, z, step, s=1.0, closed=True):
+        acc = self.rnd.uniform(0.0, step)
+        for i in range(len(path) if closed else len(path) - 1):
+            p, q = path[i], path[(i + 1) % len(path)]
+            L = math.dist(p, q)
+            while acc < L:
+                t = acc / L
+                self.shrub(p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t, z, s * self.rnd.uniform(0.8, 1.15))
+                acc += step * self.rnd.uniform(0.7, 1.3)
+            acc -= L
+
+    def bed_ring(self, fp, z, inset, step=0.0, s=1.0):
+        """테 화단: fp(d) = d 만큼 들인 둘레. 바깥 inset … inset + BED_W, 높이 BED_H, 옆 흰 상자(BED), 윗면 NW_meadow."""
+        out, inn = fp(inset), fp(inset + BED_W)
+        self.ring(out, inn, z + BED_H, MEAD, scale=self.mt)
+        self.side(out, z, z + BED_H, BED)
+        self.side(inn, z, z + BED_H, BED, inward=True)
+        if step:
+            self.shrubs_along(fp(inset + BED_W / 2), z + BED_H, step, s=s)
+
+    def bed_rect(self, x0, y0, x1, y1, z, shrubs=0):
+        mt = self.mt
+        self.mb.box((x0, y0, z), (x1, y1, z + BED_H), BED, faces='xXyYZ', fmat={'Z': MEAD},
+                    rect={f: ((x0 / mt, y0 / mt, x1 / mt, y1 / mt) if f == 'Z' else (0, 0, 1, 1)) for f in 'xXyYZ'})
+        for _ in range(shrubs):
+            self.shrub(self.rnd.uniform(x0 + 0.4, x1 - 0.4), self.rnd.uniform(y0 + 0.3, y1 - 0.3), z + BED_H, self.rnd.uniform(0.9, 1.3))
+
+    def pv_rows(self, x0, y0, x1, y1, z, P):
+        """평지붕 태양광 줄(present.py Task 6 규칙): 남쪽 PV_TILT°, 경사 1.7 m, 줄 간격 PV_ROW_PITCH, 레일 PV_RAIL. 줄 = 윗면 + 뒷판."""
+        pw, ph, tilt, pitch, rail = P
+        tl = math.radians(tilt); dh, dz = ph * math.cos(tl), ph * math.sin(tl)
+        zl = z + rail; zh = zl + dz
+        n = int((y1 - y0 - dh) / pitch) + 1
+        off = (y1 - y0 - (dh + (n - 1) * pitch)) / 2
+        k = int((x1 - x0) / pw + 1e-6); xa = x0 + ((x1 - x0) - k * pw) / 2; xb = xa + k * pw
+        for r in range(n):
+            ya = y0 + off + r * pitch; yb = ya + dh
+            self.mb.quad((xa, ya, zl), (xb, ya, zl), (xb, yb, zh), (xa, yb, zh), PVM, (0, 0, k, 1))
+            self.mb.quad((xb, yb, z), (xa, yb, z), (xa, yb, zh), (xb, yb, zh), GALV)
+        return n * k
+
+    def canopy(self, cx, ys, yn, z, P, nu=20, nv=3, clear=2.05):
+        """태양광 캐노피: 기둥 4 + 남쪽 PV_TILT° 로 기운 판(윗면 NW_pv 패널 nu × nv, 흰 밑면 · 테). 낮은 끝 z + clear."""
+        pw, ph, tilt = P[0], P[1], P[2]
+        tl = math.radians(tilt)
+        W = nu * pw; D = nv * ph * math.cos(tl); R = nv * ph * math.sin(tl); th = 0.08
+        xa, xb = cx - W / 2, cx + W / 2
+        ya = (ys + yn) / 2 - D / 2; yb = ya + D
+        zl = z + clear; zh = zl + R
+        mb = self.mb
+        mb.quad((xa, ya, zl), (xb, ya, zl), (xb, yb, zh), (xa, yb, zh), PVM, (0, 0, nu, nv))
+        mb.quad((xa, yb, zh - th), (xb, yb, zh - th), (xb, ya, zl - th), (xa, ya, zl - th), WHITE)
+        mb.quad((xa, ya, zl - th), (xb, ya, zl - th), (xb, ya, zl), (xa, ya, zl), WHITE)
+        mb.quad((xb, yb, zh - th), (xa, yb, zh - th), (xa, yb, zh), (xb, yb, zh), WHITE)
+        mb.quad((xb, ya, zl - th), (xb, yb, zh - th), (xb, yb, zh), (xb, ya, zl), WHITE)
+        mb.quad((xa, yb, zh - th), (xa, ya, zl - th), (xa, ya, zl), (xa, yb, zh), WHITE)
+        for px in (xa + 0.6, xb - 0.6):
+            for py in (ya + 0.6, yb - 0.6):
+                zt = zl + (py - ya) / D * R - th
+                mb.box((px - 0.1, py - 0.1, z), (px + 0.1, py + 0.1, zt), WHITE, faces='xXyY')
+        return zh
+
+
+def _tower_setback(t, tb, P):
+    """T1: 직육면체, setbacks 높이마다 사방 inset 셋백 테라스(유리 난간 · 가장자리 화단 · 관목 · 늘어진 잎). 옥상: 서쪽 절반 태양광 줄,
+    동쪽 절반 풍력 3기(8 m 간격, 방위 150° 대각선 — 정면 200° 에서 서로 덜 가린다). → 풍력 자리"""
+    cx, cy = t['c']; hx, hy = t['size'][0] / 2, t['size'][1] / 2; h = t['h']
+    zs = (0.0,) + tuple(t['setbacks']) + (h,)
+    tiers = [(hx - k * t['inset'], hy - k * t['inset']) for k in range(len(zs) - 1)]
+    for k, (ax, ay) in enumerate(tiers):
+        tb.walls(_rrect(cx, cy, ax, ay), zs[k], zs[k + 1], u0=0.37 * k)
+    for k in range(1, len(tiers)):
+        (ox, oy), (ix, iy) = tiers[k - 1], tiers[k]
+        fp = lambda d, ox=ox, oy=oy: _rrect(cx, cy, ox - d, oy - d)
+        tb.ring(fp(0.0), _rrect(cx, cy, ix, iy), zs[k], DECK)
+        tb.rail(fp(0.08), zs[k])
+        # 화단: 가장자리에서 BED_IN 들이되, 2 m 테라스에서는 벽 앞 0.6 m 통로를 남기도록 줄인다(→ 난간 뒤 0.2 m)
+        tb.bed_ring(fp, zs[k], max(0.15, min(BED_IN, (ox - ix) - BED_W - 0.6)), step=1.3, s=1.3)
+        tb.hang(fp(-0.06), zs[k], 1.4, 1.3)
+    ax, ay = tiers[-1]
+    tb.cap(_rrect(cx, cy, ax, ay), h, DECK)
+    tb.rail(_rrect(cx, cy, ax - 0.08, ay - 0.08), h)
+    tb.pv_rows(cx - ax + 1.2, cy - ay + 1.2, cx - 0.8, cy + ay - 1.2, h, P)
+    a = math.radians(150.0); ex = cx + ax / 2
+    return [(ex + math.sin(a) * 8.0 * j, cy + math.cos(a) * 8.0 * j, h) for j in (-1, 0, 1)][:t['turbines']]
+
+
+def _tower_rounded(t, tb, P):
+    """T2: 모서리 반지름 r 둥근 사각, 3층(12 m)마다 발코니 식재 띠(깊이 0.6, 높이 0.5: 흰 띠 · 흰 소핏 · 윗면 NW_meadow + 관목 · 늘어진 잎),
+    옥상정원(유리 난간 · 테 화단 · 가운데 화단 2)."""
+    cx, cy = t['c']; hx, hy = t['size'][0] / 2, t['size'][1] / 2; r = t['r']; h = t['h']
+    fp = lambda d: _rrect(cx, cy, hx - d, hy - d, max(r - d, 0.05))
+    tb.walls(fp(0.0), 0.0, h)
+    step = 4.0 * t['green_every']
+    z = step
+    while z < h - 6.0:
+        band, face = fp(-0.6), fp(0.0)
+        tb.ring(band, face, z + BED_H, MEAD, scale=tb.mt)
+        tb.ring(band, face, z, WHITE, down=True)
+        tb.side(band, z, z + BED_H, WHITE)
+        tb.shrubs_along(fp(-0.3), z + BED_H, 2.2, s=0.95)
+        tb.hang(fp(-0.66), z + BED_H, 1.3, 1.4)
+        z += step
+    tb.cap(fp(0.0), h, DECK)
+    tb.rail(fp(0.08), h)
+    tb.bed_ring(fp, h, BED_IN, step=1.6, s=1.2)
+    for sy in (-1, 1):
+        tb.bed_rect(cx - 7.0, cy + sy * 3.0 - 0.6, cx + 7.0, cy + sy * 3.0 + 0.6, h, shrubs=7)
+    return []
+
+
+def _tower_stepped(t, tb, P):
+    """T3: 3단 계단식(steps = (z0, z1, 북쪽 비율)). 계단 윗면은 정원(남 · 동 · 서 열린 변 유리 난간, ㄷ자 화단 + 가운데 화단 줄, 계단 끝 늘어진 잎),
+    맨 위는 유리 난간 + 태양광 캐노피(기둥 4 + 남쪽 10° 판, 높은 끝 h + 2.94) + 양 끝 화단."""
+    cx, cy = t['c']; hx, hy = t['size'][0] / 2, t['size'][1] / 2
+    x0, x1, yN = cx - hx, cx + hx, cy + hy
+    tiers = [(z0, z1, yN - 2 * hy * f) for z0, z1, f in t['steps']]
+    for k, (z0, z1, ys) in enumerate(tiers):
+        tb.walls(_box_rect(x0, ys, x1, yN), z0, z1, u0=0.37 * k)
+    e, b0, b1 = 0.08, BED_IN, BED_IN + BED_W
+    for k in range(len(tiers) - 1):
+        z = tiers[k][1]; ys, yn = tiers[k][2], tiers[k + 1][2]
+        tb.cap(_box_rect(x0, ys, x1, yn), z, DECK)
+        tb.rail([(x0 + e, yn), (x0 + e, ys + e), (x1 - e, ys + e), (x1 - e, yn)], z, closed=False)
+        tb.bed_rect(x0 + b0, ys + b0, x1 - b0, ys + b1, z, shrubs=22)
+        tb.bed_rect(x0 + b0, ys + b1, x0 + b1, yn - 0.3, z, shrubs=4)
+        tb.bed_rect(x1 - b1, ys + b1, x1 - b0, yn - 0.3, z, shrubs=4)
+        ym = (ys + b1 + yn) / 2
+        tb.bed_rect(x0 + 6.0, ym - 0.6, x1 - 6.0, ym + 0.6, z, shrubs=14)
+        tb.hang([(x0 - 0.06, yn), (x0 - 0.06, ys - 0.06), (x1 + 0.06, ys - 0.06), (x1 + 0.06, yn)], z, 1.4, 1.3, out=0.0, closed=False)
+    z = t['h']; ys = tiers[-1][2]
+    tb.cap(_box_rect(x0, ys, x1, yN), z, DECK)
+    tb.rail(_box_rect(x0 + e, ys + e, x1 - e, yN - e), z)
+    tb.canopy(cx, ys, yN, z, P)
+    tb.bed_rect(x0 + 1.0, ys + 1.2, x0 + 7.0, yN - 1.2, z, shrubs=6)
+    tb.bed_rect(x1 - 7.0, ys + 1.2, x1 - 1.0, yN - 1.2, z, shrubs=6)
+    return []
+
+
+def _tower_crown(t, tb, P):
+    """T4: 직육면체, 꼭대기 crown m 는 크라운 정원 — 바닥(h − crown)에 유리 난간 · 테 화단 · 화단 2 줄, 둘레는 흰 크라운 틀
+    (모서리 기둥 4 + 변마다 5 m 간격 핀 5 + 꼭대기 테 보, 윗면 = h) · 크라운 바닥 가장자리에서 늘어진 잎. 풍력 2기는 크라운 바닥에. → 풍력 자리"""
+    cx, cy = t['c']; hx, hy = t['size'][0] / 2, t['size'][1] / 2; h = t['h']; zc = h - t['crown']
+    fp = lambda d: _rrect(cx, cy, hx - d, hy - d)
+    tb.walls(fp(0.0), 0.0, zc)
+    tb.cap(fp(0.0), zc, DECK)
+    x0, y0, x1, y1 = cx - hx, cy - hy, cx + hx, cy + hy
+    zt, d, f = h - 0.6, 0.6, 0.15
+    for px, py in ((x0, y0), (x1 - d, y0), (x1 - d, y1 - d), (x0, y1 - d)):
+        tb.mb.box((px, py, zc), (px + d, py + d, zt), WHITE, faces='xXyY')
+    for k in range(1, 6):
+        x = x0 + 2 * hx * k / 6; y = y0 + 2 * hy * k / 6
+        tb.mb.box((x - f, y0, zc), (x + f, y0 + d, zt), WHITE, faces='xXyY')
+        tb.mb.box((x - f, y1 - d, zc), (x + f, y1, zt), WHITE, faces='xXyY')
+        tb.mb.box((x0, y - f, zc), (x0 + d, y + f, zt), WHITE, faces='xXyY')
+        tb.mb.box((x1 - d, y - f, zc), (x1, y + f, zt), WHITE, faces='xXyY')
+    tb.ring(fp(0.0), fp(1.0), h, WHITE)
+    tb.ring(fp(0.0), fp(1.0), zt, WHITE, down=True)
+    tb.side(fp(0.0), zt, h, WHITE)
+    tb.side(fp(1.0), zt, h, WHITE, inward=True)
+    tb.rail(fp(0.7), zc)
+    tb.bed_ring(fp, zc, BED_IN, step=1.5, s=1.3)
+    tb.hang(fp(-0.06), zc, 1.6, 1.4)
+    for sy in (-1, 1):
+        tb.bed_rect(cx - 9.0, cy + sy * 9.0 - 0.6, cx + 9.0, cy + sy * 9.0 + 0.6, zc, shrubs=12)
+    return [(cx - 6.0, cy + 1.5, zc), (cx + 6.0, cy + 1.5, zc)][:t['turbines']]
+
+
+TOWER_FORMS = {'setback': _tower_setback, 'rounded': _tower_rounded, 'stepped': _tower_stepped, 'crown': _tower_crown}
+
+
+def build_towers(C, M):
+    """신축 타워 4동(TOWERS): 객체 FU_tower_<id>(nw_solid=1, nw_surface='glass', 커튼월 NWF_curtain + 테라스 · 옥상 설비). → (객체, 풍력 자리)"""
+    import present
+    P = (present.PV_PANEL[0], present.PV_PANEL[1], present.PV_TILT, present.PV_ROW_PITCH, present.PV_RAIL)
+    mats = [M[k] for k in TOWER_MATS]
+    out, spots, tris = [], [], {}
+    for i, t in enumerate(TOWERS):
+        tb = _TB(800 + i, present.MEADOW_TILE)
+        spots += TOWER_FORMS[t['form']](t, tb, P)
+        nm = f'FU_tower_{t["id"]}'
+        me = tb.mb.to_mesh(nm, mats, mask=lambda co: (0.0, 0.2, 0.65 + 0.35 * smoothstep(0.0, 2.5, co[2])))
+        out.append(obj(nm, me, C, surface='glass', night=True, nw_solid=1, nw_motif='tower', nw_tower=t['id']))
+        tris[t['id']] = sum(len(p.vertices) - 2 for p in me.polygons)
+    print('towers tris', tris, 'turbine spots', [tuple(round(v, 2) for v in s) for s in spots])
+    return out, spots
+
+
+def turbine_mesh(M):
+    """소형 수평축 풍력(독자 형태, 글자 · 상표 없음). 마스트와 회전자를 따로 돌려준다(둘 다 흰 알루미늄 한 재질).
+    마스트: 원점 = 바닥. 받침판 + 원통(r 0.18, 높이 8 m) + 나셀 1.2 × 0.6 × 0.6(앞 = 로컬 +x) + 꼬리 붐 · 꼬리 날개(뒤 −x).
+    회전자: 원점 = 허브, 회전축 = 로컬 +x. 날개 3장(길이 2.8 m, 뿌리 → 끝으로 좁아지고 비틀린 다이아몬드 단면) + 원뿔 허브."""
+    mb = MB()
+    mb.box((-0.35, -0.35, 0.0), (0.35, 0.35, 0.1), 0, faces='xXyYZ')
+    mb.cyl((0, 0, 0.1), (0, 0, MAST_H), MAST_R, MAST_R, 10, 0, caps=(False, False))
+    L, Wn, Hn = NACELLE; xf = HUB[0] - 0.15                          # 나셀 앞면 = 허브 뒷면
+    mb.box((xf - L, -Wn / 2, MAST_H), (xf, Wn / 2, MAST_H + Hn), 0)
+    mb.box((xf - L - 1.0, -0.03, MAST_H + Hn / 2 - 0.05), (xf - L, 0.03, MAST_H + Hn / 2 + 0.05), 0, faces='yYzZ')
+    mb.box((xf - L - 1.8, -0.015, MAST_H + 0.05), (xf - L - 0.9, 0.015, MAST_H + 1.0), 0)
+    mast = mb.to_mesh('FU_turbine_mast', [M['white']], mask=lambda co: (0.0, 0.2, 1.0))
+    rb = MB()
+    rb.cyl((-0.15, 0, 0), (0.12, 0, 0), 0.17, 0.17, 10, 0, caps=(True, False))
+    rb.cyl((0.12, 0, 0), (0.45, 0, 0), 0.17, 0.02, 10, 0, caps=(False, True))
+    secs = ((0.15, 0.18, 0.07, 24.0), (0.95, 0.30, 0.05, 13.0), (0.15 + BLADE_L, 0.09, 0.015, 4.0))   # (반지름, 시위, 두께, 피치°)
+    X = Vector((1.0, 0.0, 0.0))
+    for k in range(3):
+        th = math.pi / 2 + 2 * math.pi * k / 3
+        er = Vector((0.0, math.cos(th), math.sin(th))); et = Vector((0.0, -math.sin(th), math.cos(th)))
+        rings = []
+        for r, c, d, pitch in secs:
+            b = math.radians(pitch)
+            ec = et * math.cos(b) + X * math.sin(b)
+            en = er.cross(ec).normalized()
+            o = er * r
+            rings.append([o + ec * (c / 2), o + en * (d / 2), o - ec * (c / 2), o - en * (d / 2)])
+        for ra, rb_ in zip(rings, rings[1:]):
+            for i in range(4):
+                j = (i + 1) % 4
+                rb.face([ra[i], ra[j], rb_[j], rb_[i]], 0)
+        rb.face(rings[-1], 0)
+    rotor = rb.to_mesh('FU_turbine_rotor', [M['white']], mask=lambda co: (0.0, 0.2, 1.0))
+    return mast, rotor
+
+
+def _sphere_dirs(n=32):
+    """단위구 위 고른 방향 n 개(골든 나선)."""
+    ga = math.pi * (3.0 - math.sqrt(5.0)); out = []
+    for i in range(n):
+        z = 1.0 - 2.0 * (i + 0.5) / n; r = math.sqrt(max(0.0, 1.0 - z * z))
+        out.append(Vector((math.cos(ga * i) * r, math.sin(ga * i) * r, z)))
+    return out
+
+
+def _ray_ao(sc, dg, o, mw, reach=12.0):
+    """객체 o(월드 행렬 mw)의 정점 AO 를 장면 광선(정점 법선 쪽 반구, reach m)으로 구해 nw_mask B 에 쓴다. → B 값 목록"""
+    me = o.data; nm = mw.to_3x3(); D = _sphere_dirs(); vals = []
+    for v in me.vertices:
+        p = mw @ v.co; nrm = (nm @ v.normal).normalized()
+        use = [d for d in D if d.dot(nrm) > 0.05]
+        hit = sum(1 for d in use if sc.ray_cast(dg, p + nrm * 0.02, d, distance=reach)[0])
+        occ = hit / max(1, len(use))
+        vals.append((0.0, 0.2, (1.0 - 0.6 * occ) * (0.7 + 0.3 * smoothstep(0.0, 1.0, v.co.z))))
+    lib.write_mask_values(me, vals)
+    return [round(b, 4) for _, _, b in vals]
+
+
+def build_turbines(C, M, sc, spots):
+    """풍력 터빈(spots = 마스트 바닥 자리). 모두 방위 TURBINE_AZ 를 본다(rotation_euler.z, 로컬 +x → (sin az, cos az)).
+    - 회전자 FU_turbine_rotor.<n>: 원점 = 허브, 축 = 로컬 +x. 기체마다 날개 위상(37°·n)을 메시에 구운 단일 사용자 메시 —
+      모양이 같으면 gltf-transform 의 dedup 이 사본을 한 메시로 합치고 instance 가 노드 이름을 지운다(Task 11 이 이름으로 돌린다).
+    - 마스트 FU_turbine_mast.<n>: 움직이지 않지만 역시 단일 사용자 메시. 자리마다 장면 광선으로 구운 AO(nw_mask B)가 달라
+      dedup 되지 않는다(인스턴싱되면 모바일이 5 기 → 1 기로 솎아 회전자만 떠 보인다)."""
+    mast, rotor = turbine_mesh(M)
+    az = math.radians(TURBINE_AZ); rz = math.atan2(math.cos(az), math.sin(az))
+    R = Matrix.Rotation(rz, 4, 'Z')
+    masts = []; out = []
+    for i, (x, y, z) in enumerate(spots):
+        me = mast.copy(); me.name = f'FU_turbine_mast.{i}'
+        mo = obj(f'FU_turbine_mast.{i}', me, C, (x, y, z), rz, surface='metal', nw_motif='wind_turbine')
+        masts.append((mo, Matrix.Translation((x, y, z)) @ R))
+        rm = rotor.copy(); rm.name = f'FU_turbine_rotor.{i}'
+        rm.transform(Matrix.Rotation(math.radians(37.0 * i), 4, 'X'))
+        hub = Vector((x, y, z)) + (R @ Vector((HUB[0], 0.0, MAST_H + HUB[1])))
+        out.append(obj(f'FU_turbine_rotor.{i}', rm, C, tuple(hub), rz, surface='metal', nw_motif='wind_turbine',
+                       nw_spin_axis='+X', nw_turbine=i))
+    bpy.data.meshes.remove(mast); bpy.data.meshes.remove(rotor)
+    dg = sc.view_layers[0].depsgraph; dg.update()
+    sig = [tuple(_ray_ao(sc, dg, mo, mw)) for mo, mw in masts]
+    rsig = [tuple(round(c, 5) for v in o.data.vertices for c in v.co) for o in out]
+    ok_r, ok_m = len(set(rsig)) == len(rsig), len(set(sig)) == len(sig)
+    print('turbines', len(spots), 'rotor distinct', ok_r, 'mast AO distinct', ok_m, 'mean AO', [round(sum(s) / len(s), 3) for s in sig])
+    if not (ok_r and ok_m):
+        raise RuntimeError('풍력: 같은 모양의 회전자(위상) 또는 마스트(AO) 메시가 있다 — gltf-transform dedup · instance 가 합쳐 '
+                           '노드 이름 FU_turbine_* 를 지운다(Task 11 이 이름으로 돌린다)')
+    return [m for m, _ in masts] + out
+
+
+PLAZA_LAWNS = [(-96.0, 222.0, -62.0, 244.0), (-16.0, 182.0, 8.0, 206.0), (50.0, 186.0, 62.0, 236.0),     # T1 · T2 블록
+               (78.0, 214.0, 100.0, 244.0), (132.0, 184.0, 141.0, 244.0),                             # T3
+               (170.0, -26.0, 184.0, 14.0), (194.0, 26.0, 226.0, 44.0)]                               # T4 서쪽 · 북쪽
+PLAZA_TREES = [(-90.0, 183.0), (-70.0, 183.0), (-4.0, 214.0), (24.0, 184.0), (56.0, 244.0), (-88.0, 234.0), (-70.0, 236.0),
+               (84.0, 184.0), (88.0, 208.0), (136.5, 214.0), (89.0, 236.0), (118.0, 232.0),
+               (178.0, 34.0)]                                  # 느티나무 711 tris × 13 + 판 ≈ 9.4k(광장 ≤ 10k)
+
+
+def build_plaza(C, M):
+    """타워 둘레 광장(PLAZAS): 보도블록 판(NW_pavers, UV = m, 윗면 PLAZA_Z) + 연석 옆면, 잔디 화단(PLAZA_LAWNS, NW_meadow, 높이 0.35),
+    느티나무(PLAZA_TREES, present 의 PR_zelkova_a 메시 사본 FU_plaza_zelkova 를 링크 복제). 장면 밖이라 nw_solid 는 없다. 표면은 'wall' —
+    웹 'ground' 는 정점 마스크 A(= 1)를 웅덩이로 읽어 비 오는 날 광장 전체가 거울이 된다."""
+    import present
+    mt = present.MEADOW_TILE
+    mb = MB(); z = PLAZA_Z
+    for x0, y0, x1, y1 in PLAZAS:
+        mb.face([(x0, y0, z), (x1, y0, z), (x1, y1, z), (x0, y1, z)], 0, [(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
+        P = _box_rect(x0, y0, x1, y1); s = 0.0
+        for i in range(4):
+            p, q = P[i], P[(i + 1) % 4]; L = math.dist(p, q)
+            mb.quad((p[0], p[1], -0.05), (q[0], q[1], -0.05), (q[0], q[1], z), (p[0], p[1], z), 0, (s, 0.0, s + L, z))
+            s += L
+    for x0, y0, x1, y1 in PLAZA_LAWNS:
+        mb.box((x0, y0, z), (x1, y1, z + 0.35), 0, faces='xXyYZ', fmat={'Z': 1},
+               rect={f: ((x0 / mt, y0 / mt, x1 / mt, y1 / mt) if f == 'Z' else (0, 0, 1, 1)) for f in 'xXyYZ'})
+    me = mb.to_mesh('FU_plaza', [M['deck'], M['meadow']], mask=lambda co: (0.0, 0.3, 0.85))
+    out = [obj('FU_plaza', me, C, surface='wall', nw_motif='tower_plaza')]
+    src = bpy.data.objects.get('PR_zelkova_a.000')
+    if src is None:
+        raise RuntimeError('광장 느티나무: present 의 PR_zelkova_a.000 이 없다(present.build() 를 먼저)')
+    # present 원형 메시를 그대로 쓰면 다음 --rebuild 의 present.build() 가 "아직 쓰이는 메시"로 멈춘다 → 사본 한 벌을 링크 복제
+    tm = bpy.data.meshes.get('FU_plaza_zelkova')
+    if tm is not None:
+        bpy.data.meshes.remove(tm)
+    tm = src.data.copy(); tm.name = 'FU_plaza_zelkova'; tm[TAG] = 1
+    for k, m in enumerate(tm.materials):              # 200 m 밖 줄기: NW_bark(텍스처 3장 ≈ 0.3 MB)를 단색으로
+        if m is not None and m.name == 'NW_bark':
+            tm.materials[k] = M['bark']
+    rnd = random.Random(2048)
+    for i, (x, y) in enumerate(PLAZA_TREES):
+        o = obj(f'FU_plaza_tree.{i:02d}', tm, C, (x, y, z - 0.05), rnd.uniform(0, 2 * math.pi), surface='foliage')
+        s = rnd.uniform(0.92, 1.08); o.scale = (s, s, s)
+        out.append(o)
+    tris = sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in out)
+    print('plaza', len(PLAZAS), 'lawns', len(PLAZA_LAWNS), 'trees', len(out) - 1, 'tris', tris)
+    return out
+
+
 # ═════════════════════════════ 앵커 · 카메라 · 밤 조명 ═════════════════════════════
 ANCHORS = [   # (id, 위치, 제목)
     ('led_line', (52.0, 145.7, 7.2), '2호선 고가 하부의 파란 LED 선'),
@@ -935,23 +1492,25 @@ def build_anchors(sc):
 
 
 def build_camera(sc):
+    """future 층의 카메라: CAM_night(밤 히어로 컷) · CAM_future(2041 골목, 맑음). 반환: {이름: 카메라 객체}."""
     lay = lib.coll('NW_layout', sc)
-    nm = 'CAM_night'
-    loc, tgt, lens = CAM_NIGHT
-    cam = bpy.data.objects.get(nm)
-    if cam is None or cam.type != 'CAMERA':
-        if cam is not None:
-            bpy.data.objects.remove(cam, do_unlink=True)
-        cd = bpy.data.cameras.get(nm) or bpy.data.cameras.new(nm)
-        cam = bpy.data.objects.new(nm, cd)
-    if cam.name not in lay.objects:
-        lay.objects.link(cam)
-    cam.location = loc
-    cam.rotation_euler = (Vector(tgt) - Vector(loc)).to_track_quat('-Z', 'Y').to_euler()
-    cam.data.lens = lens; cam.data.sensor_width = 36.0
-    cam.data.clip_start = 0.1; cam.data.clip_end = lib.FAR_CLIP
-    cam['target'] = list(tgt); cam['nw_mood'] = 'night'
-    return cam
+    out = {}
+    for nm, (loc, tgt, lens), mood in [('CAM_night', CAM_NIGHT, 'night'), ('CAM_future', CAM_FUTURE, 'clear')]:
+        cam = bpy.data.objects.get(nm)
+        if cam is None or cam.type != 'CAMERA':
+            if cam is not None:
+                bpy.data.objects.remove(cam, do_unlink=True)
+            cd = bpy.data.cameras.get(nm) or bpy.data.cameras.new(nm)
+            cam = bpy.data.objects.new(nm, cd)
+        if cam.name not in lay.objects:
+            lay.objects.link(cam)
+        cam.location = loc
+        cam.rotation_euler = (Vector(tgt) - Vector(loc)).to_track_quat('-Z', 'Y').to_euler()
+        cam.data.lens = lens; cam.data.sensor_width = 36.0
+        cam.data.clip_start = 0.1; cam.data.clip_end = lib.FAR_CLIP
+        cam['target'] = list(tgt); cam['nw_mood'] = mood
+        out[nm] = cam
+    return out
 
 
 def _light(NC, name, kind, loc, energy, color=None, kelvin=None, rot=None, size=None, spot=None, blend=0.6, shadow=True,
@@ -1135,6 +1694,9 @@ def build():
     build_taxis(C, M, gz)
     build_drones(C, M)
     build_helpers(C, M, gz)
+    _, spots = build_towers(C, M)
+    build_turbines(C, M, sc, spots)
+    build_plaza(C, M)
     build_anchors(sc)
     build_camera(sc)
     # 현재 층 간판 글자(nw_night): 밤에만 켜지는 발광(낮 렌더는 그대로)

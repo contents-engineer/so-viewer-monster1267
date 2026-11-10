@@ -89,3 +89,9 @@ test('(b) getQualityConfig: 데스크톱(1024/6000/bloom on) vs 모바일(512/18
   assert.equal(ds2Mobile.assetDir, 'assets/nowhere-ds2/mobile');
   assert.equal(ds2Mobile.maskUrl, 'assets/nowhere-ds2/nowhere-ground-mask.webp');
 });
+
+test('(s) 해 그림자: 데스크톱만 켠다(모바일은 그림자 패스 비용 없이)', () => {
+  assert.equal(getQualityConfig('desktop').sunShadows, true);
+  assert.equal(getQualityConfig('mobile').sunShadows, false);
+  assert.equal(getQualityConfig('desktop', 'ds2').sunShadows, true, 'DS2 는 world.js 에서 끈다(등급 값은 공통)');
+});

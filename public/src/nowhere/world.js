@@ -68,6 +68,9 @@ export async function createWorld({
     uniforms.uPudColor.value.setRGB(0.3, 0.34, 0.36);   // 계곡 개울: 회청색 반사 수면(성수의 은빛 거울보다 어둡게)
     uniforms.uPudMetal.value = 0.85;
   }
+  // 성수 2041: 복원·정돈된 도시 — 틈의 이끼를 30 % 로(구운 마스크는 그대로, 비 · 눈 무드에서도 같다)
+  const SEONGSU_MOSS = 0.3;
+  if (worldVer !== 'ds2') uniforms.uMoss.value = SEONGSU_MOSS;
 
   // 3) 하늘 돔 + 조명 + 환경 반사맵(PMREM) 구성
   const sky = createSkyDome(uniforms);
@@ -114,7 +117,22 @@ export async function createWorld({
   const sunLight = new THREE.DirectionalLight('#FFF4E6', 1.35);
   sunLight.position.set(-115, 135, 165);
   if (sunCfg?.dir) sunLight.position.copy(uniforms.uSunDir.value).multiplyScalar(240);
-  sunLight.castShadow = false;
+  // 맑음의 해 그림자(성수 · 데스크톱): 카메라 앞 ±SHADOW_HALF m 를 덮는 직교 그림자. followSun 이 매 프레임 옮긴다.
+  const SHADOW_HALF = 110;
+  const SHADOW_AHEAD = 70;
+  const SHADOW_DIST = 300;
+  const shadowsOn = Boolean(quality.sunShadows) && worldVer !== 'ds2';
+  sunLight.castShadow = shadowsOn;
+  if (shadowsOn) {
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    sunLight.shadow.mapSize.set(quality.shadowMapSize, quality.shadowMapSize);
+    Object.assign(sunLight.shadow.camera, { left: -SHADOW_HALF, right: SHADOW_HALF, top: SHADOW_HALF, bottom: -SHADOW_HALF, near: 1, far: 700 });
+    sunLight.shadow.camera.updateProjectionMatrix();
+    sunLight.shadow.bias = -0.0004;
+    sunLight.shadow.normalBias = 0.5;
+    scene.add(sunLight.target);
+  }
   scene.add(sunLight);
 
   // 4) GLTFLoader + MeshoptDecoder 준비
@@ -162,6 +180,16 @@ export async function createWorld({
     while (cur) {
       if (typeof cur.name === 'string' && cur.name.includes('drone')) return true;
       cur = cur.parent;
+    }
+    return false;
+  }
+
+  // 장면 밖 원경(성수 2041 신축 타워 · 둘레 광장 · 풍력): 카메라를 따라가는 해 그림자 상자에 들지 않으므로 드리우지 않는다(받기는 그대로).
+  // 병합되면 이름이 NW_Merged_* 로 바뀌므로 병합할 때 묶음이 모두 원경이면 nw_noCast 를 단다.
+  const FAR_CASTER = /^FU_(tower|plaza|turbine)/;
+  function isFarCaster(node) {
+    for (let cur = node; cur; cur = cur.parent) {
+      if (typeof cur.name === 'string' && FAR_CASTER.test(cur.name)) return true;
     }
     return false;
   }
@@ -315,6 +343,7 @@ export async function createWorld({
       mergedMesh.name = `NW_Merged_${layerKey}_${bucket.material.name || 'mat'}`;
       mergedMesh.userData.nw_layer = layerKey;
       mergedMesh.userData.nw_surface = bucket.surface;
+      mergedMesh.userData.nw_noCast = bucket.nodes.every(isFarCaster);
       root.add(mergedMesh);
       for (const n of bucket.nodes) {
         if (n.parent) n.parent.remove(n);
@@ -348,6 +377,35 @@ export async function createWorld({
   facearchRoot.position.fromArray(faceCfg.pos);
   facearchRoot.rotation.y = THREE.MathUtils.degToRad(faceCfg.rotY || 0);
   processRoot(facearchRoot, 'building_facearch', 'building');
+
+  if (shadowsOn) {
+    const NO_CAST = new Set(['holo', 'emissive', 'water']);
+    for (const key of ['ground', 'present', 'future', 'building_haus', 'building_facearch']) {
+      layerGroups[key]?.traverse((n) => {
+        if (!n.isMesh) return;
+        n.receiveShadow = true;
+        n.castShadow = key !== 'ground' && !NO_CAST.has(n.userData?.nw_surface) && !/^FU_tube_glass/.test(n.name) &&
+          !n.userData?.nw_noCast && !isFarCaster(n);
+      });
+    }
+  }
+
+  const _fwd = new THREE.Vector3();
+  const _focus = new THREE.Vector3();
+  const _toSun = new THREE.Vector3();
+  /** 그림자 상자를 카메라 앞 SHADOW_AHEAD m 로 옮긴다(1 m 단위로 붙여 걸을 때 가장자리가 떨지 않게). */
+  function followSun(camera) {
+    if (!shadowsOn) return;
+    camera.getWorldDirection(_fwd);
+    _fwd.y = 0;
+    if (_fwd.lengthSq() < 1e-6) _fwd.set(0, 0, -1);
+    _fwd.normalize();
+    _focus.copy(camera.position).addScaledVector(_fwd, SHADOW_AHEAD);
+    _toSun.copy(sunLight.position).sub(sunLight.target.position).normalize();
+    sunLight.target.position.set(Math.round(_focus.x), 0, Math.round(_focus.z));
+    sunLight.target.updateMatrixWorld();
+    sunLight.position.copy(sunLight.target.position).addScaledVector(_toSun, SHADOW_DIST);
+  }
 
   // 지형 높이 격자: 카메라가 지면 아래로 내려가 지형이 뒷면 컬링으로 사라지는("바닥 아래가 비쳐 보이는") 상태 방지.
   // 지면 레이어 전체 + 원경 지형 메시(계곡 바닥·암벽·암괴·개울·강·도로)를 로드 시 한 번 래스터화한다.
@@ -468,6 +526,7 @@ export async function createWorld({
     droneActors,
     groundHeightAt,
     getWalkBlocker,
+    followSun,
     // 14:00 기준 해 방향(성수 = Blender FX_sun 남서 34°, DS2 = layout.sun 북북동 26°) — 기상·시간 컨트롤러가 시각에 따라 돌린다
     sunBaseDir: sunBaseDir,
     updateEnvironmentMap,

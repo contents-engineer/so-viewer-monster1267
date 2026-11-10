@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { detectQualityTier, getQualityConfig } from './quality.js';
 import { createWorld } from './world.js';
 import { createPostPipeline } from './post.js';
-import { createWeatherController, getPresets, parseTimeParam, TIME_QUICK } from './weather.js';
+import { createWeatherController, getPresets, parseTimeParam, TIME_QUICK, weatherNamesFor, defaultWeather } from './weather.js';
 import { createRainSystem } from './rain.js';
 import { createCameraController, updateDroneActors } from './camera.js';
 import { createHelpOverlay, createWalkHud } from './help.js';
@@ -129,8 +129,8 @@ async function boot() {
     sharedUniforms: world.uniforms,
   });
 
-  // 기상(흐림·비·눈)과 시간(0~24시)을 따로 고른다. URL: weather=overcast|rain|snow(옛 dusk·night 는 시간으로), time=21.5 | 21:30
-  const initialWeather = params.get('weather') || 'overcast';
+  // 기상(맑음·흐림·비·눈)과 시간(0~24시)을 따로 고른다. URL: weather=clear|overcast|rain|snow(옛 dusk·night 는 시간으로), time=21.5 | 21:30
+  const initialWeather = params.get('weather') || defaultWeather(worldVer);
   const weather = createWeatherController({
     world,
     post,
@@ -311,6 +311,11 @@ async function boot() {
     return camDef;
   }
 
+  const weatherNames = weatherNamesFor(worldVer);
+  document.querySelectorAll('[data-weather]').forEach((btn) => {
+    btn.hidden = !weatherNames.includes(btn.dataset.weather);   // DS2 에서는 '맑음' 을 숨긴다
+  });
+
   document.querySelectorAll('[data-weather]').forEach((btn) => {
     btn.addEventListener('click', () => {
       setWeather(btn.dataset.weather, false);
@@ -398,6 +403,7 @@ async function boot() {
     interior.update(dt);
 
     renderer.info.reset();
+    world.followSun(camera);
     post.composer.render();
     perf.frame(performance.now());   // 꺼져 있으면 바로 돌아간다
   }

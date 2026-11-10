@@ -4,7 +4,7 @@
 import { clockText } from './weather.js';
 
 export const DISPLAY_TITLE = 'HAUS NOWHERE SEOUL';
-export const WEATHER_LABEL = { overcast: '흐림', rain: '비', snow: '눈' };
+export const WEATHER_LABEL = { clear: '맑음', overcast: '흐림', rain: '비', snow: '눈' };
 
 /** [제목, 시각 글자('HH:MM' — 월드 시각이면 clockText(hour), HUD 와 같은 글자), 기상 이름(모르면 그대로)] */
 export function displayLines(time, weatherName) {

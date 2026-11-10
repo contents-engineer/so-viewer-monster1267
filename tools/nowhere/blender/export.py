@@ -4,9 +4,10 @@
 # 하는 일
 #   1) public/assets/nowhere/layout.json 생성:
 #      - buildings (BLD_haus, BLD_facearch)
-#      - cameras (CAM_street, CAM_aerial, CAM_viaduct, CAM_night, CAM_ground, CAM_lot)
+#      - cameras (CAM_street, CAM_aerial, CAM_viaduct, CAM_night, CAM_ground, CAM_lot, CAM_future)
 #      - anchors (ANCHOR_* 24개: id, layer, pos, title, facts, lore, source, render)
 #      - drones (DRONE_PATHS 4개: sec, d1, d2, d3)
+#      - solids (경로 여유 검사용 상자: 건물 표 · 아파트 · 고가 상판 · HAUS · FaceArch · nw_solid=1 객체, solid_boxes())
 #      모든 좌표는 Blender Z-up (x, y, z) → Three.js Y-up (x, z, −y) 로 변환.
 #   2) public/assets/nowhere/sky-1k.hdr 복사 (build/nowhere-src/hdri/urban_street_03_1k.hdr).
 #   3) 히어로·카메라 렌더를 WebP(1280×720)로 public/assets/nowhere/renders/*.webp 에 저장.
@@ -50,7 +51,8 @@ CAM_ORDER = [
     ('viaduct', '2호선 고가 하부',            't4-viaduct-iter2.png', 'hero-viaduct.webp'),
     ('night',   '밤거리 — 젖은 노면과 네온',   'hero-night.png',   'hero-night.webp'),
     ('ground',  '노면 근접 — 연석·웅덩이',     't2-ground.png',    'hero-ground.webp'),
-    ('lot',     '빈터 자연 포켓',             't2-lot.png',       'hero-lot.webp'),
+    ('lot',     '포켓 공원',                  't2-lot.png',       'hero-lot.webp'),
+    ('future', '2041 골목 — 고가 튜브와 새 타워', 'hero-future.png', 'hero-future.webp'),
 ]
 
 # 각 앵커별 기본 요약(Task 8 의 anchors.ko.json 과 연동되며 layout.json 스키마도 충족)
@@ -115,9 +117,10 @@ ANCHOR_META = {
         'source': 'docs/nowhere/research/seongsu.md',
         'render': 'assets/nowhere/renders/hero-night.webp',
     },
-    'wires': {
-        'facts': [['구성', '12 m 콘크리트 전주 · 주상변압기 · 처진 전선 다발'], ['보호대', '황흑 사선 줄무늬 (#F2C200 / #1A1A1A)']],
-        'lore': '지중화되지 못한 이면도로의 가공 배전선과 통신선 다발이 비 갠 하늘을 가로지르며 성수 골목의 실루엣을 만든다.',
+    'restored_brick': {
+        'facts': [['구현', 'present.py AGE_SCALE 0.35 — 벽 정점 마스크의 그을음 · 빗물 얼룩 · 하단 이끼를 옛 세기의 35 %로'],
+                  ['소재', 'church_bricks_02 · brick_wall_001 (CC0)']],
+        'lore': '2041년 성수 도시재생 사업은 골목 위 전선 다발을 땅속으로 묻고(지중화), 공장 띠의 적벽돌은 헐지 않고 세척했다. 그을음과 빗물 자국을 걷어내자 붉은 벽이 다시 드러났다.',
         'source': 'docs/nowhere/research/seongsu.md',
         'render': 'assets/nowhere/renders/hero-viaduct.webp',
     },
@@ -139,22 +142,24 @@ ANCHOR_META = {
         'source': 'docs/nowhere/research/seongsu.md',
         'render': 'assets/nowhere/renders/hero-street.webp',
     },
-    'lot_moss': {
-        'facts': [['규칙', '윗면 법선 · 오목지 · 물가 가장자리에만 분포'], ['색상', '올리브 #3A461C ~ #5C652D (DS 시그니처 #5)']],
-        'lore': '철거 후 방치된 공사 부지의 콘크리트 기초와 현무암 틈새마다 잦은 비로 이끼 군락이 자라났다.',
-        'source': 'docs/nowhere/research/ds.md',
+    'park_lawn': {
+        'facts': [['잔디', 'aerial_grass_rock 2k (CC0) 를 녹색으로 보정, 지면 기복 ±0.25 m'],
+                  ['산책로', '닫힌 고리 폭 2.0 m, concrete_pavers_02 보도블록']],
+        'lore': '공사 가림막 뒤에 오래 방치됐던 철거 빈터는 2041년 주민 참여형 도시재생으로 잔디와 둘레 산책로를 갖춘 포켓 공원이 됐다.',
+        'source': 'docs/nowhere/research/seongsu.md',
         'render': 'assets/nowhere/renders/hero-lot.webp',
     },
-    'lot_water': {
-        'facts': [['구현', '수평 수면 절단 + 웅덩이 거칠기 0.04 + 빗물 파문'], ['소재', 'coast_sand_rocks_02 · nowhere-ground-mask.webp']],
-        'lore': '낮은 물길과 옛 지하 기초 자리를 따라 고인 웅덩이가 흐린 하늘과 HAUS 매스를 거울처럼 비춘다.',
-        'source': 'docs/nowhere/research/ds.md',
+    'park_water': {
+        'facts': [['구현', '웅덩이 3곳의 수평 수면 + 얕은 물길, 지면 마스크 A채널'],
+                  ['경계석', '현무암 작은 기둥(직접 모델링) 0.4 m 간격']],
+        'lore': '빗물이 고이던 낮은 땅은 빗물을 모아 흘려보내는 물길 정원으로 다듬어졌다. 비가 오면 물길이 차오르고 맑은 날에는 하늘을 비춘다.',
+        'source': 'docs/nowhere/research/seongsu.md',
         'render': 'assets/nowhere/renders/hero-lot.webp',
     },
-    'lot_rocks': {
-        'facts': [['비율', '대형 슬래브 1 : 중형 바위 5–8 : 소형 잔돌 다수'], ['소재', 'dark_rock · boulder_01 · rock_moss_set (CC0)']],
-        'lore': '3단 암석 군집 규칙을 따라 깨진 콘크리트 슬래브와 현무암 덩어리가 물길 둘레에 무리를 이룬다.',
-        'source': 'docs/nowhere/research/ds.md',
+    'park_stones': {
+        'facts': [['구성', '주상절리 현무암 덩어리 3개(직접 모델링)'], ['소재', 'dark_rock (CC0)']],
+        'lore': '빈터 시절부터 있던 현무암 덩어리 가운데 큰 세 개는 치우지 않고 공원의 조경석으로 남겼다.',
+        'source': 'docs/nowhere/research/seongsu.md',
         'render': 'assets/nowhere/renders/hero-lot.webp',
     },
     'ginkgo': {
@@ -239,6 +244,44 @@ def export_renders_and_hdri(sc):
 
 
 # ───────────────────────────── layout.json 생성
+def _box_three(id_, mn, mx):
+    a = to_three(mn); b = to_three(mx)
+    return {'id': id_, 'min': [round(min(a[i], b[i]), 2) for i in range(3)], 'max': [round(max(a[i], b[i]), 2) for i in range(3)]}
+
+
+def solid_boxes():
+    """인트로·투어 비행·이동체 경로의 여유 검사용 상자(three 좌표, m).
+    건물 표(present.BELT·C1·E1·SOUTH, 박공은 용마루까지), 아파트, 고가 상판, HAUS·FaceArch, nw_solid=1 객체(월드 AABB)."""
+    import present
+    out = []
+    for specs in (present.BELT, present.C1, present.E1, present.SOUTH):
+        for sp in specs:
+            x0, y0, x1, y1 = sp['rect']
+            h = sp['gf'] + (sp['fl'] - 1) * sp['fh'] + sp.get('par', 0.0)
+            if sp.get('roof') == 'gable':
+                half = ((y1 - y0) if sp.get('ridge', 'x') == 'x' else (x1 - x0)) / 2.0
+                h += half * math.tan(math.radians(sp.get('pitch', 12)))
+            out.append(_box_three(sp['name'], (x0, y0, 0.0), (x1, y1, h)))
+    for i, ((cx, cy), s) in enumerate(present.APTS):
+        out.append(_box_three(f'APT{i}', (cx - 16.5, cy - 6.5, 0.0), (cx + 16.5, cy + 6.5, present.APT_H * s)))
+    out.append(_box_three('VIA_deck', (present.VIA_PIERS[0], present.VIA_Y0, present.DECK_B),
+                          (present.VIA_PIERS[-1], present.VIA_Y1, present.DECK_T)))
+    out.append(_box_three('HAUS', (-25.15, -25.9, 0.0), (25.15, 25.9, 81.0)))
+    fa = bpy.data.objects.get('BLD_facearch')
+    fx, fy = (fa.location.x, fa.location.y) if fa else (105.0, 15.0)
+    rz = fa.rotation_euler.z if fa else math.radians(27.0)
+    c, s = math.cos(rz), math.sin(rz)
+    corners = [(fx + u * c - v * s, fy + u * s + v * c) for u in (-11.0, 11.0) for v in (-9.0, 9.0)]   # 22 × 18 필로티 대지
+    out.append(_box_three('FACEARCH', (min(p[0] for p in corners), min(p[1] for p in corners), 0.0),
+                          (max(p[0] for p in corners), max(p[1] for p in corners), 31.0)))
+    for o in bpy.data.objects:
+        if o.type == 'MESH' and o.get('nw_solid'):
+            ws = [o.matrix_world @ Vector(cn) for cn in o.bound_box]
+            out.append(_box_three(o.name, tuple(min(v[i] for v in ws) for i in range(3)),
+                                  tuple(max(v[i] for v in ws) for i in range(3))))
+    return out
+
+
 def export_layout(sc):
     import future
     haus = bpy.data.objects.get('BLD_haus')
@@ -313,13 +356,14 @@ def export_layout(sc):
         'cameras': cameras,
         'anchors': anchors,
         'drones': drones,
+        'solids': solid_boxes(),
         'maskRect': [x0, y0, x1, y1],
     }
     out_path = os.path.join(PUB_DIR, 'layout.json')
     os.makedirs(PUB_DIR, exist_ok=True)
     with open(out_path, 'w', encoding='utf-8') as f:
         json.dump(layout, f, ensure_ascii=False, indent=2)
-    print(f'wrote {out_path}: {len(cameras)} cameras, {len(anchors)} anchors, {len(drones)} drones')
+    print(f'wrote {out_path}: {len(cameras)} cameras, {len(anchors)} anchors, {len(drones)} drones, {len(layout["solids"])} solids')
     return layout
 
 
@@ -401,7 +445,8 @@ FLAT_MAT_SPECS = {
     'NW_station_green':  ('#3F7A55', 0.45, 0.30, 1.0),
     'NW_steel_black':    ('#232425', 0.55, 0.55, 1.0),
     'NW_steel_galv':     ('#8E9291', 0.42, 0.80, 1.0),
-    'NW_turf':           ('#3C5A3A', 0.85, 0.0,  1.0),
+    'NW_field_turf':     ('#3C5A3A', 0.85, 0.0,  1.0),   # 학교 운동장 인조잔디(공원 잔디 NW_turf 는 aerial_grass_rock 텍스처 경로)
+    'NW_roof_planter':   ('#5E5A52', 0.80, 0.0,  1.0),   # 성수 2041 옥상 화단 옆면(Task 6)
     'NWF_alu_dark':      ('#2A2D31', 0.38, 0.85, 1.0),
     'NWF_black':         ('#121416', 0.60, 0.0,  1.0),
     'NWF_pearl':         ('#C9CDD0', 0.32, 0.15, 1.0),
@@ -414,7 +459,9 @@ FLAT_MAT_SPECS = {
 
 def _wire_gltf_pbr(m, diff_im, arm_im=None, nor_im=None, tile_m=None, rot=0.0, offset=(0.0, 0.0),
                    normal_scale=1.0, rough_val=0.7, metal_val=0.0, emit_im=None, emit_col=None, emit_str=0.0,
-                   alpha_im=False, alpha_val=1.0, interp='Linear'):
+                   alpha_im=False, alpha_val=1.0, interp='Linear', alpha_clip=None):
+    """alpha_clip(예: 0.5)이 있으면 텍스처 알파와 BSDF 알파 사이에 Math(ROUND / GREATER_THAN)를 끼워 glTF MASK 로 나가게 한다
+    (없으면 알파를 그대로 이어 BLEND)."""
     nt = m.node_tree
     nt.nodes.clear()
     out = nt.nodes.new('ShaderNodeOutputMaterial')
@@ -444,7 +491,16 @@ def _wire_gltf_pbr(m, diff_im, arm_im=None, nor_im=None, tile_m=None, rot=0.0, o
         nt.links.new(vec_sock, td.inputs['Vector'])
         nt.links.new(td.outputs['Color'], bsdf.inputs['Base Color'])
         if alpha_im:
-            nt.links.new(td.outputs['Alpha'], bsdf.inputs['Alpha'])
+            a_sock = td.outputs['Alpha']
+            if alpha_clip is not None:
+                mth = nt.nodes.new('ShaderNodeMath')
+                if abs(alpha_clip - 0.5) < 1e-6:
+                    mth.operation = 'ROUND'                 # glTF 내보내기: Round → MASK, cutoff 0.5
+                else:
+                    mth.operation = 'GREATER_THAN'; mth.inputs[1].default_value = alpha_clip
+                nt.links.new(a_sock, mth.inputs[0])
+                a_sock = mth.outputs[0]
+            nt.links.new(a_sock, bsdf.inputs['Alpha'])
 
     if arm_im is not None:
         ta = nt.nodes.new('ShaderNodeTexImage')
@@ -570,10 +626,15 @@ def prepare_materials_for_export():
             is_foliage = m.get('nw_surface') == 'foliage'
             is_glass = m.get('nw_surface') == 'glass'
             emit_im = im if (emeta and emeta.get('tex') == 'Base Color') else None
-            _wire_gltf_pbr(m, im, rough_val=0.18 if is_glass else 0.55,
-                            metal_val=0.1 if not (is_foliage or is_glass) else 0.0,
+            # nw_alpha_clip(present.mat_image 가 단다): > 0 → MASK(알파 시험, 정렬 없음), 0 → 불투명. 없으면 옛 규칙(잎 = 알파 BLEND)
+            clip = m.get('nw_alpha_clip')
+            use_alpha = is_foliage if clip is None else clip > 0
+            # nw_pbr(거칠기, 금속)이 있으면 그 값(present.py 태양광 NW_pv), 없으면 옛 기본값
+            pbr = m.get('nw_pbr')
+            _wire_gltf_pbr(m, im, rough_val=float(pbr[0]) if pbr else (0.18 if is_glass else 0.55),
+                            metal_val=float(pbr[1]) if pbr else (0.1 if not (is_foliage or is_glass) else 0.0),
                            emit_im=emit_im, emit_str=1.0 if emit_im else 0.0,
-                           alpha_im=is_foliage, interp=interp)
+                           alpha_im=use_alpha, interp=interp, alpha_clip=float(clip) if (clip is not None and clip > 0) else None)
             if is_foliage:
                 m.surface_render_method = 'DITHERED'
             converted += 1
@@ -588,7 +649,9 @@ def prepare_materials_for_export():
             emit_col = emeta.get('color') if emeta else None
             is_holo = m.get('nw_surface') == 'holo' or (emeta and emeta.get('additive'))
             alpha_val = 0.35 if is_holo else 1.0
-            _wire_gltf_pbr(m, alb_im, rough_val=0.35 if emeta else 0.85, metal_val=0.0,
+            pbr = m.get('nw_pbr')            # (거칠기, 금속) — future.py 커튼월 NWF_curtain(CP1). 없으면 옛 기본값
+            _wire_gltf_pbr(m, alb_im, rough_val=float(pbr[0]) if pbr else (0.35 if emeta else 0.85),
+                           metal_val=float(pbr[1]) if pbr else 0.0,
                            emit_im=emi_im, emit_col=emit_col, emit_str=1.0 if (emi_im or emit_col) else 0.0,
                            alpha_val=alpha_val, interp='Closest' if meta.get('kind') == 'palette' else 'Linear')
             if is_holo or meta.get('alpha'):

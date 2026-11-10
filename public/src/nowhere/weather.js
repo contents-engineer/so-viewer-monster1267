@@ -59,6 +59,13 @@ export const PRESETS = {
     hemiIntensity: 0.95,
     envIntensity: 0.85,
     sunHaze: 0.0,
+    cloudCover: 0.0,
+    dayExposure: 0.0,
+    daySaturation: 1.0,
+    dayFill: 1.0,
+    gradeShadow: 0.22,
+    blackLift: 0.014,
+    grain: 0.016,
   },
   rain: {
     uWet: 1.0,
@@ -80,6 +87,13 @@ export const PRESETS = {
     hemiIntensity: 0.72,
     envIntensity: 0.75,
     sunHaze: 0.0,
+    cloudCover: 0.0,
+    dayExposure: 0.0,
+    daySaturation: 1.0,
+    dayFill: 1.0,
+    gradeShadow: 0.22,
+    blackLift: 0.014,
+    grain: 0.016,
   },
   dusk: {
     uWet: 0.40,
@@ -101,6 +115,13 @@ export const PRESETS = {
     hemiIntensity: 0.80,
     envIntensity: 0.78,
     sunHaze: 0.0,
+    cloudCover: 0.0,
+    dayExposure: 0.0,
+    daySaturation: 1.0,
+    dayFill: 1.0,
+    gradeShadow: 0.22,
+    blackLift: 0.014,
+    grain: 0.016,
   },
   night: {
     uWet: 0.80,
@@ -122,6 +143,13 @@ export const PRESETS = {
     hemiIntensity: 0.55,
     envIntensity: 0.65,
     sunHaze: 0.0,
+    cloudCover: 0.0,
+    dayExposure: 0.0,
+    daySaturation: 1.0,
+    dayFill: 1.0,
+    gradeShadow: 0.22,
+    blackLift: 0.014,
+    grain: 0.016,
   },
   snow: {
     uWet: 0.20,
@@ -143,8 +171,52 @@ export const PRESETS = {
     hemiIntensity: 1.05,
     envIntensity: 0.90,
     sunHaze: 0.0,
+    cloudCover: 0.0,
+    dayExposure: 0.0,
+    daySaturation: 1.0,
+    dayFill: 1.0,
+    gradeShadow: 0.22,
+    blackLift: 0.014,
+    grain: 0.016,
+  },
+  // 맑음(성수 2041 기본): 파란 하늘 · 흰 적운 · 강한 해 · 마른 노면. 시간(황혼 · 밤)은 다른 기상처럼 곱해진다.
+  // 낮 룩(CP1, 레퍼런스 대조): 밝은 노출 · 높은 채도 · 옅은 연무 · 그림자 청록 감광 없음. day* · grade* · blackLift · grain 은
+  // 해가 지면(uNight) 다른 기상과 같은 값으로 돌아가고 실내에서는 쓰지 않는다(composeState · setInterior).
+  clear: {
+    uWet: 0.05,
+    uRain: 0.0,
+    uSnow: 0.0,
+    uNight: 0.0,
+    uFogB: 0.0004,
+    uFogK: 0.03,
+    fogColor: '#D2E5F4',
+    fogFarColor: '#C6DCF0',
+    skyHorizon: '#C8E0F6',
+    skyZenith: '#4A8FEE',
+    skyGround: '#4A4F4A',
+    exposure: 0.92,
+    saturation: 1.0,
+    uEmitGain: 0.25,
+    sunIntensity: 2.6,
+    sunColor: '#FFF1DC',
+    hemiIntensity: 0.75,
+    envIntensity: 0.9,
+    sunHaze: 0.15,
+    cloudCover: 0.42,
+    dayExposure: 1.3,
+    daySaturation: 1.25,
+    dayFill: 1.5,
+    gradeShadow: 0.0,
+    blackLift: 0.005,
+    grain: 0.008,
   },
 };
+
+/** 낮 룩 키: 노출 더하기(dayExposure) · 채도 곱(daySaturation) · 하늘 채움광 곱(dayFill: 반구광 · 환경광) ·
+ *  그레이딩(섀도 청록 감광 · 블랙 리프트 · 그레인). 맑음만 상수와 다르다. */
+export const LOOK_KEYS = ['dayExposure', 'daySaturation', 'dayFill', 'gradeShadow', 'blackLift', 'grain'];
+/** 실내(HAUS 내부)에서 쓰는 룩 = 맑음이 아닌 기상의 상수(실내 조명은 이 값으로 맞춰져 있다). */
+export const INTERIOR_LOOK = { dayExposure: 0.0, daySaturation: 1.0, dayFill: 1.0, gradeShadow: 0.22, blackLift: 0.014, grain: 0.016 };
 
 // DS2 산악 월드 덮어쓰기 — 참조 화면(빙하 계곡 역광 헤이즈)의 읽기:
 //   해는 계곡 상류(북북동) 암벽 너머 낮은 고도, 그 주변 하늘이 하얗게 번진다(sunHaze).
@@ -206,7 +278,15 @@ export function lerp(a, b, t) {
 // 최종 상태 = 시간이 정하는 빛(밤 정도·해 색과 세기·하늘/안개 색) × 기상이 주는 변화(젖음·비·눈·안개 밀도·하늘색 비율).
 // 14:00 에서는 기존 흐림·비·눈 프리셋과 같은 값이 나온다(테스트 tests/nowhere-weather.test.mjs).
 
-export const WEATHER_NAMES = ['overcast', 'rain', 'snow'];
+export const WEATHER_NAMES = ['clear', 'overcast', 'rain', 'snow'];
+/** 월드에서 고를 수 있는 기상. DS2 는 역광 헤이즈 룩에 맞춘 세 가지만. */
+export function weatherNamesFor(worldVer = 'seongsu') {
+  return worldVer === 'ds2' ? ['overcast', 'rain', 'snow'] : WEATHER_NAMES;
+}
+/** URL 에 weather 가 없을 때의 기상. 성수 2041 = 맑음, DS2 = 흐림. */
+export function defaultWeather(worldVer = 'seongsu') {
+  return worldVer === 'ds2' ? 'overcast' : 'clear';
+}
 export const DAY_HOUR = 14;          // 기준 시각: 각 월드의 설계 해 방향(대표 렌더)과 같은 시각
 export const TIME_QUICK = { day: 14, dusk: 18.5, night: 21.5 };
 const SUNRISE = 6.0;
@@ -261,7 +341,11 @@ export function composeState(presets, weatherName, hour) {
   out.sunIntensity = t.sunIntensity * ratio('sunIntensity');
   out.hemiIntensity = t.hemiIntensity * ratio('hemiIntensity');
   out.envIntensity = t.envIntensity * ratio('envIntensity');
-  out.sunHaze = day.sunHaze > 0 ? t.sunHaze * (w.sunHaze / day.sunHaze) : t.sunHaze;
+  out.sunHaze = day.sunHaze > 0 ? t.sunHaze * (w.sunHaze / day.sunHaze) : Math.max(t.sunHaze, w.sunHaze);
+  out.cloudCover = w.cloudCover ?? 0;   // 구름 덮임은 기상이 정한다(밤 색은 하늘 셰이더가 uNight 로 어둡게)
+  // 낮 룩: 기상이 흐림 상수에서 벗어난 만큼을 해가 떠 있는 동안만(1 − 시간의 uNight) 더한다 → 맑은 밤은 예전 그레이드 · 노출
+  const dayness = 1 - Math.min(1, Math.max(0, t.uNight));
+  for (const k of LOOK_KEYS) out[k] = t[k] + (w[k] - day[k]) * dayness;
   return out;
 }
 
@@ -357,13 +441,16 @@ export function createWeatherController({
   let curDuration = duration;
   let elapsed = duration;
   let lastEnvAt = 0;
+  let interior = false;
   const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
   function applySun(h) {
     if (!sunBaseDir || !world.uniforms.uSunDir) return;
     const sd = sunDirAt(h, sunBaseDir);
     world.uniforms.uSunDir.value.set(sd.sun.x, sd.sun.y, sd.sun.z);
-    world.lights.sunLight.position.set(sd.light.x * 240, sd.light.y * 240, sd.light.z * 240);
+    const L = world.lights.sunLight;
+    const o = L.target ? L.target.position : { x: 0, y: 0, z: 0 };
+    L.position.set(o.x + sd.light.x * 240, o.y + sd.light.y * 240, o.z + sd.light.z * 240);
   }
 
   function applyStateToScene(st, refreshEnv = false) {
@@ -382,23 +469,31 @@ export function createWeatherController({
     world.sky.uniforms.uSkyHorizon.value.set(st.skyHorizon);
     world.sky.uniforms.uSkyZenith.value.set(st.skyZenith);
     world.sky.uniforms.uSkyGround.value.set(st.skyGround);
+    if (world.sky.uniforms.uSkyCumulus) world.sky.uniforms.uSkyCumulus.value = st.cloudCover ?? 0;
 
     world.lights.sunLight.intensity = st.sunIntensity;
     world.lights.sunLight.color.set(st.sunColor);
-    world.lights.hemiLight.intensity = st.hemiIntensity;
+    const fill = st.dayFill ?? 1;   // 외관 조명만 바꾸므로 실내에서도 그대로(창밖 캡처가 외관과 같게)
+    world.lights.hemiLight.intensity = st.hemiIntensity * fill;
     world.lights.hemiLight.color.set(st.skyHorizon);
     world.lights.hemiLight.groundColor.set(st.skyGround);
 
-    renderer.toneMappingExposure = st.exposure;
+    // 실내(setInterior)에서는 노출 · 그레이딩의 낮 룩 키 대신 상수(INTERIOR_LOOK) — 실내 조명은 기본 노출 · 그레이드에 맞춰져 있다
+    const look = interior ? INTERIOR_LOOK : st;
+    renderer.toneMappingExposure = st.exposure + (look.dayExposure ?? 0);
     if (post?.gradePass) {
-      post.gradePass.uniforms.uSaturation.value = st.saturation;
+      const g = post.gradePass.uniforms;
+      g.uSaturation.value = st.saturation * (look.daySaturation ?? 1);
+      if (g.uShadowMix) g.uShadowMix.value = look.gradeShadow ?? INTERIOR_LOOK.gradeShadow;
+      if (g.uBlackLift) g.uBlackLift.value = look.blackLift ?? INTERIOR_LOOK.blackLift;
+      if (g.uGrain) g.uGrain.value = look.grain ?? INTERIOR_LOOK.grain;
     }
     if (post?.bloomPass) {
       post.bloomPass.strength = 0.18 + st.uEmitGain * 0.28;
     }
     if (refreshEnv && typeof world.updateEnvironmentMap === 'function') {
       lastEnvAt = now();
-      world.updateEnvironmentMap(st.skyHorizon, st.skyZenith, st.skyGround, st.envIntensity);
+      world.updateEnvironmentMap(st.skyHorizon, st.skyZenith, st.skyGround, st.envIntensity * fill);
     }
   }
 
@@ -463,6 +558,12 @@ export function createWeatherController({
     return currentState;
   }
 
+  /** 실내(HAUS 내부)를 그리는 동안 true: 노출 · 그레이드의 낮 룩 키를 끄고(INTERIOR_LOOK), 나오면 되돌린다. */
+  function setInterior(on) {
+    interior = Boolean(on);
+    applyStateToScene(currentState, false);
+  }
+
   return {
     getPresetName: () => weatherName,
     getWeather: () => weatherName,
@@ -472,6 +573,7 @@ export function createWeatherController({
     setWeather,
     setTime,
     setPreset,
+    setInterior,
     update,
   };
 }

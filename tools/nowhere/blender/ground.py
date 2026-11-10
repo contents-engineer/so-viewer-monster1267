@@ -1,12 +1,13 @@
-# HAUS NOWHERE — 성수 2041 / Task 2: 지면과 거리(현재의 성수 바닥).
+# HAUS NOWHERE — 성수 2041 / Task 2: 지면과 거리(현재의 성수 바닥). Task 4(2026-11-10): 빈터 → 포켓 공원, 차도 보수 패치 끄기.
 # 실행: MCP 에서 exec(open('<ROOT>/tools/nowhere/blender/ground.py').read(), {'__name__': '__main__'})
 #       헤드리스: blender -b --python-expr "exec(open('.../ground.py').read(), {'__name__': '__main__'})"
 # 매 실행마다 NW_ground 컬렉션을 비우고 처음부터 다시 만든다(멱등). 좌표는 Blender Z-up 미터, HAUS 원점(§3).
 #
 # 만드는 것
-#   NW_ground  (→ nowhere-ground.glb) 차도·보도·경계석·대지·빈터·전정·노면 표시·점자블록·맨홀·빗물받이·가로수 보호판·잔해
+#   NW_ground  (→ nowhere-ground.glb) 차도·보도·경계석·대지·포켓 공원(잔디·산책로·물길 정원)·전정·노면 표시·점자블록·맨홀·빗물받이·
+#              가로수 보호판
 #   NW_layout  CAM_street · CAM_ground · CAM_aerial, BLD_haus · BLD_facearch (export.py 가 layout.json 으로)
-#   NW_slots   SLOT_* 빈 객체 — Task 3 이 벤치·꽃·가로수·가림막을 놓을 자리(내보내지 않음)
+#   NW_slots   SLOT_* 빈 객체 — Task 3 이 벤치·꽃·가로수를 놓을 자리(내보내지 않음)
 #   NW_ref     두 건물 원본(배치 확인용, 내보내지 않음)
 #   NW_fx      FX_fog(높이 지수 안개 상자, 내보내지 않음)
 import bpy, os, sys, math, random, importlib, time
@@ -35,7 +36,7 @@ NR = (67.0, 73.0)                  # 북쪽 이면도로(y +70, 6 m)
 VR = (138.5, 146.5)                # 고가 하부 가로(y +135…+150 띠 안의 8 m 차도)
 XW, CW = -14.0, 2.5                # 뚝섬로 횡단보도 중심 x, 반폭(폭 5 m)
 XV = 22.0                          # 고가 하부 가로 횡단보도 x
-LOT = (28.0, -22.0, 65.8, 40.0)    # 철거 후 방치된 빈터(동쪽 끝은 골목 보도 안쪽 선)
+LOT = (28.0, -22.0, 65.8, 40.0)    # 옛 빈터 → 포켓 공원(동쪽 끝은 골목 보도 안쪽 선)
 HAUS_BB = RRect(-25.15, -25.9, 25.15, 25.9)   # 캔틸레버 포함 외곽 — 그 아래는 비를 맞지 않는다
 FORE = (-26.0, -31.5, 26.0, -17.0)            # 전정: 보도 안쪽 선 ~ 1층 벽 안쪽
 GRAVEL = [(-24.6, -27.7, -3.6, -26.05), (3.6, -27.7, 24.6, -26.05)]   # 흰 자갈 화단(처마 낙수선)
@@ -74,13 +75,16 @@ PIT_H = 0.6
 PARCEL_X = [-80.0, -55.0, -31.0, 31.0, 50.0, 95.0, 122.0, 141.0]
 PARCEL_Y = [-75.0, -95.0, -120.0, -140.0, 27.0, 50.0, 95.0, 118.0, 155.0]
 
-# 빈터: 웅덩이(중심, 반지름), 잔해 더미(중심, 반지름, 높이), 물길(폴리라인), 공사 차량 바퀴 자국
-POOLS = [((39.5, 3.0), 3.6), ((53.0, 19.0), 2.6), ((36.0, 29.0), 2.2)]
+# 포켓 공원(옛 빈터, Task 4): 웅덩이(중심, 반지름) = 물길 정원의 수면, 둔덕(중심, 반지름, 옛 높이), 물길(폴리라인), 산책로
+POOLS = [((39.5, 3.0), 3.6), ((53.0, 19.0), 2.6), ((38.5, 28.5), 2.2)]   # 셋째는 산책로와 겹치지 않게 (36, 29) → (38.5, 28.5)
 MOUNDS = [((58.5, -9.0), 4.5, 0.55), ((33.5, -13.0), 3.5, 0.42), ((47.5, 33.5), 4.0, 0.45), ((60.5, 30.0), 3.0, 0.35)]
+MOUND_K = 0.45                     # 잔디 둔덕: 옛 잔해 더미 높이의 45 %(가장 높은 것 0.25 m)
+LOT_SINK = 0.12                    # 공원 안쪽이 대지보다 낮은 깊이(옛 빈터 0.34 m)
 CHANNEL = [(63.8, 38.5), (59.5, 31.5), (56.0, 24.5), (53.0, 19.0), (49.5, 12.5), (44.5, 6.5), (39.5, 3.0),
            (36.5, -2.5), (35.0, -8.0), (36.5, -15.0)]
-TRACK = [(44.0, -22.5), (44.6, -16.0), (44.0, -9.0), (42.0, -3.0), (40.0, 1.0)]
-TRACK_HALF = 0.9
+PARK_PATH = [(32.0, -18.0), (60.0, -18.0), (63.0, 10.0), (58.0, 37.0), (34.0, 37.0), (31.0, 10.0)]   # 닫힌 산책로(present.PARK_PATH)
+PARK_PATH_W = 2.0                  # 산책로 폭(보도블록 concrete_pavers_02, 잔디 + 0.02 m)
+PAINT_WEAR = 0.2                   # 차선·정지선 마모(닳아 아스팔트가 비치는 정도의 최대값). 성수 2041: 다시 칠했다(옛 1.0)
 
 
 # ═════════════════════════════ 높이·마스크 구동 함수 ═════════════════════════════
@@ -252,6 +256,9 @@ def _uvsep(M, name='UVMap'):
     return M.b.sepxyz(u.outputs['UV'])
 
 
+ASPHALT_GAIN = 1.2      # 차도 아스팔트 알베도 이득(CP1: 맑은 낮에 거의 검게 읽혀 +20 %). export 는 첫 grade 의 gain 을 굽는다
+
+
 def mat_asphalt():
     """뚝섬로·이면도로·대지 아스팔트: clean_asphalt + road_damaged 보수 패치 + 실링 균열(타르 줄)."""
     M = lib.Mat('NW_asphalt'); b = M.b
@@ -275,7 +282,7 @@ def mat_asphalt():
     patch = b.mx(cells((8.5, 3.25, 1.0), 0.07, 0.4, (0.1, 0.35, 0.45), 3.1),
                  cells((37.0, 3.25, 1.0), 0.16, 0.25, (0.15, 0.4, 0.22), 11.7))
     patch = b.mul(patch, rw)
-    c1 = M.grade(t['color'], 0.55, srgb('#E4E2DE'))
+    c1 = M.grade(t['color'], 0.55, srgb('#E4E2DE'), ASPHALT_GAIN)
     c2 = M.grade(t2['color'], 0.2, None, 0.55)
     col = b.col(patch, c1, c2)
     rough = b.flt(patch, t['rough'], t2['rough'])
@@ -312,7 +319,7 @@ def mat_paint(name, hexcol, tactile=False):
     t = M.texset('clean_asphalt', M.uv(3.5))
     P = M.pos
     wear = b.add(b.noise(P, 1.1, 4.0, 0.6), b.mul(b.sub(b.noise(P, 7.0, 2.0, 0.6), 0.5), 0.5))
-    wear = b.smooth(0.56, 0.64, wear)
+    wear = b.mul(b.smooth(0.56, 0.64, wear), PAINT_WEAR)        # 성수 2041: 다시 칠한 선(마모 ≤ 0.2)
     paint = b.col(1.0, srgb(hexcol), b.rgb(0.78, 0.78, 0.76), 'MULTIPLY')
     asph = M.grade(t['color'], 0.55, srgb('#E4E2DE'))
     col = b.col(wear, paint, asph)
@@ -413,6 +420,23 @@ def mat_lot():
     col = M.macro_var(col, 0.2, 0.07)
     mk = M.mask(base_wet=0.32, moss_bias=-0.04)
     s = M.surface(col, rough, nrm, hgt, mk, crevice_moss=1.4, crevice_puddle=0.6, porosity=0.5, wet_gloss=0.15)
+    return M.finish(s.outputs['Color'], s.outputs['Roughness'], s.outputs['Normal'], spec=0.35)
+
+
+TURF_TILE = 12.0                                  # 잔디 텍스처 한 장(m). 원본 aerial_grass_rock 은 15 m 를 찍은 것(6 m 는 조감에서 격자가 보였다)
+TURF_GRADE = dict(sat=1.0, tint=(0.5, 1.1, 0.55, 1.0), gain=1.0)    # 올리브 이끼·흙 → 여름 잔디 녹색(§5 잎 #4E7A3A 근처). B 를 낮춰 자갈이 푸르게 뜨지 않게
+
+
+def mat_turf():
+    """포켓 공원 잔디(Task 4): aerial_grass_rock(Poly Haven CC0, 2k)을 여름 잔디 녹색으로 보정. 웹은 export 가 같은 보정을 구운
+    알베도·ARM·노멀을 쓴다(export.FLAT_MAT_SPECS 에 넣지 않는다)."""
+    M = lib.Mat('NW_turf'); b = M.b
+    t = M.texset('aerial_grass_rock', M.uv(TURF_TILE))
+    col = M.grade(t['color'], TURF_GRADE['sat'], TURF_GRADE['tint'], TURF_GRADE['gain'])
+    nrm = M.micro(t['normal'], 'aerial_grass_rock', 0.9, 0.5)
+    col = M.macro_var(col, 0.16, 0.06)
+    mk = M.mask(base_wet=0.3, moss_bias=-0.2)
+    s = M.surface(col, t['rough'], nrm, t['height'], mk, crevice_moss=0.8, crevice_puddle=0.6, porosity=0.6, wet_gloss=0.25)
     return M.finish(s.outputs['Color'], s.outputs['Roughness'], s.outputs['Normal'], spec=0.35)
 
 
@@ -641,7 +665,7 @@ def build():
     MAT = {
         'asphalt': mat_asphalt(), 'white': mat_paint('NW_paint_white', '#E9E9E4'),
         'yellow': mat_paint('NW_paint_yellow', '#CFA932', tactile=True), 'pavers': mat_pavers(),
-        'concrete': mat_concrete(), 'lot': mat_lot(), 'gravel': mat_gravel(), 'iron': mat_iron(),
+        'concrete': mat_concrete(), 'lot': mat_lot(), 'gravel': mat_gravel(), 'iron': mat_iron(), 'turf': mat_turf(),
     }
     print('materials', round(time.time() - t0, 1))
 
@@ -679,7 +703,7 @@ def build():
     pts = [p for p in dedupe(pts) if in_scene(p[0], p[1], 0.05) and d_curb(*p) > 0.05]
     road_inside = lambda x, y: in_scene(x, y) and d_curb(x, y) > 0
     road, rv, rt = make_surface('GR_road', G, MAT['asphalt'], loops + [scene_loop], pts, road_inside, road_z, road_drive)
-    road['nw_roadwork'] = 1.0
+    road['nw_roadwork'] = 0.0               # 성수 2041: 굴착 복구 패치(road_damaged)를 끈다 — 다시 포장한 차도
     road_s = lib.Sampler(rv, rt, 2.0)
     print('road', len(rt), round(time.time() - t0, 1))
 
@@ -871,9 +895,9 @@ def build():
         slot(SL, f'SLOT_bench_{i}', (cx, py0 - 0.75, 0.0), math.pi, size=(1.8, 0.6))
     print('forecourt', round(time.time() - t0, 1))
 
-    # ── 6. 빈터: 기복 ±0.6 m, 물길, 웅덩이 3곳(수면은 지형을 수평으로 잘라 만든 실제 평면), 바퀴 자국
+    # ── 6. 포켓 공원(옛 빈터): 잔디 기복 ±0.25 m, 물길 정원(웅덩이 3곳의 수면은 지형을 수평으로 잘라 만든 실제 평면), 산책로
     build_lot(G, SL, MAT)
-    print('vacant lot', round(time.time() - t0, 1))
+    print('pocket park', round(time.time() - t0, 1))
 
     # ── 7. 노면 표시·점자블록
     build_markings(G, MAT, road_s, walk_s)
@@ -899,41 +923,46 @@ def slot(c, name, loc, rz=0.0, size=(1, 1)):
     return e
 
 
-# ═════════════════════════════ 빈터 ═════════════════════════════
+# ═════════════════════════════ 포켓 공원(옛 빈터) ═════════════════════════════
+def path_dist(x, y):
+    """포켓 공원 산책로(PARK_PATH, 닫힌 꺾은선) 중심선까지 거리(m)."""
+    return seg_dist(x, y, PARK_PATH + PARK_PATH[:1])
+
+
 def build_lot(G, SL, MAT):
+    """옛 빈터 → 포켓 공원(Task 4). 잔디(NW_turf) 지면은 기복 ±0.25 m 와 완만한 둔덕(MOUNDS), 물길 정원은 웅덩이 3곳의
+    수평 수면 + 얕은 물길(CHANNEL, 산책로 아래는 암거로 묻는다), 산책로(PARK_PATH)는 보도블록 띠.
+    잡석·깨진 슬래브·철근·기초 벽·가림막 기초는 걷어냈다. 현무암 경계석·조경석·관목·벤치는 present.build_lot_park 가 놓는다."""
     lx0, ly0, lx1, ly1 = LOT
     step = 0.34
     nx = int(round((lx1 - lx0) / step)); ny = int(round((ly1 - ly0) / step))
     sx = (lx1 - lx0) / nx; sy = (ly1 - ly0) / ny
     H = [[0.0] * (nx + 1) for _ in range(ny + 1)]
     CH = [[0.0] * (nx + 1) for _ in range(ny + 1)]
-    TR = [[0.0] * (nx + 1) for _ in range(ny + 1)]
     for j in range(ny + 1):
         y = ly0 + j * sy
         for i in range(nx + 1):
             x = lx0 + i * sx
             e = min(x - lx0, lx1 - x, y - ly0, ly1 - y)
-            h = -0.34 * smoothstep(0.2, 2.6, e)
-            rel = 0.30 * n2(x, y, 1 / 11.0, 21.0, 3) + 0.13 * n2(x, y, 1 / 3.2, 22.0, 2) + 0.035 * n2(x, y, 1 / 0.8, 23.0, 1)
+            h = -LOT_SINK * smoothstep(0.2, 2.6, e)
+            rel = 0.09 * n2(x, y, 1 / 11.0, 21.0, 3) + 0.03 * n2(x, y, 1 / 3.2, 22.0, 2)
             h += rel * smoothstep(0.6, 3.5, e)
             wx = x + 1.2 * n2(x, y, 0.15, 24.0); wy = y + 1.2 * n2(x, y, 0.15, 25.0)
             fe = smoothstep(0.3, 2.5, e)      # 테두리에서는 0 — 대지 아스팔트와 틈 없이 만난다
             for (cx, cy), r, hg in MOUNDS:
-                h += fe * hg * math.exp(-((wx - cx) ** 2 + (wy - cy) ** 2) / (r * r))
+                h += fe * hg * MOUND_K * math.exp(-((wx - cx) ** 2 + (wy - cy) ** 2) / (r * r))
             for (cx, cy), r in POOLS:
                 h -= fe * 0.42 * math.exp(-((wx - cx) ** 2 + (wy - cy) ** 2) / (r * r))
-            dch = seg_dist(x + 0.5 * n2(x, y, 0.3, 26.0), y + 0.5 * n2(x, y, 0.3, 27.0), CHANNEL)
-            ch = math.exp(-(dch / 0.5) ** 2)
+            # 물길: 다듬은 수로라 꺾은선을 그대로 따른다(현무암 경계석이 같은 선을 따른다). 산책로 밑 2.6 m 안은 암거
+            ch = math.exp(-(seg_dist(x, y, CHANNEL) / 0.5) ** 2) * smoothstep(1.4, 2.6, path_dist(x, y))
             h -= 0.17 * ch * smoothstep(0.5, 2.0, e)
-            dt = min(abs(seg_dist(x, y, [(p[0] + s * TRACK_HALF, p[1]) for p in TRACK])) for s in (-1, 1))
-            tr = math.exp(-(dt / 0.24) ** 2) * (1 - smoothstep(-6.0, 1.0, y))
-            h -= 0.075 * tr * smoothstep(0.0, 0.6, e)
-            H[j][i] = h; CH[j][i] = ch; TR[j][i] = tr
+            H[j][i] = h; CH[j][i] = ch
     # 오목함(라플라시안, 약 1 m 간격)
     def lap(i, j, k=3):
         i0, i1 = max(0, i - k), min(nx, i + k); j0, j1 = max(0, j - k), min(ny, j + k)
         return (H[j][i0] + H[j][i1] + H[j0][i] + H[j1][i]) * 0.25 - H[j][i]
-    # 웅덩이 수위: 반지름 안 최저점 + 0.2 m (테두리보다 낮게)
+    # 웅덩이 수위: 가장 깊은 곳 + 0.2 m. 잔디 기복을 낮춘 뒤로는 옛 35 % 분위수 상한이 웅덩이를 반지름의 0.6 배로
+    # 줄여 물길 정원에서 수면이 거의 보이지 않았다 → 상한을 뺀다(수면 반지름 ≈ 0.8 r)
     levels = []
     for (cx, cy), r in POOLS:
         hs = []
@@ -942,8 +971,7 @@ def build_lot(G, SL, MAT):
                 x = lx0 + i * sx; y = ly0 + j * sy
                 if (x - cx) ** 2 + (y - cy) ** 2 < r * r:
                     hs.append(H[j][i])
-        hs.sort()
-        levels.append(min(hs[0] + 0.2, hs[int(len(hs) * 0.35)]))
+        levels.append(min(hs) + 0.2)
     verts = []; drive = []
     for j in range(ny + 1):
         y = ly0 + j * sy
@@ -959,8 +987,8 @@ def build_lot(G, SL, MAT):
             conc = clamp01(lap(i, j, 6) / 0.09); convex = clamp01(-lap(i, j, 6) / 0.09)
             conc_s = clamp01(lap(i, j, 2) / 0.04)
             e = min(x - lx0, lx1 - x, y - ly0, ly1 - y)
-            chw = CH[j][i] ** 2.2                       # 물은 물길 바닥에만, 둑은 젖음·이끼
-            water = clamp01(0.95 * chw + 0.8 * TR[j][i] ** 1.5 + 0.75 * conc + 0.45 * shore)
+            chw = CH[j][i] ** 2.2                       # 물은 물길 바닥에만, 둑은 젖음
+            water = clamp01(0.95 * chw + 0.75 * conc + 0.45 * shore)
             shelter = clamp01(0.22 + 1.25 * conc + 0.4 * conc_s + 1.1 * shore + 0.7 * CH[j][i] * (1 - chw) - 1.1 * convex
                               + 0.25 * (1 - smoothstep(0.0, 1.5, e)))
             verts.append((x, y, h)); drive.append((water, shelter, 1.0, clamp01(fill)))
@@ -972,8 +1000,10 @@ def build_lot(G, SL, MAT):
                 faces.append((a, a + 1, a + nx + 2)); faces.append((a, a + nx + 2, a + nx + 1))
             else:
                 faces.append((a, a + 1, a + nx + 1)); faces.append((a + 1, a + nx + 2, a + nx + 1))
-    o = lib.mesh_obj('GR_vacant', verts, faces, G, MAT['lot'])
+    o = lib.mesh_obj('GR_vacant', verts, faces, G, MAT['turf'])
     lib.write_drive(o.data, drive); lib.tag(o, 'ground')
+    zs = [v[2] for k, v in enumerate(verts) if drive[k][3] <= 0.0]
+    print('park lawn relief', round(min(zs), 3), round(max(zs), 3), 'pool levels', [round(L, 3) for L in levels])
 
     def hz(x, y):
         fi = (x - lx0) / sx; fj = (y - ly0) / sy
@@ -982,176 +1012,43 @@ def build_lot(G, SL, MAT):
         z = lambda ii, jj: verts[jj * (nx + 1) + ii][2]
         return (z(i, j) * (1 - tx) + z(i + 1, j) * tx) * (1 - ty) + (z(i, j + 1) * (1 - tx) + z(i + 1, j + 1) * tx) * ty
 
-    def in_pool(x, y):
-        for ((cx, cy), r), L in zip(POOLS, levels):
-            if math.hypot(x - cx, y - cy) < 1.7 * r and hz(x, y) <= L + 0.005:
-                return True
-        return False
-
-    build_rubble(G, MAT, hz, in_pool)
-    build_foundation(G, MAT, hz)
-    # 공사 가림막 기초(프리캐스트 블록 1.5 m), 남쪽 문 8 m·서쪽 일부 빠짐
-    fV, fF = rect_rings([(0.72, 0.2, 0.36), (0.75, 0.23, 0.33), (0.75, 0.23, -0.08)])
-    def fmask(co, n):
-        return (0.55 * smoothstep(0.5, 0.95, n.z) + 0.25 * (1 - smoothstep(-0.05, 0.12, co.z)), 0.4 + 0.4 * (1 - smoothstep(0.0, 0.2, co.z)),
-                1 - 0.5 * (1 - smoothstep(-0.05, 0.15, co.z)))
-    fme = proto_mesh('GR_footing', fV, fF, MAT['concrete'], lambda co: (co[0] + co[1] * 0.37, co[2]), fmask)
-    k = 0
-    for (ax, ay), (bx, by) in (((lx0 + 0.25, ly0 + 0.25), (lx1 - 0.25, ly0 + 0.25)), ((lx1 - 0.25, ly0 + 0.25), (lx1 - 0.25, ly1 - 0.25)),
-                               ((lx1 - 0.25, ly1 - 0.25), (lx0 + 0.25, ly1 - 0.25)), ((lx0 + 0.25, ly1 - 0.25), (lx0 + 0.25, ly0 + 0.25))):
-        L = math.hypot(bx - ax, by - ay); n = int(L / 1.53)
-        ang = math.atan2(by - ay, bx - ax)
-        for i in range(n):
-            t = (i + 0.5) / n; x = ax + (bx - ax) * t; y = ay + (by - ay) * t
-            if abs(y - (ly0 + 0.25)) < 0.1 and 40.5 < x < 48.5:      # 공사 차량 문
-                continue
-            if abs(x - (lx0 + 0.25)) < 0.1 and 8.0 < y < 15.5:      # 쓰러져 빠진 구간
-                continue
-            place(f'GR_footing.{k:03d}', fme, G, (x, y, 0.0), ang + random.Random(k).uniform(-0.02, 0.02), surface='wall'); k += 1
-    for side, (a, b2) in {'S': ((lx0, ly0), (lx1, ly0)), 'E': ((lx1, ly0), (lx1, ly1)), 'N': ((lx1, ly1), (lx0, ly1)), 'W': ((lx0, ly1), (lx0, ly0))}.items():
-        e = slot(SL, f'SLOT_hoarding_{side}', ((a[0] + b2[0]) / 2, (a[1] + b2[1]) / 2, 0.36),
-                 math.atan2(b2[1] - a[1], b2[0] - a[0]), size=(math.hypot(b2[0] - a[0], b2[1] - a[1]), 2.5))
-    slot(SL, 'SLOT_hoarding_gate', (44.5, ly0, 0.0), 0.0, size=(8.0, 2.5))
+    build_park_path(G, MAT, hz)
 
 
-FOUNDATION = [[(31.5, 18.5), (45.0, 18.5), (45.0, 31.0), (31.5, 31.0)],
-              [(48.5, -18.5), (62.5, -18.5), (62.5, -5.0), (48.5, -5.0)]]
-
-
-def build_foundation(G, MAT, hz):
-    """철거된 건물의 기초 벽 흔적(두께 0.25 m, 높이 0.1~0.7 m, 부서진 윗면). 물이 고인 옛 지하 모서리가 생긴다."""
-    rnd = random.Random(2041)
+def build_park_path(G, MAT, hz, step=0.5):
+    """포켓 공원 닫힌 산책로: 폭 PARK_PATH_W 보도블록(NW_pavers), 잔디 + 0.02 m. 꺾이는 점은 마이터로 잇고, 단면은 3 점
+    (가운데 점이 있어야 둔덕 위에서 잔디가 길 가운데로 솟지 않는다)."""
+    P = PARK_PATH; n = len(P); hw = PARK_PATH_W / 2
+    tang = []
+    for k in range(n):
+        (ax, ay), (bx, by) = P[k], P[(k + 1) % n]
+        L = math.hypot(bx - ax, by - ay); tang.append(((bx - ax) / L, (by - ay) / L, L))
+    sec = []                                          # (중심 x, y, 왼쪽 오프셋 x, y)
+    for k in range(n):
+        tx, ty, L = tang[k]
+        px, py, _ = tang[k - 1]
+        nxa, nya = -py, px; nxb, nyb = -ty, tx        # 앞·뒤 변의 왼쪽 법선
+        mx, my = nxa + nxb, nya + nyb; ml = math.hypot(mx, my); mx, my = mx / ml, my / ml
+        k_m = hw / max(0.3, mx * nxb + my * nyb)      # 마이터 길이
+        m = max(1, int(math.ceil(L / step)))
+        for i in range(m):
+            t = i / m
+            cx, cy = P[k][0] + tx * L * t, P[k][1] + ty * L * t
+            ox, oy = (mx * k_m, my * k_m) if i == 0 else (nxb * hw, nyb * hw)
+            sec.append((cx, cy, ox, oy))
     V = []; F = []
-    th = 0.25
-    for poly in FOUNDATION:
-        n = len(poly)
-        for k in range(n):
-            (ax, ay), (bx, by) = poly[k], poly[(k + 1) % n]
-            L = math.hypot(bx - ax, by - ay); tx, ty = (bx - ax) / L, (by - ay) / L; nx, ny = -ty * th / 2, tx * th / 2
-            s0 = 0.0
-            while s0 < L - 0.3:
-                seg = min(L - s0, rnd.uniform(1.0, 3.2))
-                if rnd.random() < 0.78:
-                    p0 = (ax + tx * s0, ay + ty * s0); p1 = (ax + tx * (s0 + seg), ay + ty * (s0 + seg))
-                    zb = min(hz(*p0), hz(*p1)) - 0.35
-                    h0 = hz(*p0) + rnd.uniform(0.08, 0.7); h1 = hz(*p1) + rnd.uniform(0.08, 0.7)
-                    b0 = len(V)
-                    for (px, py), zt in ((p0, h0), (p1, h1)):
-                        V += [(px - nx, py - ny, zb), (px + nx, py + ny, zb), (px + nx, py + ny, zt), (px - nx, py - ny, zt + rnd.uniform(-0.06, 0.06))]
-                    F += [(b0 + 0, b0 + 1, b0 + 2, b0 + 3)[::-1], (b0 + 4, b0 + 5, b0 + 6, b0 + 7),
-                          (b0 + 0, b0 + 4, b0 + 7, b0 + 3), (b0 + 1, b0 + 2, b0 + 6, b0 + 5),
-                          (b0 + 3, b0 + 7, b0 + 6, b0 + 2), (b0 + 0, b0 + 1, b0 + 5, b0 + 4)]
-                s0 += seg + rnd.uniform(0.0, 0.25)
-    o = lib.mesh_obj('GR_foundation', V, F, G, MAT['concrete'], smooth=False)
-    lib.recalc_normals(o.data)
-    lib.box_uv(o.data, 1.0)
-    lib.write_mask(o, lambda co, nn: (0.85 * smoothstep(0.55, 0.9, nn.z) + 0.45 * (1 - smoothstep(-0.05, 0.25, co.z - hz(co.x, co.y))),
-                                      0.5 + 0.45 * (1 - smoothstep(0.0, 0.3, co.z - hz(co.x, co.y))),
-                                      1 - 0.6 * (1 - smoothstep(-0.05, 0.3, co.z - hz(co.x, co.y)))))
-    lib.tag(o, 'wall')
+    for cx, cy, ox, oy in sec:
+        for s_ in (1.0, 0.0, -1.0):
+            x, y = cx + ox * s_, cy + oy * s_
+            V.append((x, y, hz(x, y) + 0.02))
+    N = len(sec)
+    for k in range(N):
+        a = 3 * k; b2 = 3 * ((k + 1) % N)
+        F.append((a, a + 1, b2 + 1, b2)); F.append((a + 1, a + 2, b2 + 2, b2 + 1))
+    o = lib.mesh_obj('GR_park_path', V, F, G, MAT['pavers'])
+    lib.write_drive(o.data, [(0.12, 0.3 + 0.3 * (1 - smoothstep(0.0, 0.4, abs(path_dist(v[0], v[1]) - hw))), 1.0, 0.0) for v in V])
+    lib.tag(o, 'ground')
     return o
-
-
-def chunk_mesh(seed, flat):
-    """각진 잡석(볼록 껍질). 데스 스트랜딩처럼 둥근 돌이 아니라 모서리가 선 블록."""
-    import bmesh
-    rnd = random.Random(seed)
-    bm = bmesh.new()
-    for _ in range(13):
-        v = Vector((rnd.gauss(0, 1), rnd.gauss(0, 1), rnd.gauss(0, 1))).normalized()
-        v.x *= rnd.uniform(0.8, 1.25); v.y *= rnd.uniform(0.7, 1.1); v.z *= flat * rnd.uniform(0.75, 1.1)
-        bm.verts.new(v * 0.5)
-    res = bmesh.ops.convex_hull(bm, input=list(bm.verts))
-    for el in res.get('geom_interior', []) + res.get('geom_unused', []):
-        if isinstance(el, bmesh.types.BMVert) and el.is_valid:
-            bm.verts.remove(el)
-    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-    zmin = min(v.co.z for v in bm.verts)
-    for v in bm.verts:
-        v.co.z -= zmin
-    V = [tuple(v.co) for v in bm.verts]
-    idx = {v: i for i, v in enumerate(bm.verts)}
-    F = [tuple(idx[v] for v in f.verts) for f in bm.faces]
-    h = max(v[2] for v in V)
-    bm.free()
-    return V, F, h
-
-
-def build_rubble(G, MAT, hz, in_pool):
-    """바위 3단 스케일(#6): 대형 깨진 슬래브 3, 중형 잡석 군집, 소형 잔돌 다수(링크 복제)."""
-    rnd = random.Random(1267)
-    protos = []
-    for k in range(6):
-        V, F, h = chunk_mesh(100 + k, (0.45, 0.6, 0.75, 0.5, 0.9, 0.35)[k])
-
-        def m(co, n, h=h):
-            top = smoothstep(0.45, 0.9, n.z) * smoothstep(0.3 * h, 0.75 * h, co.z)
-            low = 1 - smoothstep(0.0, 0.35 * h, co.z)
-            return (0.75 * top + 0.35 * low, 0.5 + 0.45 * low, 1 - 0.55 * low)
-
-        me = proto_mesh(f'GR_rubble_{k}', V, F, MAT['concrete'], None, m)
-        lib.box_uv(me, 1.0)
-        protos.append((me, h))
-    # 대형: 철거된 바닥 슬래브 조각(고유 메시, 기울어 반쯤 묻힘) + 삐져나온 철근
-    slabs = [((50.5, -4.5), 3.3, 0.35, (0.04, -0.07)), ((33.8, 13.0), 2.7, 0.8, (0.14, 0.03)), ((58.5, 8.5), 2.1, 2.1, (-0.05, 0.26)),
-             ((41.5, 37.0), 1.6, -0.5, (0.2, -0.1))]
-    rebar_V, rebar_F = rect_rings([(0.011, 0.011, 0.5), (0.011, 0.011, 0.0)])
-    rme = proto_mesh('GR_rebar', rebar_V, rebar_F, MAT['iron'], lambda co: (30.0 + co[0], co[2]), lambda co, n: (0.0, 0.45, 0.9))
-    centers = []
-    for si, ((cx, cy), r, rz, (tx, ty)) in enumerate(slabs):
-        rs = random.Random(si * 7 + 3)
-        n = 9
-        poly = [(r * rs.uniform(0.7, 1.15) * math.cos(2 * math.pi * i / n + rs.uniform(-0.2, 0.2)),
-                 r * 0.75 * rs.uniform(0.7, 1.15) * math.sin(2 * math.pi * i / n + rs.uniform(-0.2, 0.2))) for i in range(n)]
-        v2, tris = lib.cdt([poly], [], lambda x, y, poly=poly: lib.point_in_poly(x, y, poly))
-        th = 0.24
-        V = [(x, y, th) for x, y in v2] + [(x, y, 0.0) for x, y in v2]
-        F = [tuple(f) for f in tris] + [tuple(reversed([i + len(v2) for i in f])) for f in tris]
-        # 옆면(외곽선 순서대로)
-        bidx = [min(range(len(v2)), key=lambda k: (v2[k][0] - px) ** 2 + (v2[k][1] - py) ** 2) for px, py in poly]
-        for i in range(n):
-            a, b2 = bidx[i], bidx[(i + 1) % n]
-            F.append((a, a + len(v2), b2 + len(v2), b2)[::-1])
-        z = hz(cx, cy) - 0.1
-        mw = Matrix.Translation((cx, cy, z)) @ Euler((tx, ty, rz)).to_matrix().to_4x4()
-        VW = [tuple(mw @ Vector(v)) for v in V]
-        # 묻힘: 지형 아래로 너무 들어간 꼭짓점은 그대로(지형이 덮는다)
-        o = lib.mesh_obj(f'GR_slab_{si}', VW, F, G, MAT['concrete'], smooth=False, mask_uv=True)
-        lib.recalc_normals(o.data)
-        lib.box_uv(o.data, 1.0)
-        lib.write_mask(o, lambda co, nn: (0.8 * smoothstep(0.6, 0.95, nn.z) * smoothstep(0.42, 0.7, n2(co.x, co.y, 0.9, 81.0) * 0.5 + 0.5)
-                                          + 0.4 * (1 - smoothstep(-0.1, 0.15, co.z - hz(co.x, co.y))),
-                                          0.55 + 0.4 * (1 - smoothstep(0.0, 0.2, co.z - hz(co.x, co.y))),
-                                          1 - 0.6 * (1 - smoothstep(-0.05, 0.2, co.z - hz(co.x, co.y)))))
-        lib.tag(o, 'rock')
-        centers.append(((cx, cy), r))
-        for k in range(4):
-            a = rs.uniform(0, 2 * math.pi); rr = r * rs.uniform(0.55, 0.85)
-            px, py = cx + rr * math.cos(a), cy + rr * 0.75 * math.sin(a)
-            place(f'GR_rebar.{si}{k}', rme, G, (px, py, hz(px, py) + 0.05), rs.uniform(0, 6.3), rs.uniform(-0.7, 0.7), rs.uniform(-0.7, 0.7),
-                  (1, 1, rs.uniform(0.5, 1.3)), surface='metal')
-    # 군집: 중심(더미·슬래브·물가) 둘레에 중형 1 : 소형 여러 개
-    clusters = [(c, r * 1.3, 18, 34) for (c, r, _) in MOUNDS] + [(c, r * 1.6, 7, 14) for c, r in centers]
-    clusters += [((x, y), 1.2, 1, 6) for (x, y) in CHANNEL[1:-1]]
-    clusters += [((39.5, -15.5), 2.4, 5, 12), ((50.5, -13.0), 2.6, 6, 14), ((47.5, -2.0), 1.8, 3, 8)]   # 공사 문 앞 근경
-    clusters += [((rnd.uniform(LOT[0] + 2, LOT[2] - 2), rnd.uniform(LOT[1] + 2, LOT[3] - 2)), 2.5, 2, 6) for _ in range(14)]
-    k = 0
-    for (cx, cy), rad, nmed, nsmall in clusters:
-        for size_cls, count in (('m', nmed), ('s', nsmall)):
-            for _ in range(count):
-                a = rnd.uniform(0, 2 * math.pi); d = rad * math.sqrt(rnd.random()) * (0.8 if size_cls == 'm' else 1.2)
-                x = cx + d * math.cos(a); y = cy + d * math.sin(a)
-                if _rect_d(LOT, x, y) > -0.8:
-                    continue
-                if in_pool(x, y) and rnd.random() > 0.12:
-                    continue
-                me, h = protos[rnd.randrange(len(protos))]
-                s = rnd.uniform(0.4, 1.1) if size_cls == 'm' else rnd.uniform(0.08, 0.24)
-                z = hz(x, y) - h * s * rnd.uniform(0.2, 0.45)
-                place(f'GR_rubble.{k:04d}', me, G, (x, y, z), rnd.uniform(0, 6.3), rnd.uniform(-0.35, 0.35), rnd.uniform(-0.35, 0.35),
-                      (s * rnd.uniform(0.85, 1.2), s * rnd.uniform(0.85, 1.2), s), surface='rock')
-                k += 1
-    print('rubble instances', k)
 
 
 # ═════════════════════════════ 노면 표시 ═════════════════════════════

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PRESETS, getPresets, lerp, srgbToLinear, linearToSrgb } from '../public/src/nowhere/weather.js';
+import { PRESETS, getPresets, lerp, srgbToLinear, linearToSrgb, composeState, WEATHER_NAMES, weatherNamesFor, defaultWeather, parseHexLinear, LOOK_KEYS, INTERIOR_LOOK } from '../public/src/nowhere/weather.js';
 
 test('(a) PRESETS 5종(overcast, rain, dusk, night, snow)이 존재하고 키 집합이 모두 동일하다', () => {
   const names = ['overcast', 'rain', 'dusk', 'night', 'snow'];
@@ -50,7 +50,7 @@ test('(d) getPresets: 성수는 PRESETS 그대로, DS2 는 같은 키 집합에 
   const baseKeys = Object.keys(PRESETS.overcast).sort();
   for (const n of Object.keys(PRESETS)) {
     assert.deepEqual(Object.keys(ds2[n]).sort(), baseKeys, `ds2 ${n} 프리셋의 키 집합이 다름`);
-    assert.equal(PRESETS[n].sunHaze, 0, `성수 ${n} 는 태양 헤이즈가 없어야 함`);
+    if (n !== 'clear') assert.equal(PRESETS[n].sunHaze, 0, `성수 ${n} 는 태양 헤이즈가 없어야 함`);   // 맑음만 해 주변이 살짝 번진다(0.15)
   }
   assert.ok(ds2.overcast.sunHaze > 0.5, 'DS2 흐림은 역광 태양 헤이즈가 보여야 함');
   assert.ok(ds2.overcast.uFogK < PRESETS.overcast.uFogK, 'DS2 계곡 연무는 성수보다 높이까지 차야 함(uFogK 작게)');
@@ -124,4 +124,40 @@ test('(h) parseTimeParam·timeLabel: URL time=21.5 / 21:30, 시간대 이름', a
   assert.equal(timeLabel(18.5), '18:30 · 황혼');
   assert.equal(timeLabel(21.75), '21:45 · 밤');
   assert.equal(timeLabel(5.5), '05:30 · 새벽');
+});
+
+const srgb8 = (hex) => parseHexLinear(hex).map((c) => Math.round(linearToSrgb(c) * 255));
+const sameColor = (a, b) => srgb8(a).every((v, i) => Math.abs(v - srgb8(b)[i]) <= 1);
+
+test('(k) 맑음: 키 집합이 같고, 14:00 합성 = 맑음 프리셋, 구름 덮임은 기상이 정한다', () => {
+  assert.deepEqual(Object.keys(PRESETS.clear).sort(), Object.keys(PRESETS.overcast).sort());
+  const s = composeState(PRESETS, 'clear', 14);
+  for (const k of ['uWet', 'uFogB', 'uFogK', 'exposure', 'saturation', 'sunIntensity', 'hemiIntensity', 'envIntensity', 'cloudCover', 'sunHaze']) {
+    assert.ok(Math.abs(s[k] - PRESETS.clear[k]) < 1e-9, `${k}: ${s[k]} ≠ ${PRESETS.clear[k]}`);
+  }
+  for (const k of ['skyHorizon', 'skyZenith', 'fogColor', 'fogFarColor', 'sunColor']) {
+    assert.ok(sameColor(s[k], PRESETS.clear[k]), `${k}: ${s[k]} ≠ ${PRESETS.clear[k]}`);
+  }
+  assert.equal(composeState(PRESETS, 'overcast', 14).cloudCover, 0);
+  const night = composeState(PRESETS, 'clear', 21.5);
+  assert.equal(night.cloudCover, PRESETS.clear.cloudCover);
+  assert.ok(night.sunIntensity < PRESETS.clear.sunIntensity * 0.5, '밤에는 해가 약하다');
+  assert.ok(night.uNight > 0.5);
+  // 낮 룩 키(노출 더하기 · 채도 곱 · 그레이딩): 14:00 = 맑음 프리셋, 맑은 밤 = 상수(실내 룩), 맑음이 아닌 기상은 언제나 상수
+  for (const k of LOOK_KEYS) {
+    assert.ok(Math.abs(s[k] - PRESETS.clear[k]) < 1e-9, `맑음 14:00 ${k}`);
+    assert.ok(Math.abs(composeState(PRESETS, 'clear', 22)[k] - INTERIOR_LOOK[k]) < 1e-9, `맑은 밤 ${k}`);
+    for (const n of ['overcast', 'rain', 'dusk', 'night', 'snow']) assert.equal(PRESETS[n][k], INTERIOR_LOOK[k], `${n}.${k} = 상수`);
+    for (const w of ['overcast', 'rain', 'snow']) for (const h of [7, 14, 18.5, 22]) assert.ok(Math.abs(composeState(PRESETS, w, h)[k] - INTERIOR_LOOK[k]) < 1e-9, `${w}@${h} ${k}`);
+  }
+});
+
+test('(l) 월드별 기상 목록 · 기본 기상: 성수 = 맑음 포함 · 기본 맑음, DS2 = 그대로', () => {
+  assert.deepEqual(weatherNamesFor('seongsu'), ['clear', 'overcast', 'rain', 'snow']);
+  assert.deepEqual(weatherNamesFor('ds2'), ['overcast', 'rain', 'snow']);
+  assert.equal(defaultWeather('seongsu'), 'clear');
+  assert.equal(defaultWeather('ds2'), 'overcast');
+  assert.deepEqual(WEATHER_NAMES, weatherNamesFor('seongsu'));
+  assert.equal(getPresets('ds2').overcast.sunHaze, 1.0, 'DS2 덮어쓰기 유지');
+  for (const n of ['overcast', 'rain', 'dusk', 'night', 'snow']) assert.equal(PRESETS[n].cloudCover, 0, n);
 });

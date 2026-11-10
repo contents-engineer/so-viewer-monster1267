@@ -6,6 +6,7 @@ import { clockText, timeLabel } from '../public/src/nowhere/weather.js';
 test('(a) 문구: 제목 · 시각 글자 · 기상 이름', () => {
   assert.deepEqual(displayLines('07:05', 'rain'), [DISPLAY_TITLE, '07:05', '비']);
   assert.deepEqual(displayLines('21:30', 'overcast'), ['HAUS NOWHERE SEOUL', '21:30', '흐림']);
+  assert.deepEqual(displayLines('14:00', 'clear'), ['HAUS NOWHERE SEOUL', '14:00', '맑음']);
   assert.equal(displayLines('00:00', 'snow')[2], '눈');
   assert.equal(displayLines('00:00', 'fog')[2], 'fog', '모르는 기상은 이름 그대로');
 });

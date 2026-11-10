@@ -14,6 +14,7 @@ const GradeShader = {
     uSaturation: { value: 0.78 },
     uBlackLift: { value: 0.014 },
     uShadowTint: { value: new THREE.Color('#1F3A3F') },
+    uShadowMix: { value: 0.22 },   // 섀도 청록 감광 세기(기상 프리셋 gradeShadow, 맑은 낮은 0)
     uHighlightTint: { value: new THREE.Color('#F4F1E6') },
     uGrain: { value: 0.016 },
     uVignette: { value: 0.22 },
@@ -32,6 +33,7 @@ const GradeShader = {
     uniform float uSaturation;
     uniform float uBlackLift;
     uniform vec3 uShadowTint;
+    uniform float uShadowMix;
     uniform vec3 uHighlightTint;
     uniform float uGrain;
     uniform float uVignette;
@@ -53,7 +55,7 @@ const GradeShader = {
       float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
       float shMask = 1.0 - smoothstep(0.0, 0.35, lum);
       float hiMask = smoothstep(0.35, 1.15, lum);
-      col = mix(col, col * (uShadowTint * 2.1), shMask * 0.22);
+      col = mix(col, col * (uShadowTint * 2.1), shMask * uShadowMix);
       col *= mix(vec3(1.0), uHighlightTint, hiMask * 0.18);
       col = col + vec3(uBlackLift) * (1.0 - smoothstep(0.0, 0.25, lum));
 
