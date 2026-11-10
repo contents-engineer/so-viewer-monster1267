@@ -13,6 +13,7 @@ import { approachFor } from './tour-config.js';
 import { buildFlightPath } from './flight.js';
 import { SEONGSU_INTRO } from './intro-path.js';
 import { createInterior } from './interior.js';
+import { createPerfHud } from './perf-hud.js';
 
 async function boot() {
   const canvas = document.getElementById('nw-canvas');
@@ -222,6 +223,13 @@ async function boot() {
     exteriorScene: scene,
     isHelpOpen: () => help.isOpen(),
   });
+  // 성능 표시: P 키로 켜고 끈다. 키보드 없는 기기(아이패드 등)는 주소에 ?stats=1
+  // 텍스처 추정은 외관 · 실내 장면을 함께 센다(실내에 있어도 외관 텍스처는 GPU 에 남아 있음 — 메모리 한도 판단용)
+  const perf = createPerfHud({ renderer, getScenes: () => [scene, interior.scene], tier: quality.tier });
+  window.addEventListener('keydown', (e) => {
+    if ((e.key === 'p' || e.key === 'P') && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat) perf.toggle();
+  });
+  if (params.get('stats') === '1') perf.toggle(true);
   const scenario = createScenarioRunner({
     adapters: {
       // 끝까지 재생 · 사용자 입력으로 건너뜀 → 건물 선택으로, 다른 동작이 끊음 → 투어 종료
@@ -391,6 +399,7 @@ async function boot() {
 
     renderer.info.reset();
     post.composer.render();
+    perf.frame(performance.now());   // 꺼져 있으면 바로 돌아간다
   }
 
   animate();
