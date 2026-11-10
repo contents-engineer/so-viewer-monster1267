@@ -12,7 +12,8 @@ import { approachFor } from './tour-config.js';
 import { floorOrder, shortLabel, elevatorButtons, inArea, createAreaTrigger, isFloorChain, isCeilingChain } from './inner-nav.js';
 import { createTourPlayer } from './inner-tour.js';
 import { createWindowView, hasWindowView, viewKey, interiorLighting, VIEW_SETTLE_MS } from './inner-view.js';
-import { createDisplayScreen, worldHourDate } from './inner-display.js';
+import { createDisplayScreen, nowClockText } from './inner-display.js';
+import { clockText } from './weather.js';
 
 export const INNER_LAYOUT_URL = 'assets/nowhere-inner/inner-layout.json';
 const FADE_MS = 600;
@@ -36,7 +37,7 @@ function nameChain(n) {
   return s;
 }
 
-export function createInterior({ renderer, camera, camCtrl, post, world, quality, modal, weather = null, exteriorScene, onChange = null }) {
+export function createInterior({ renderer, camera, camCtrl, post, world, quality, modal, weather = null, exteriorScene, isHelpOpen = () => false, onChange = null }) {
   const mobile = quality.tier === 'mobile';
   const scene = new THREE.Scene();
   scene.name = 'NW_Interior';
@@ -105,11 +106,11 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
       caption.hidden = !text;
     },
     // 첫 지점은 비행 대신 짧은 화면 전환 컷 — 사용자가 걸어간 어느 자리에서 시작해도 직선 비행이 전시물(1F 도시 모형 등)을 뚫지 않게
-    cut: async ({ pos, target }) => {
+    cut: async ({ pos, target, isCurrent }) => {
       camCtrl.setWalkMode(false);   // 비행(flyTo)처럼 둘러보기 시작에 보행을 끈다 — 컷 도중 멈춰도 같은 상태
       await fadeTo(true, '', TOUR_CUT_MS);
       if (busy) return;   // 그사이 층 이동 · 나가기가 화면 전환을 넘겨받았다(밝히지 않는다)
-      if (tour.isPlaying()) camCtrl.placeAt(pos, target);   // 입력으로 멈췄으면 옮기지 않고 그 자리에서 밝힌다
+      if (isCurrent()) camCtrl.placeAt(pos, target);   // 입력으로 멈췄으면(또는 다시 시작했으면) 옮기지 않고 그 자리에서 밝힌다
       await fadeTo(false, '', TOUR_CUT_MS);
     },
   });
@@ -119,8 +120,9 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     if (!active || busy || !floorDef?.tour?.length) return;
     const floorId = floorDef.id;
     tour.play(floorDef.tour).then((r) => {
-      // 끝까지 보면 마지막 지점에서 보행으로 돌아간다(지점은 전시물 밖 — 보행이 지면 눈높이로 붙임). 입력으로 멈췄으면(stopped) 그 자리에서 보행 꺼진 채
-      if (r === 'done' && active && !busy && floorDef?.id === floorId && !modal.isOpen()) camCtrl.setWalkMode(true);
+      // 끝까지 보면 마지막 지점에서 보행으로 돌아간다(지점은 전시물 밖 — 보행이 지면 눈높이로 붙임). 입력으로 멈췄으면(stopped) 그 자리에서 보행 꺼진 채.
+      // 모달 · 도움말이 떠 있으면 켜지 않는다(읽는 동안 그 뒤에서 시점이 눈높이로 바뀌고 보행 안내가 뜨지 않게)
+      if (r === 'done' && active && !busy && floorDef?.id === floorId && !modal.isOpen() && !isHelpOpen()) camCtrl.setWalkMode(true);
     });
   });
   exitBtn.addEventListener('click', () => exit());
@@ -441,7 +443,7 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     if (!active) return;
     applyLighting();
     // 1F 디스플레이는 월드 시각(HUD 시간 슬라이더와 같은 값) · 기상을 보여 준다
-    if (display && floorDef?.id === '1') display.update(weather ? worldHourDate(weather.getHour()) : new Date());
+    if (display && floorDef?.id === '1') display.update(weather ? clockText(weather.getHour()) : nowClockText());
     // 기상 · 시각이 바뀌면 전환이 끝난 뒤(VIEW_SETTLE_MS) 창밖을 다시 캡처한다
     if (weather && !busy && hasWindowView(floorDef)) {
       const k = viewKey(weather.getWeather(), weather.getHour());

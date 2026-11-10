@@ -305,8 +305,8 @@ export function parseTimeParam(v) {
   return h >= 0 && h <= 24 ? h : null;
 }
 
-/** '18:30 · 황혼' 형식의 시각·시간대 이름. */
-export function timeLabel(hour) {
+/** 시각 hour(0~24 소수) → 'HH:MM'(분 반올림, 60 분은 다음 시, 24 는 24:00). HUD(timeLabel)와 1F 디스플레이가 같이 쓴다. */
+export function clockText(hour) {
   const h = clampHour(hour);
   let hh = Math.floor(h);
   let mm = Math.round((h - hh) * 60);
@@ -314,8 +314,14 @@ export function timeLabel(hour) {
     hh += 1;
     mm = 0;
   }
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+}
+
+/** '18:30 · 황혼' 형식의 시각·시간대 이름. */
+export function timeLabel(hour) {
+  const h = clampHour(hour);
   const name = h < 5 ? '밤' : h < 7 ? '새벽' : h < 17 ? '낮' : h < 19.5 ? '황혼' : '밤';
-  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} · ${name}`;
+  return `${clockText(h)} · ${name}`;
 }
 
 /**

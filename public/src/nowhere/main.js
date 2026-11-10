@@ -218,6 +218,7 @@ async function boot() {
     modal,
     weather,
     exteriorScene: scene,
+    isHelpOpen: () => help.isOpen(),
   });
   const scenario = createScenarioRunner({
     adapters: {

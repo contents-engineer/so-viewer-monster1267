@@ -86,7 +86,7 @@ test('(e) cut 이 있으면 첫 지점은 비행 대신 cut 으로 옮기고(지
     cut: (to) => { cuts.push(to); return Promise.resolve(); },
   });
   assert.equal(await p.play(stops), 'done');
-  assert.deepEqual(cuts, [{ pos: stops[0].pos, target: stops[0].target }]);
+  assert.deepEqual(cuts.map(({ pos, target }) => ({ pos, target })), [{ pos: stops[0].pos, target: stops[0].target }]);
   assert.equal(cam.flights.length, stops.length - 1, '첫 구간은 비행하지 않는다');
   assert.deepEqual(cam.flights[0].path.points, [stops[0].pos, stops[1].pos]);
   assert.ok(cam.flights.every((f) => f.opts.interruptible === true));
@@ -114,4 +114,29 @@ test('(f) cut 도중 stop() 이면 stopped, 비행 없이 자막을 지우고 �
   assert.equal(cam.flights.length, 0);
   assert.equal(captions.at(-1), '');
   assert.equal(p.isPlaying(), false);
+});
+
+test('(g) cut 의 isCurrent: 컷 도중 stop() 뒤 다시 play() 하면 앞선 컷은 false(isPlaying 은 true) — 옛 컷이 카메라를 옮기지 않게', async () => {
+  const cam = fakeCam();
+  const cuts = [];
+  const p = createTourPlayer({
+    camCtrl: cam,
+    getView: () => start,
+    showCaption: () => {},
+    wait: () => Promise.resolve(),
+    cut: (to) => new Promise((r) => cuts.push({ ...to, release: r })),
+  });
+  const first = p.play(stops);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(cuts[0].isCurrent(), true);
+  p.stop();
+  const second = p.play(stops);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(p.isPlaying(), true);
+  assert.equal(cuts[0].isCurrent(), false, '앞선 재생의 컷');
+  assert.equal(cuts[1].isCurrent(), true, '지금 재생의 컷');
+  cuts[0].release();
+  assert.equal(await first, 'stopped');
+  cuts[1].release();
+  assert.equal(await second, 'done');
 });

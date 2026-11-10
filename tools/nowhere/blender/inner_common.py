@@ -2,6 +2,7 @@
 # inner_build.py(파이프라인) · inner_floors.py(층 정의)가 쓴다. 좌표: Blender Z-up m, 층 원점 = 바닥 중앙 부근. 웹(Three.js)은 (x, z, −y).
 # 노드 이름 규칙(웹 interior.js 가 씀): 바닥 IN_floor*, 천장 IN_ceiling*, 벽 · 유리 · 기둥 · 코어 IN_*, 전시물 EX_*.
 import bpy, bmesh, os, math
+import numpy as np
 from mathutils import Vector, Matrix
 
 ROOT = os.environ.get('NW_ROOT') or os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..'))
@@ -124,9 +125,12 @@ def gltf_output_group():
     return g
 
 
-def bake_floor_ao(floor, tag, size=1024, samples=48, distance=2.5):
+def bake_floor_ao(floor, tag, size=1024, samples=48, distance=4.5, gamma=1.8):
     """바닥(IN_floor 평면)에 AO 를 굽는다: 두 번째 UV 'AO'(바닥 전체 0…1) + 이미지 → glTF occlusionTexture(texCoord 1).
-    벽 · 기둥 · 전시물 아래 접지 그늘만 굽고, 실시간 조명(반구광 · 방향광)은 웹에서 그대로 쓴다."""
+    벽 · 기둥 · 전시물 아래 접지 그늘만 굽고, 실시간 조명(반구광 · 방향광)은 웹에서 그대로 쓴다.
+    웹 aoMap 은 간접광에만 곱해지고 세기를 1 넘게 올리면 음수가 되므로, 그늘의 넓이 · 진하기는 여기서 정한다:
+    천장은 굽기에서 빼고(천고 4 m 보다 넓은 거리에서도 바닥 전체가 고르게 어두워지지 않게) 거리를 넓힌 뒤,
+    감마(gamma > 1)로 중간 톤을 진하게 한다(1 = 열린 바닥은 그대로 1)."""
     sc = bpy.context.scene
     sc.render.engine = 'CYCLES'
     sc.cycles.samples = samples
@@ -158,7 +162,27 @@ def bake_floor_ao(floor, tag, size=1024, samples=48, distance=2.5):
     bpy.ops.object.select_all(action='DESELECT')
     floor.select_set(True)
     bpy.context.view_layer.objects.active = floor
-    bpy.ops.object.bake(type='AO', margin=4, use_clear=True, uv_layer='AO')   # 굽기는 활성 UV(UVMap)를 쓰므로 'AO' 로 지정
+    ceil = bpy.data.objects.get('IN_ceiling')
+    bsdf = next(n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED')
+    normal_src = [l.from_socket for l in bsdf.inputs['Normal'].links]
+    for l in list(bsdf.inputs['Normal'].links):
+        nt.links.remove(l)   # 바닥 노멀맵은 굽기 동안 끊는다(AO 에 타일 격자가 찍히지 않게) — 끝나면 다시 잇는다
+    if ceil:
+        ceil.hide_render = True
+    try:
+        bpy.ops.object.bake(type='AO', margin=4, use_clear=True, uv_layer='AO')   # 굽기는 활성 UV(UVMap)를 쓰므로 'AO' 로 지정
+    finally:
+        if ceil:
+            ceil.hide_render = False
+        for s in normal_src:
+            nt.links.new(s, bsdf.inputs['Normal'])
+    px = np.empty(size * size * 4, dtype=np.float32)
+    img.pixels.foreach_get(px)
+    rgb = px.reshape(-1, 4)[:, :3]
+    if rgb.mean() < 0.2:   # 굽기 UV · 대상 노드가 어긋나면 전부 검게 구워진다(실제로 있었던 실패)
+        raise RuntimeError(f'AO bake {tag}: mean {rgb.mean():.3f} — 거의 검은 AO')
+    rgb[:] = np.power(rgb, gamma)
+    img.pixels.foreach_set(px)
     path = os.path.join(RAW, 'ao', f'inner-{tag}-ao.png')
     os.makedirs(os.path.dirname(path), exist_ok=True)
     img.filepath_raw = path
