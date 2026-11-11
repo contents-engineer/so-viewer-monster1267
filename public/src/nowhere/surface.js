@@ -48,6 +48,8 @@ export function createSharedUniforms(groundMaskTex = null, maskRect = [-170, -21
     uHeatherColor: { value: new THREE.Color('#5A3426') },     // 적갈색 히스·고산 식물 반점
     uPudColor: { value: new THREE.Color(0.54, 0.62, 0.66) },  // 웅덩이·수면 반사 기본색
     uPudMetal: { value: 0.88 },
+    // 밤 거리 반사광(성수 Task 12): 가로등 · 상점 창 불빛이 벽 아랫부분과 노면에 번지는 세기. 0 = 끔(DS2 · 기본값)
+    uNightFill: { value: 0.0 },
     uMaskRect: {
       value: new THREE.Vector4(maskRect[0], maskRect[1], maskRect[2], maskRect[3]),
     },
@@ -154,11 +156,19 @@ export function patchSurfaceMaterial(material, surfaceType, sharedUniforms, hasV
     material.side = THREE.DoubleSide;
   }
 
+  // 재질별 발광 곱(낮 · 밤, 기본 1 = 그대로): world.js 가 성수 재질에만 userData.nwEmitGain = [낮, 밤] 을 단다(밤 조율 Task 12).
+  // 위의 발광 규칙(항상 · 밤에만 · 창)을 거친 뒤 mix(낮, 밤, uNight) 를 곱한다. 값은 material.userData.nwEmitUniforms 로 바꿀 수 있다
+  const emitGain = Array.isArray(material.userData.nwEmitGain) ? material.userData.nwEmitGain : [1, 1];
+  const emitUniforms = { day: { value: emitGain[0] }, night: { value: emitGain[1] } };
+  material.userData.nwEmitUniforms = emitUniforms;
+
   const cacheKey = `nw_v4_${surface}_${hasVertexMask ? 1 : 0}_${isAlwaysEmit ? 1 : 0}_${isNightOnlyEmit ? 1 : 0}_${windowEmitKind}_${isBeam ? 1 : 0}`;
   material.customProgramCacheKey = () => cacheKey;
 
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, sharedUniforms);
+    shader.uniforms.uNwEmitDay = emitUniforms.day;
+    shader.uniforms.uNwEmitNight = emitUniforms.night;
     shader.uniforms.uNwSurfaceKind = { value: kindId };
     shader.uniforms.uNwHasVertMask = { value: hasVertexMask ? 1.0 : 0.0 };
     shader.uniforms.uNwAlwaysEmit = { value: isAlwaysEmit ? 1.0 : 0.0 };
@@ -245,6 +255,9 @@ uniform float uNwNightOnlyEmit;
 uniform int uNwWindowKind;
 uniform float uNwBeam;
 uniform float uNwBeamLen;
+uniform float uNwEmitDay;
+uniform float uNwEmitNight;
+uniform float uNightFill;
 
 varying vec3 vNwWorld;
 varying vec3 vNwWorldNormal;
@@ -448,6 +461,12 @@ if (uNwWindowKind == 1) {
 } else if (uNwAlwaysEmit > 0.5) {
   float emitScale = mix(0.45, 2.35, clamp(uEmitGain, 0.0, 1.2));
   totalEmissiveRadiance *= emitScale;
+}
+totalEmissiveRadiance *= mix(uNwEmitDay, uNwEmitNight, clamp(uNight, 0.0, 1.0));   // 재질별 낮 · 밤 곱(기본 1)
+if (uNightFill > 0.0 && uNight > 0.01 && (uNwSurfaceKind == 1 || uNwSurfaceKind == 2)) {
+  // 밤 거리 반사광(성수): 가로등 · 상점 창 불빛이 벽 아랫부분(높이에 따라 줄어듦)과 노면을 따뜻하게 비춘다. 실제 광원 없이 알베도에 더한다
+  float fillH = (uNwSurfaceKind == 2) ? exp(-max(0.0, vNwWorld.y) * 0.11) : 0.55;
+  totalEmissiveRadiance += diffuseColor.rgb * vec3(1.0, 0.84, 0.64) * uNightFill * fillH * uNight;
 }
 if (uNwSurfaceKind == 10 && uNwWindowKind == 0 && uNight > 0.01) {
   // HAUS NOWHERE 및 영웅 건물 외피: 야간 전정 업라이트·크라운 간접 세척광(FX_night_haus_up/wash 대응)

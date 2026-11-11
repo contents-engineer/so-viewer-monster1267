@@ -54,7 +54,8 @@ TAG = 'nw_future_src'                    # 이 스크립트가 만든 이미지 
 FONT_FILE = os.path.join(lib.SRC, 'fonts', 'NotoSansKR-Bold.otf')
 
 # ═════════════════════════════ 배치 상수 (§3, Blender 좌표 m) ═════════════════════════════
-VIA_Y0, VIA_Y1 = 149.3, 160.7            # 상판 하부 모서리(남·북), present.py SLOT_viaduct_led 와 같다
+VIA_Y0, VIA_Y1 = 149.3, 160.7            # 상판 하부 모서리(남·북), present.py SLOT_viaduct_led 와 같다. 주의: present.VIA_Y0/Y1(150 · 160)은
+                                         # 고가 몸체 면이라 이름이 같아도 값이 다르다 — 여기 값 = 그 바깥 0.7 m 상판 테두리 끝 = 승강장 선로 쪽 끝
 DECK_B = 7.9                             # 상판 하면
 ST_X = (22.8, 91.2)                      # 성수역형 승강장 구간(양쪽 3.6 m 내밂, 하면 7.45)
 ST_D, ST_B = 3.6, 7.45
@@ -101,10 +102,18 @@ TOWERS = [
     dict(id='T4', c=(205.0, 0.0), size=(30.0, 30.0), h=116.0, form='crown', crown=8.0, turbines=2),    # CP1 전: (205, 40) 은 거리 시점에서 HAUS 상부 뒤에 숨었다
 ]
 TOWER_SITE_MARGIN = 12.0
-# 2호선 유리 튜브: 단면(y = 고가 중심 155 기준, z 절대), 장면 층 구간(승강장 22.8 … 91.2 은 기존 지붕)
+# 2호선 유리 튜브: 단면(y = 고가 중심 155 기준, z 절대), 장면 층 일반 구간(서 · 동). 그 사이 승강장 구간 ST_X 는 넓은 단면
+# TUBE_ST_PROFILE(Task 11b, CP2: 녹색 곡면 지붕을 걷고 유리 튜브로)이 덮는다
 TUBE_Y = 155.0
 TUBE_PROFILE = [(-4.7, 9.0), (-4.7, 11.6), (-3.3, 13.9), (-1.2, 15.0), (1.2, 15.0), (3.3, 13.9), (4.7, 11.6), (4.7, 9.0)]
 TUBE_SPANS = [(-300.0, 22.8), (91.2, 420.0)]
+# 승강장 구간 넓은 단면: 승강장은 상판 테두리 끝(VIA_Y0 = 149.3, 고가 중심 −5.7)에서 바깥으로 ST_D 3.6 → 승강장 바깥 끝 ±9.3
+# (145.7 · 164.3, present.via_station), 바깥 난간 ±9.2, 바닥 present.ST_FLOOR_Z = 10.0. 유리는 승강장 끝에서 0.4 m 바깥 ±9.7
+# (리브 안쪽 면 ±9.55 — 난간과 0.3 m). 아래 끝 = 유리 받침 띠 윗면(TUBE_ST_SILL). 일반 단면과 같은 8 점(세로벽 → 어깨 → 완만한 지붕 →
+# 평평한 꼭대기 z 15.0). 어깨 (±6.7, 14.6) = 세로벽(높이 13.0)에서 3.0 m 안쪽: 승강장 선로 쪽 끝(±5.7)이 완만한 지붕 아래(바닥 + 4.7 m)에,
+# 승강장 가운데(±7.5)는 바닥 + 4.2 m, 난간 위 3.3 m. 꼭대기 평평한 폭 ±2.4 는 등줄기 LED(z 14.95)를 일반 구간과 같은 높이로 잇는다
+TUBE_ST_PROFILE = [(-9.7, 10.15), (-9.7, 13.0), (-6.7, 14.6), (-2.4, 15.0), (2.4, 15.0), (6.7, 14.6), (9.7, 13.0), (9.7, 10.15)]
+TUBE_ST_SILL = (9.7, 10.15, 9.3, 9.9)    # 유리 받침 띠(강재): 아래 · 윗면 z, 안쪽(= 승강장 바깥 끝 ±9.3에 붙는다) · 바깥(리브 바깥 면 ±9.85 너머) |y − 155|
 # 타워 공통(Task 8). 층 띠는 아틀라스 각 층 맨 위 0.3 m 라 z = 4k(테라스 · 옥상 · 크라운 바닥)가 슬래브 끝에 맞는다
 CW_TILE = (12.0, 8.0)                  # 커튼월 아틀라스 한 장 = 둘레 12 m × 높이 8 m(1 칸 1.5 × 4.0 m, 가로 8칸 × 2층). 1024² 라
                                        # optimize(--texture-size 1024)를 지나도 85 × 128 px/m 를 지킨다(2048 변은 반으로 줄었다)
@@ -694,7 +703,9 @@ def materials():
     tr_a, tr_e = paint_train_window()
     M.update({
         'tube_steel': mat_basic('NWF_tube_steel', '#E6E9EA', 0.35, 0.3),
-        'tube_glass': mat_glass('NWF_tube_glass', '#BFD8E6', 0.22),
+        # 튜브 유리(Task 12): 옅은 #BFD8E6 · 알파 0.22 는 2041 골목 끝(약 100 m)에서 흰 리브만 남아 '흰 난간선'으로 읽혔다 →
+        # 짙은 청회색 · 알파 0.55 로 흰 리브와 대비를 주고 하늘 반사가 보이게(형상 그대로). 웹 불투명도는 world.js GLASS_OPACITY 와 같은 값
+        'tube_glass': mat_glass('NWF_tube_glass', TUBE_GLASS[0], TUBE_GLASS[1]),
         'tube_led': mat_emit('NWF_tube_led', '#DDF4FA', 0.0, 2.0),
         'white_conc': mat_basic('NWF_white_concrete', '#E3E1DB', 0.75, 0.0, surface='wall'),
         'train_white': mat_basic('NWF_train_white', '#EEF1F2', 0.28, 0.1),
@@ -704,7 +715,8 @@ def materials():
     })
     # 스마트 거리(Task 10, §4.2 · §4.3): 태양광 노면, 청록 발광선, 청록 LED(횡단보도 · 배송로봇 띠), 투명 키오스크 유리, 파라솔 천, 티크 좌판
     M.update({
-        'road_pv': mat_tex('NWF_road_pv', paint_pv_road(), 0.2, 0.25, surface='metal'),
+        # 태양광 노면(Task 12): 거칠기 0.2 · 금속 0.25 는 비스듬히 보면 하늘을 비춰 밝은 회청색 → 0.65 · 0 으로 짙은 남색 셀이 남게
+        'road_pv': mat_tex('NWF_road_pv', paint_pv_road(), 0.65, 0.0, surface='metal'),
         'road_led': mat_emit('NWF_road_led', SMART_CYAN, 0.5, 2.2),
         'led_cyan': mat_emit('NWF_led_cyan', SMART_CYAN, 3.0, 16.0),
         'kiosk_glass': mat_ui('NWF_kiosk_glass', ui_a, ui_e, 1.4, 6.0, rough=0.08, surface='glass'),
@@ -721,7 +733,7 @@ def materials():
     kg.surface_render_method = 'BLENDED'; kg.use_backface_culling = False
     kg['nw_tex'] = json.dumps({**json.loads(kg['nw_tex']), 'alpha': 0.55}, ensure_ascii=False)
     next(n for n in M['tube_glass'].node_tree.nodes if n.type == 'BSDF_PRINCIPLED').inputs['Roughness'].default_value = 0.05
-    M['tube_glass']['nw_tex'] = json.dumps({'kind': 'flat', 'color': '#BFD8E6', 'alpha': 0.22, 'rough': 0.05}, ensure_ascii=False)
+    M['tube_glass']['nw_tex'] = json.dumps({'kind': 'flat', 'color': TUBE_GLASS[0], 'alpha': TUBE_GLASS[1], 'rough': 0.05}, ensure_ascii=False)
     # 커튼월(CP1): 반금속 · 매끈 → 하늘을 비추는 푸른 유리(알베도 아틀라스가 반사를 물들인다). export 가 nw_pbr 을 읽는다
     next(n for n in M['curtain'].node_tree.nodes if n.type == 'BSDF_PRINCIPLED').inputs['Metallic'].default_value = CURTAIN_PBR[1]
     M['curtain']['nw_pbr'] = CURTAIN_PBR
@@ -1118,24 +1130,25 @@ def _spans(a, b, gaps):
 
 
 def paint_pv_road():
-    """태양광 노면 타일(512 × 256 = 4 × 2 m, 128 px/m). 0.5 m 강화유리 타일(테두리 #C9CED3) 안에 셀 4 × 4(#1E2C44, 격자 #9AA7B5),
-    유리 윗면의 옅은 하늘 반사, 띠 양 가장자리(v 0 · 1)의 어두운 테두리 띠와 0.25 m 마다 LED 점(밝은 청록, 그린 점 — 발광 아님)."""
+    """태양광 노면 타일(512 × 256 = 4 × 2 m, 128 px/m). 0.5 m 강화유리 타일(테두리 · 격자 #8A97AB) 안에 셀 4 × 4(#13213F),
+    유리 윗면의 옅은 하늘 반사, 띠 양 가장자리(v 0 · 1)의 어두운 테두리 띠와 0.25 m 마다 LED 점(밝은 청록, 그린 점 — 발광 아님).
+    Task 12: 셀이 타일의 77 %(전 66 %)를 덮고 셀을 짙은 남색으로 — 멀리서 밉맵 평균이 밝은 회청색이던 것을 레퍼런스처럼 짙은 남색 + 가는 밝은 격자로
+    (전: 셀 #1E2C44 · 13 px / 14.5 px 간격 · 여백 3, 격자 #9AA7B5, 틀 #C9CED3, 사선 반사 0.06)."""
     W, H = 512, 256
     rng = np.random.default_rng(1041)
-    cell, grid, frame = _hexs('#1E2C44'), _hexs('#9AA7B5'), _hexs('#C9CED3')
+    cell, grid = _hexs('#13213F'), _hexs('#8A97AB')
     A = _canvas(W, H, grid)
     T = 64
     for ty in range(H // T):
         for tx in range(W // T):
             x0, y0 = tx * T, ty * T
-            _rect(A, x0, y0, x0 + T, y0 + T, frame)
             k = rng.uniform(0.9, 1.1)
             for cy in range(4):
                 for cx in range(4):
-                    _rect(A, x0 + 3 + cx * 14.5, y0 + 3 + cy * 14.5, x0 + 3 + cx * 14.5 + 13, y0 + 3 + cy * 14.5 + 13,
+                    _rect(A, x0 + 2 + cx * 15, y0 + 2 + cy * 15, x0 + 2 + cx * 15 + 14, y0 + 2 + cy * 15 + 14,
                           np.clip(cell * k * rng.uniform(0.92, 1.08), 0, 1))
     yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
-    sheen = (0.06 * np.exp(-(((xx % T) - (yy % T)) / 22.0) ** 2))[..., None]     # 타일마다 사선 반사(유리)
+    sheen = (0.03 * np.exp(-(((xx % T) - (yy % T)) / 22.0) ** 2))[..., None]     # 타일마다 사선 반사(유리, Task 12: 0.06 → 0.03)
     A[..., :3] = A[..., :3] * (1 - sheen) + 1.0 * sheen
     for yb in ((0, 7), (H - 7, H)):                                                  # 띠 가장자리 테두리 + LED 점
         _rect(A, 0, yb[0], W, yb[1], _hexs('#39434D'))
@@ -2025,6 +2038,7 @@ TUBE_RIB_PITCH = 5.5                    # 리브 간격(m): 구간마다 이 값
 TUBE_RIB = (0.2, 0.3)                   # 리브 단면: x 폭 · 꺾은선 법선 깊이(꺾은선이 가운데 — 유리가 리브 한가운데를 지난다)
 TUBE_STRINGER = 0.1                     # 꺾임점 6 곳을 잇는 세로 띠(정사각 단면 변)
 TUBE_LED = (14.95, 0.08, 0.03)          # 등줄기 LED: 아래면 z, 폭, 두께
+TUBE_GLASS = ('#456F88', 0.55)          # 튜브 유리 색 · 알파(Task 12 조율, 전 #BFD8E6 · 0.22)
 TUBE_PLANTERS = ((149.2, 150.3), (159.7, 160.8))   # 상판 바깥 화단 y(남 · 북). 상판 테두리(149.3 · 160.7, 턱 9.3)를 덮는다
 TUBE_PLANTER_Z = (8.9, 9.6)             # 화단 상자 아래 · 윗면(NW_meadow)
 VINE_DROP, VINE_W, VINE_COVER = 0.8, 1.0, 0.85  # 늘어진 덩굴 카드: 길이(윗면 아래), 폭, 덮는 비율(덩이마다 끊긴다). 모바일은 world.js 가 숨긴다
@@ -2032,7 +2046,14 @@ VINE_CELL = (0.5, 0.0)                  # NW_ivy 아틀라스 칸 (½, 0) = Task
 TRAIN = dict(cars=4, L=17.0, W=2.9, H=3.4, gap=0.6, nose=2.2, ch=0.35, win=(1.2, 2.4), stripe=(0.98, 1.10), module=17.0 / 8)
 TRAINS = [('FU_train_a', (-200.0, 152.6, 9.3)), ('FU_train_b', (240.0, 157.4, 9.3))]   # 원점 = 열차 가운데 바닥, 앞 = 로컬 +x
 BRIDGES = [   # 상판 (x0, x1), (y0, y1), 윗면, 두께, 기둥 자리, 기둥 지름, 화단(6 m 마다)
-    dict(id='SB1', x=(64.0, 76.0), y=(112.0, 115.2), top=9.0, th=0.45, cols=((65.0, 113.6), (75.4, 113.6)), d=0.45, beds=False),
+    # SB1(Task 11b 수정 1회차): 골목 중간 V8 동면 ↔ E1d 서면. 옛 자리(y 112 … 115.2, B6 박공 ↔ B10)는 2041 골목 시점에서 승강장 튜브와
+    # 같은 앙각(3.4 … 5.3°)에 걸려 튜브 · 열차를 가렸다 → 카메라에서 42 … 45 m 로 당겨 상판 밑이 앙각 9.1° 위로 오른다.
+    # y 49.85 … 53.05 = E1d 4 층 발코니(y 47.05 … 49.65 · 56.95 … 59.55, 판 z 8.35 … 8.5) 사이 벽 — 상판이 x 76 벽까지 닿는다.
+    # 윗면 9.35 = E1d 4 층 창(y 50.85 … 52.45) 창턱(9.36) 바로 아래: 그 창이 다리 출입구로 읽힌다. 밑면 8.9 는 V8 3 층 창 머리(8.85) 위라
+    # V8 창을 막지 않고, 난간 꼭대기 10.47 ≈ V8 파라펫(10.4). 기둥은 두 벽의 창 사이 벽 앞: 서쪽 (65.4, 51.45) = V8 창 사이(50.6 … 52.3)
+    # 가운데, V8 세로 간판(y 50.85 … 51.15, x ≤ 64.85) · 3 층 발코니(y 51.8 …, x ≤ 64.95)를 비키도록 벽에서 1.4 m.
+    # 동쪽 (75.4, 50.25) = E1d 창 사이(49.15 … 50.85) — 4 층 발코니(… 49.65)와 0.4 m, 배송로봇 bot1 길(x 73.9)에서 1.3 m
+    dict(id='SB1', x=(64.0, 76.0), y=(49.85, 53.05), top=9.35, th=0.45, cols=((65.4, 51.45), (75.4, 50.25)), d=0.45, beds=False),
     dict(id='SB2', x=(128.0, 131.2), y=(-60.0, -29.0), top=10.0, th=0.5, cols=((129.6, -33.6), (129.6, -54.2)), d=0.6, beds=True),
 ]
 BRIDGE_BED = (1.2, 0.5, 0.45)           # SB2 화단: 길이(상판 방향) · 폭 · 높이
@@ -2061,12 +2082,53 @@ def _offset_profile(P, d):
     return out
 
 
+def _tube_rib(mb, pin, pout, x0, x1, skip=()):
+    """리브 하나: 안쪽 꺾은선 pin 과 바깥 꺾은선 pout 사이 띠를 x0 … x1 로 민다(변마다 안쪽 · 바깥 · −x · +x 면). skip = 건너뛸 변 번호."""
+    for i in range(len(pin) - 1):
+        if i in skip:
+            continue
+        a, b, c, d = pin[i], pin[i + 1], pout[i + 1], pout[i]
+        mb.quad((x1, a[0], a[1]), (x0, a[0], a[1]), (x0, b[0], b[1]), (x1, b[0], b[1]), 0)     # 안쪽 면(튜브 안을 본다)
+        mb.quad((x0, d[0], d[1]), (x1, d[0], d[1]), (x1, c[0], c[1]), (x0, c[0], c[1]), 0)     # 바깥 면
+        mb.quad((x0, a[0], a[1]), (x0, d[0], d[1]), (x0, c[0], c[1]), (x0, b[0], b[1]), 0)     # −x 옆
+        mb.quad((x1, d[0], d[1]), (x1, a[0], a[1]), (x1, b[0], b[1]), (x1, c[0], c[1]), 0)     # +x 옆
+
+
+def _tube_ribs(P, xa, xb, solid_ends=False):
+    """구간 xa … xb 의 리브(단면 P): TUBE_RIB_PITCH 이하 같은 간격으로 나눠 양 끝에도 리브. → (ribs, fine) 조립기.
+    짝수 번째 리브 + 꺾임점 세로 띠 → ribs, 홀수 번째 → fine(모바일은 world.js 가 숨긴다 → 간격 두 배).
+    solid_ends: 마지막 리브도 번호와 관계없이 ribs 에(승강장 구간 양 끝 = 단면이 바뀌는 끝 틀이라 모바일에서도 그린다)."""
+    pin, pout = _offset_profile(P, -TUBE_RIB[1] / 2), _offset_profile(P, TUBE_RIB[1] / 2)
+    hw = TUBE_RIB[0] / 2
+    n = max(1, math.ceil((xb - xa) / TUBE_RIB_PITCH - 1e-6))
+    ribs, fine = MB(), MB()
+    for k in range(n + 1):
+        x = xa + (xb - xa) * k / n
+        x0, x1 = max(xa, x - hw), min(xb, x + hw)
+        _tube_rib(ribs if k % 2 == 0 or (solid_ends and k == n) else fine, pin, pout, x0, x1)
+    s = TUBE_STRINGER / 2
+    for y, z in P[1:-1]:                                       # 꺾임점 세로 띠(바깥 면 · 안쪽 면 · 위 · 아래)
+        ribs.box((xa, y - s, z - s), (xb, y + s, z + s), 0, faces='yYzZ')
+    return ribs, fine
+
+
+def _tube_glass(g, PG, xa, xb):
+    """유리: 꺾은선 PG 의 변마다 xa … xb 한 장(리브가 판을 나눠 보이게 한다). 남쪽 아래 → 꼭대기 → 북쪽 아래 순서 = 바깥 법선."""
+    sv = 0.0
+    for (ya, za), (yb, zb) in zip(PG, PG[1:]):
+        sl = math.hypot(yb - ya, zb - za)
+        g.quad((xa, ya, za), (xb, ya, za), (xb, yb, zb), (xa, yb, zb), 0, (xa / 20.0, sv, xb / 20.0, sv + sl))
+        sv += sl
+
+
 def build_tube(C, M):
-    """2호선 유리 튜브(§4.2): TUBE_SPANS 두 구간마다 리브 · 유리 · 화단(+ 늘어진 덩굴), 두 구간을 잇는 등줄기 LED 한 줄.
-    - FU_tube_ribs_<w|e>(nw_solid=1): 리브 짝수 번째 + 꺾임점 세로 띠, FU_tube_ribs_fine_<w|e>: 리브 홀수 번째(모바일은 world.js 가 숨긴다 → 11 m 간격)
-    - FU_tube_glass_<w|e>: TUBE_PROFILE 7 변을 x 로 민 판(NWF_tube_glass, 양면 · 알파 0.22). 그림자 · 정적 병합 제외는 world.js
+    """2호선 유리 튜브(§4.2): TUBE_SPANS 두 구간(서 w · 동 e)마다 리브 · 유리 · 화단(+ 늘어진 덩굴), 그 사이 승강장 구간(s, ST_X)은
+    넓은 단면 리브 · 유리, 세 구간을 잇는 등줄기 LED 한 줄.
+    - FU_tube_ribs_<w|s|e>(nw_solid=1): 리브 짝수 번째 + 꺾임점 세로 띠, FU_tube_ribs_fine_<w|s|e>: 리브 홀수 번째(모바일은 world.js 가 숨긴다 → 간격 두 배)
+    - FU_tube_glass_<w|s|e>: 단면 7 변을 x 로 민 판(NWF_tube_glass, 양면 · TUBE_GLASS 알파 0.55). 그림자 · 정적 병합 제외는 world.js
     - FU_tube_planter_<w|e>: 상판 바깥 화단 상자(옆 NWF_white_concrete, 윗면 NW_meadow), FU_tube_planter_vines_<w|e>: 늘어진 덩굴 카드(NW_ivy)
-    승강장 구간(TUBE_SPANS 사이 22.8 … 91.2)에는 만들지 않는다."""
+    - 승강장 구간(Task 11b): TUBE_ST_PROFILE(±9.7 — 승강장 · 바깥 난간까지) 리브 · 유리 + 유리 받침 띠(승강장 끝 → 유리 바깥). 양 끝은
+      단면이 바뀌므로 일반 단면 리브 고리(끝 틀)와 두 단면 사이를 막는 유리 끝벽을 둔다. 덩굴 화단은 없다(승강장이 상판 테두리를 덮는다)."""
     import present
     P = [(y + TUBE_Y, z) for y, z in TUBE_PROFILE]
     pin, pout = _offset_profile(P, -TUBE_RIB[1] / 2), _offset_profile(P, TUBE_RIB[1] / 2)
@@ -2076,33 +2138,15 @@ def build_tube(C, M):
     rnd = random.Random(2041)
     mt = present.MEADOW_TILE
     for key, (xa, xb) in zip(('w', 'e'), TUBE_SPANS):
-        n = max(1, math.ceil((xb - xa) / TUBE_RIB_PITCH - 1e-6))
-        ribs, fine = MB(), MB()
-        for k in range(n + 1):
-            x = xa + (xb - xa) * k / n
-            x0, x1 = max(xa, x - hw), min(xb, x + hw)
-            mb = ribs if k % 2 == 0 else fine
-            for i in range(len(P) - 1):
-                a, b, c, d = pin[i], pin[i + 1], pout[i + 1], pout[i]
-                mb.quad((x1, a[0], a[1]), (x0, a[0], a[1]), (x0, b[0], b[1]), (x1, b[0], b[1]), 0)     # 안쪽 면(튜브 안을 본다)
-                mb.quad((x0, d[0], d[1]), (x1, d[0], d[1]), (x1, c[0], c[1]), (x0, c[0], c[1]), 0)     # 바깥 면
-                mb.quad((x0, a[0], a[1]), (x0, d[0], d[1]), (x0, c[0], c[1]), (x0, b[0], b[1]), 0)     # −x 옆
-                mb.quad((x1, d[0], d[1]), (x1, a[0], a[1]), (x1, b[0], b[1]), (x1, c[0], c[1]), 0)     # +x 옆
-        s = TUBE_STRINGER / 2
-        for y, z in P[1:-1]:                                   # 꺾임점 세로 띠(바깥 면 · 안쪽 면 · 위 · 아래)
-            ribs.box((xa, y - s, z - s), (xb, y + s, z + s), 0, faces='yYzZ')
+        ribs, fine = _tube_ribs(P, xa, xb)
         me = ribs.to_mesh(f'FU_tube_ribs_{key}', [M['tube_steel']], mask=lambda co: (0.0, 0.15, 1.0))
         out.append(obj(f'FU_tube_ribs_{key}', me, C, surface='metal', nw_solid=1, nw_motif='tube'))
         me = fine.to_mesh(f'FU_tube_ribs_fine_{key}', [M['tube_steel']], mask=lambda co: (0.0, 0.15, 1.0))
         out.append(obj(f'FU_tube_ribs_fine_{key}', me, C, surface='metal', nw_motif='tube'))
-        # 유리: 7 변 × 한 장(리브가 판을 나눠 보이게 한다). 남쪽 아래 → 꼭대기 → 북쪽 아래 순서 = 바깥 법선.
-        # 아래 끝은 화단 윗면(9.6)부터: 그 아래는 화단 안쪽 면(y 150.3 · 159.7)과 같은 면이라 깊이 다툼이 난다
+        # 유리 아래 끝은 화단 윗면(9.6)부터: 그 아래는 화단 안쪽 면(y 150.3 · 159.7)과 같은 면이라 깊이 다툼이 난다
         PG = [(P[0][0], TUBE_PLANTER_Z[1])] + P[1:-1] + [(P[-1][0], TUBE_PLANTER_Z[1])]
-        g = MB(); sv = 0.0
-        for (ya, za), (yb, zb) in zip(PG, PG[1:]):
-            sl = math.hypot(yb - ya, zb - za)
-            g.quad((xa, ya, za), (xb, ya, za), (xb, yb, zb), (xa, yb, zb), 0, (xa / 20.0, sv, xb / 20.0, sv + sl))
-            sv += sl
+        g = MB()
+        _tube_glass(g, PG, xa, xb)
         me = g.to_mesh(f'FU_tube_glass_{key}', [M['tube_glass']], mask=lambda co: (0.0, 0.0, 1.0))
         out.append(obj(f'FU_tube_glass_{key}', me, C, surface='glass', nw_motif='tube'))
         # 등줄기 LED(꼭대기 안쪽): 아래 · 옆 · 위 면
@@ -2137,6 +2181,44 @@ def build_tube(C, M):
         out.append(obj(f'FU_tube_planter_{key}', me, C, surface='wall', nw_motif='tube'))
         me = vn.to_mesh(f'FU_tube_planter_vines_{key}', [M['ivy']], mask=lambda co: (0.0, 0.2, 0.85))
         out.append(obj(f'FU_tube_planter_vines_{key}', me, C, surface='foliage', nw_motif='tube'))
+    # ── 승강장 구간 s(Task 11b): 넓은 단면. 리브 간격 규칙은 같고, 양 끝 리브는 모바일에서도 그린다(끝 틀)
+    xa, xb = ST_X
+    Q = [(y + TUBE_Y, z) for y, z in TUBE_ST_PROFILE]
+    ribs, fine = _tube_ribs(Q, xa, xb, solid_ends=True)
+    sz0, sz1, si, so = TUBE_ST_SILL
+    for sg in (-1.0, 1.0):                                     # 유리 받침 띠: 승강장 바깥 끝(±9.3) → 리브 바깥(±9.85) 너머, 윗면 = 유리 아래 끝
+        y0, y1 = sorted((TUBE_Y + sg * si, TUBE_Y + sg * so))
+        ribs.box((xa, y0, sz0), (xb, y1, sz1), 0)
+    g = MB()
+    _tube_glass(g, Q, xa, xb)
+    # 양 끝(단면이 바뀌는 곳): 일반 단면 리브 고리를 승강장 쪽 반 폭(0.1 m)으로 — 서 · 동 구간 끝 리브와 붙어 한 리브 폭이 된다.
+    # 꼭대기 변(3)은 넓은 단면 끝 리브의 평평한 꼭대기와 겹쳐 뺀다. 유리 끝벽은 끝 리브 폭 가운데(xm)에서 두 단면 사이 고리를 막는다:
+    # 아래는 도상(present.TRACK_BED_Z) · 승강장 바닥(present.ST_FLOOR_Z)까지 내려 하늘이 새는 틈이 없다(승강장 판 끝면 x = xa · xb 와 겹치지 않는다)
+    N, Wd = TUBE_PROFILE, TUBE_ST_PROFILE
+    zb, zf = present.TRACK_BED_Z, present.ST_FLOOR_Z
+    ye = VIA_Y0 - TUBE_Y                                       # 상판 테두리 끝 = 승강장 선로 쪽 끝(−5.7, future.VIA_Y0 = 테두리 포함 149.3)
+    end_polys = [[(N[0][0], zb), (ye, zb), (ye, zf), (N[0][0], zf)],     # 남쪽 반(고가 중심 기준), 바깥 법선 −x 순서
+                 [(N[0][0], zf), (Wd[0][0], zf), Wd[1], N[1]],
+                 [N[1], Wd[1], Wd[2], N[2]],
+                 [N[2], Wd[2], Wd[3], N[3]]]                         # N[3] … N[4] 꼭대기는 두 단면이 같은 z 15.0 → 막을 것이 없다
+    for xe, sx in ((xa, -1.0), (xb, 1.0)):
+        x0, x1 = (xe, xe + hw) if sx < 0 else (xe - hw, xe)
+        _tube_rib(ribs, pin, pout, x0, x1, skip=(3,))
+        xm = (x0 + x1) / 2
+        for sg in (1.0, -1.0):                                 # 남(그대로) · 북(거울)
+            for poly in end_polys:
+                pts = [(xm, TUBE_Y + sg * y, z) for y, z in poly]
+                if sx * sg > 0:                                # 동쪽 끝(+x 법선) 또는 북쪽 거울 → 순서를 뒤집어 바깥 법선을 맞춘다
+                    pts.reverse()
+                g.face(pts, 0, [(p[1] / 20.0, p[2]) for p in pts])
+    me = ribs.to_mesh('FU_tube_ribs_s', [M['tube_steel']], mask=lambda co: (0.0, 0.15, 1.0))
+    out.append(obj('FU_tube_ribs_s', me, C, surface='metal', nw_solid=1, nw_motif='tube'))
+    me = fine.to_mesh('FU_tube_ribs_fine_s', [M['tube_steel']], mask=lambda co: (0.0, 0.15, 1.0))
+    out.append(obj('FU_tube_ribs_fine_s', me, C, surface='metal', nw_motif='tube'))
+    me = g.to_mesh('FU_tube_glass_s', [M['tube_glass']], mask=lambda co: (0.0, 0.0, 1.0))
+    out.append(obj('FU_tube_glass_s', me, C, surface='glass', nw_motif='tube'))
+    z0, w, t = TUBE_LED                                        # 등줄기 LED: 서 · 동 구간 사이를 이어 −300 … 420 한 줄
+    led.box((xa, TUBE_Y - w / 2, z0), (xb, TUBE_Y + w / 2, z0 + t), 0, faces='yYzZ')
     me = led.to_mesh('FU_tube_led', [M['tube_led']], mask=lambda co: (0.0, 0.0, 1.0))
     out.append(obj('FU_tube_led', me, C, surface='emissive', night=True, nw_motif='tube'))
     for o in out:

@@ -9,7 +9,8 @@
 #                                   고가 하부 가로 등)와 차선, 한강(BD_river, y −338 … −1160)
 #   BD_mid_*                         중경 도시 링(장면 가장자리 ~ 700 m): 블록·필지 → 벽돌 공장·연립·상가·지식산업센터·아파트.
 #                                   한 장의 외벽 아틀라스(NWB_gen_city, 층마다 띠) + 한 장의 밤 창 발광(NWB_gen_city_night)
-#   BD_far                           0.7 ~ 3 km 저층 지붕 바다 + 아파트 판상·타워(서울의 수평선)
+#   BD_far                           0.7 ~ 3 km 저층 지붕 바다 + 아파트 판상·타워(서울의 수평선) — 모바일 · 데스크톱 공통(FAR_*_KEEP 비율)
+#   BD_far_desk                      BD_far 에서 걸러진 나머지 동(데스크톱 전용, 모바일은 world.js 가 숨긴다)
 #   BD_infra                         2호선 고가 연장(파란 LED 선은 future.py 가 같은 끝까지), 강변북로 고가
 #   BD_tube_w, BD_tube_e             고가 위 유리 튜브의 원경 외피(future.TUBE_PROFILE 단면, 장면 층 튜브 바깥 ~ VIA_EXT, NWB_tube)
 #   BD_layer1, BD_layer2, BD_lotte, BD_namsan_tower   스카이라인 1겹(1 ~ 1.5 km)·2겹(2.5 ~ 3 km) 실루엣
@@ -699,15 +700,22 @@ def blocked_far(x, y):
     return False
 
 
-FAR_LOW_KEEP = 0.25     # 성수 2041(Task 8b 0.35 → Task 10 0.25): 모바일 삼각형 예산(0.9 M) — 먼 저층 상자 · 판상 아파트를 이 비율만 남긴다(전역 제약의
-FAR_SLAB_KEEP = 0.45    # (Task 10: 0.55 → 0.45) 줄이기 순서 1: 원경 크림색 상자). 고르는 난수는 따로 써서 남는 동의 자리 · 크기는 예전과 같다
+# 원경 크림색 상자(전역 제약의 줄이기 순서 1) 중 BD_far(모바일 · 데스크톱 공통)에 남기는 비율. 고르는 난수는 따로 써서 남는 동의 자리 · 크기는 예전과 같다.
+#   Task 8b 0.35 · 0.55 → Task 10 0.25 · 0.45 → Task 12 0.0 · 0.38: 모바일 삼각형 예산(0.9 M)에서 저층 상자 3.5 K · 판상 동 약 1.1 K 를 덜어
+#   모바일 공원 느티나무(8 그루)와 카페 테라스(6 조)를 모두 그린다(world.js MOBILE_FULL_INST)
+# 걸러진 나머지 동은 BD_far_desk(데스크톱 전용)에 넣는다 → 데스크톱 원경은 Task 8b 전(저층 1431 · 판상 295 동 전부)으로 돌아가고, 모바일은
+# world.js MOBILE_HIDE 가 이 객체를 숨겨 그리기 · 삼각형이 늘지 않는다(백드롭 GLB 는 데스크톱 · 모바일이 같은 파일)
+FAR_LOW_KEEP = 0.0
+FAR_SLAB_KEEP = 0.38
 
 
 def build_far(C, M):
+    """반환: (BD_far, BD_far_desk). BD_far = 모바일 · 데스크톱 공통(KEEP 비율), BD_far_desk = 걸러진 나머지(데스크톱 전용)."""
     rnd = random.Random(707)
     keep = random.Random(708)
     acc = Acc()
-    n_low = n_slab = 0
+    acc_d = Acc()
+    n_low = n_slab = n_desk = 0
     # 저층 지붕 바다(0.7 ~ 1.6 km): 50 m 격자, 한 칸에 낮은 상자 하나(벽 한 줄 = 묶음 띠, 지붕)
     step = 50.0
     k = int(1700 / step)
@@ -723,11 +731,13 @@ def build_far(C, M):
             fp = rect_fp(x, y, w, d)
             h = fl * 3.0
             uo = rnd.random(); rm = rnd.choice(('roof_grey', 'roof_green', 'roof_dark'))
-            if keep.random() >= FAR_LOW_KEEP:
-                continue
-            walls(acc, fp, 0.0, h, st, 3.6, uo)
-            roof_flat(acc, fp, h, rm)
-            n_low += 1
+            tgt = acc if keep.random() < FAR_LOW_KEEP else acc_d
+            walls(tgt, fp, 0.0, h, st, 3.6, uo)
+            roof_flat(tgt, fp, h, rm)
+            if tgt is acc:
+                n_low += 1
+            else:
+                n_desk += 1
     # 판상 아파트·타워(0.7 ~ 3 km): 단지 단위로 3 ~ 6동씩
     nclus = 70
     for c in range(nclus):
@@ -756,18 +766,21 @@ def build_far(C, M):
             rows = max(1, int(round(h / 11.2)))
             hh = h / rows
             uos = [rnd.random() for _ in range(rows)]
-            if keep.random() >= FAR_SLAB_KEEP:
-                continue
+            tgt = acc if keep.random() < FAR_SLAB_KEEP else acc_d
             for q in range(rows):
-                walls(acc, fp, q * hh, (q + 1) * hh, st, 2.9, uos[q],
+                walls(tgt, fp, q * hh, (q + 1) * hh, st, 2.9, uos[q],
                       (lambda i, L, st=st: st if L > 20 else 'apt_end') if not tower else None)
-            roof_flat(acc, fp, h, 'roof_grey')
+            roof_flat(tgt, fp, h, 'roof_grey')
             if h > 110:
-                boxtop(acc, bx, by, 2.0, 2.0, h, 1.5, 'beacon', ang)
-            n_slab += 1
+                boxtop(tgt, bx, by, 2.0, 2.0, h, 1.5, 'beacon', ang)
+            if tgt is acc:
+                n_slab += 1
+            else:
+                n_desk += 1
     o = acc.to_obj('BD_far', C, [M['city']], 'wall')
-    print('far', n_low, n_slab, acc.tris())
-    return o
+    od = acc_d.to_obj('BD_far_desk', C, [M['city']], 'wall')
+    print('far', n_low, n_slab, acc.tris(), 'desk', n_desk, acc_d.tris())
+    return o, od
 
 
 # ═════════════════════════════ 스카이라인 1 · 2겹 ═════════════════════════════

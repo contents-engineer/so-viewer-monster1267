@@ -57,6 +57,9 @@ async function boot() {
     };
     // DS2 전용 7번째 시점: 참조 화면 구도(상류 개울 둑에서 겹쳐지는 층리 암벽을 바라봄)
     const camSeg = document.getElementById('nw-cam-seg');
+    // 성수 전용 '2041 골목'(future) 시점은 DS2 layout 에 없으므로 숨긴다
+    const futureBtn = camSeg?.querySelector('[data-cam="future"]');
+    if (futureBtn) futureBtn.hidden = true;
     if (camSeg && !camSeg.querySelector('[data-cam="valley"]')) {
       const vBtn = document.createElement('button');
       vBtn.type = 'button';

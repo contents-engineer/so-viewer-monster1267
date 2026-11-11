@@ -12,7 +12,7 @@
 #     PR_apt.*       12~13F 아파트 판상 3동(한 메시의 링크 복제) — Task 6: 북면 발코니 식재 띠, 옥상 태양광 70 % + 정원
 #     지붕(Task 6)   정적 묶음에 들어간다: 박공 해 쪽 면 태양광 한 장(NW_pv), 평지붕 태양광 줄(NW_pv + 뒷판) · 옥상정원
 #                    (화단 NW_roof_planter + NW_meadow, 자갈길 NW_gravel). 옥상 관목 PR_shrub_roof.*(INST · 아파트 동마다, 144 tris 카드 원형)
-#     PR_via.*       2호선 고가: 아치 교각 경간(링크 복제) + 벽돌 충전벽 + 성수역형 녹색 승강장 지붕
+#     PR_via.*       2호선 고가: 아치 교각 경간(링크 복제) + 벽돌 충전벽 + 성수역형 승강장(지붕은 future 유리 튜브)
 #     PR_light.*, PR_signal.*, PR_bollard.*   가로등(한국형 단주)·신호기둥·볼라드
 #     PR_ph_*.*      Poly Haven 소품(Decimate, 링크 복제): 셔터(고가 하부 창고), 분전함, 소화기함, 휴지통, 홈통, 비상계단,
 #                    공장 창·차고 문, 관목. Task 4 가 실외기·공중전화·덮개 씌운 차·방호벽(RETIRED_PROPS)을 걷어냈다
@@ -53,11 +53,14 @@ TAG = 'nw_present_src'                   # 이 스크립트가 가져온 재질�
 INST = []                                # (proto 키, 위치, 회전 z, 배율) — 건물 생성 중 쌓아 두었다가 한꺼번에 배치
 
 # ═════════════════════════════ 배치 상수 (§3, Blender 좌표 m) ═════════════════════════════
-VIA_Y0, VIA_Y1 = 150.0, 160.0            # 2호선 고가 폭 10 m
+VIA_Y0, VIA_Y1 = 150.0, 160.0            # 2호선 고가 몸체 폭 10 m(교각 · 아치 면). 상판은 양쪽으로 0.7 m 더 내민다 —
+                                         # future.VIA_Y0/Y1(149.3 · 160.7)은 이름이 같지만 그 내민 상판 끝(= 승강장 선로 쪽 끝)이다
 VIA_SPAN, VIA_PIER = 22.0, 2.4           # 경간 22 m, 교각 폭
 VIA_PIERS = [-130.0 + VIA_SPAN * k for k in range(14)]          # −130 … +156 (서쪽 끝 장면 밖까지)
 VIA_SPRING, VIA_CROWN = 5.4, 7.5          # 아치 기점·정점 높이
 DECK_B, DECK_T = 7.9, 9.0                 # 상판 하면·상면(자갈 도상 +0.3 → 레일면 약 9.3 m)
+TRACK_BED_Z = DECK_T + 0.3                # 도상(자갈) 윗면 = 상판 테두리 턱 윗면
+ST_FLOOR_Z = DECK_T + 1.0                 # 성수역형 승강장 바닥(via_station · future 승강장 구간 튜브)
 STATION = (24.0, 90.0)                    # 성수역형 승강장 3경간(교각 24·46·68·90 사이)
 CAM_VIA = ((13.0, 159.2, 1.65), (13.0, 0.0, 26.5), 20.0)   # 고가 아래 아치 안에서 남쪽 공장 띠 너머 HAUS 타워
 
@@ -2682,7 +2685,7 @@ def via_span_mesh(M):
                  C, (0.0, 0.4, 0.6, 0.0), (0, 0, -1))
         # 성수 2041(Task 9): 난간벽 · 방음벽을 걷었다 — 유리 튜브(future.build_tube)가 선로를 덮고, 상판 테두리에는 튜브 바깥
         # 화단(y 149.2 … 150.3 · 159.7 … 160.8, 윗면 9.6)이 놓인다. 테두리는 도상 높이(DECK_T + 0.3)의 턱으로 끝난다(원경 BD_infra 상판과 같은 높이).
-        zt = DECK_T + 0.3
+        zt = TRACK_BED_Z
         acc.poly([(x_0, ye, DECK_B), (x_1, ye, DECK_B), (x_1, ye, zt), (x_0, ye, zt)],
                  [(x_0, DECK_B), (x_1, DECK_B), (x_1, zt), (x_0, zt)], C,
                  lambda p, n: (0.0, 0.3, 0.95, 0.6 * smoothstep(DECK_B + 0.4, DECK_T + 1.1, p[2])), (0, sy, 0))
@@ -2691,11 +2694,11 @@ def via_span_mesh(M):
                  [(x_0, 0), (x_1, 0), (x_1, 0.25), (x_0, 0.25)], M['trim'], (0.55, 0.6, 0.95, 0.0), (0, 0, 1))
     # 도상(자갈) + 레일 4줄
     yi0, yi1 = -0.7 + 0.25, W + 0.7 - 0.25
-    acc.poly([(x_0, yi0, DECK_T + 0.3), (x_1, yi0, DECK_T + 0.3), (x_1, yi1, DECK_T + 0.3), (x_0, yi1, DECK_T + 0.3)],
+    acc.poly([(x_0, yi0, TRACK_BED_Z), (x_1, yi0, TRACK_BED_Z), (x_1, yi1, TRACK_BED_Z), (x_0, yi1, TRACK_BED_Z)],
              [(x_0, yi0), (x_1, yi0), (x_1, yi1), (x_0, yi1)], M['basalt'], (0.2, 0.55, 0.8, 0.0), (0, 0, 1))
     for yc in (2.7, 7.3):
         for s in (-0.75, 0.75):
-            acc.box((x_0, yc + s - 0.04, DECK_T + 0.3), (x_1, yc + s + 0.04, DECK_T + 0.48), M['steel'], (0.0, 0.3, 0.9, 0.0), faces='yYZ')
+            acc.box((x_0, yc + s - 0.04, TRACK_BED_Z), (x_1, yc + s + 0.04, TRACK_BED_Z + 0.18), M['steel'], (0.0, 0.3, 0.9, 0.0), faces='yYZ')
     return acc.to_mesh('PR_via_span')
 
 
@@ -2734,10 +2737,11 @@ def via_infill_mesh(M):
 
 
 def via_station(M, acc):
-    """성수역형 승강장: 3경간 상판 양쪽 3.6 m 승강장 + 녹색 곡면 지붕(기둥 11 m 간격). 고가 하부 가로 위로 내민다."""
+    """성수역형 승강장: 3경간 상판 양쪽 3.6 m 승강장(바깥면 녹색 띠 · 바깥 난간 · 끝면 · 받침 브래킷). 고가 하부 가로 위로 내민다.
+    성수 2041(Task 11b): 녹색 곡면 지붕과 지붕 기둥을 걷었다 — 승강장 구간 유리 튜브(future.build_tube, FU_tube_*_s)가 지붕이다."""
     xa, xb = STATION[0] - 1.2, STATION[1] + 1.2
     W = VIA_Y1 - VIA_Y0
-    pw = 3.6; zf = DECK_T + 1.0; zs = DECK_B - 0.45
+    pw = 3.6; zf = ST_FLOOR_Z; zs = DECK_B - 0.45
     for y_in, y_out in ((VIA_Y0 - 0.7, VIA_Y0 - 0.7 - pw), (VIA_Y1 + 0.7, VIA_Y1 + 0.7 + pw)):
         sy = 1 if y_out > y_in else -1
         lo, hi = min(y_in, y_out), max(y_in, y_out)
@@ -2750,36 +2754,15 @@ def via_station(M, acc):
         for x in (xa, xb):
             acc.poly([(x, lo, zs), (x, hi, zs), (x, hi, zf), (x, lo, zf)], [(lo, zs), (hi, zs), (hi, zf), (lo, zf)], M['conc'],
                      (0.0, 0.4, 0.8, 0.0), (-1 if x == xa else 1, 0, 0))
-        # 승강장 선로 쪽 끝면(Task 9: 상판 난간벽을 걷어 도상 턱 DECK_T + 0.3 위가 드러난다)
-        acc.poly([(xa, y_in, DECK_T + 0.3), (xb, y_in, DECK_T + 0.3), (xb, y_in, zf), (xa, y_in, zf)],
-                 [(xa, DECK_T + 0.3), (xb, DECK_T + 0.3), (xb, zf), (xa, zf)], M['conc'], (0.0, 0.4, 0.8, 0.0), (0, -sy, 0))
-        # 승강장 바깥 난간 + 지붕 기둥
+        # 승강장 선로 쪽 끝면(Task 9: 상판 난간벽을 걷어 도상 턱 TRACK_BED_Z 위가 드러난다)
+        acc.poly([(xa, y_in, TRACK_BED_Z), (xb, y_in, TRACK_BED_Z), (xb, y_in, zf), (xa, y_in, zf)],
+                 [(xa, TRACK_BED_Z), (xb, TRACK_BED_Z), (xb, zf), (xa, zf)], M['conc'], (0.0, 0.4, 0.8, 0.0), (0, -sy, 0))
+        # 승강장 바깥 난간(Task 11b: 지붕 기둥 7 개는 걷었다 — 유리 튜브 받침 띠가 승강장 끝에 붙어 고가 중심 ±9.3 … 9.9 에 놓인다)
         yr = y_out - sy * 0.1
         acc.cyl((xa, yr, zf + 1.1), (xb, yr, zf + 1.1), 0.04, 0.04, 4, M['galv'], (0, 0.4, 0.9, 0))
         for k in range(int((xb - xa) / 2.0) + 1):
             px = xa + 2.0 * k
             acc.cyl((px, yr, zf), (px, yr, zf + 1.1), 0.025, 0.025, 4, M['galv'], (0, 0.4, 0.9, 0))
-        for k in range(7):
-            px = xa + 1.0 + (xb - xa - 2.0) * k / 6
-            acc.box((px - 0.15, yr - sy * 0.6 - 0.15, zf), (px + 0.15, yr - sy * 0.6 + 0.15, zf + 4.2), M['galv'], (0, 0.35, 0.9, 0.2),
-                    faces='xXyY')
-    # 녹색 곡면 지붕(양쪽 승강장과 선로 위 한 덩어리)
-    ya, yb = VIA_Y0 - 0.7 - pw - 0.6, VIA_Y1 + 0.7 + pw + 0.6
-    ze, zc = zf + 4.0, zf + 6.4
-    NS = 12
-    ptsy = [ya + (yb - ya) * i / NS for i in range(NS + 1)]
-    zz = [ze + (zc - ze) * (1 - ((y - 0.5 * (ya + yb)) / (0.5 * (yb - ya))) ** 2) for y in ptsy]
-    for i in range(NS):
-        for top in (True, False):
-            dz = 0.0 if top else -0.25
-            p = [(xa - 1.0, ptsy[i], zz[i] + dz), (xb + 1.0, ptsy[i], zz[i] + dz), (xb + 1.0, ptsy[i + 1], zz[i + 1] + dz),
-                 (xa - 1.0, ptsy[i + 1], zz[i + 1] + dz)]
-            acc.poly(p, [(xa, ptsy[i]), (xb, ptsy[i]), (xb, ptsy[i + 1]), (xa, ptsy[i + 1])], M['green'] if top else M['galv'],
-                     (0.25 if top else 0.0, 0.5, 0.95 if top else 0.6, 0.0), (0, 0, 1) if top else (0, 0, -1))
-    for x, sx in ((xa - 1.0, -1), (xb + 1.0, 1)):
-        for i in range(NS):
-            acc.poly([(x, ptsy[i], zz[i] - 0.25), (x, ptsy[i + 1], zz[i + 1] - 0.25), (x, ptsy[i + 1], zz[i + 1]), (x, ptsy[i], zz[i])],
-                     [(0, 0), (1, 0), (1, 0.25), (0, 0.25)], M['green'], (0, 0.4, 0.9, 0), (sx, 0, 0))
     # 승강장 아래 받침 브래킷(교각마다)
     for px in (STATION[0], STATION[0] + VIA_SPAN, STATION[0] + 2 * VIA_SPAN, STATION[1]):
         for y_in, y_out in ((VIA_Y0 - 0.7, VIA_Y0 - 0.7 - pw), (VIA_Y1 + 0.7, VIA_Y1 + 0.7 + pw)):

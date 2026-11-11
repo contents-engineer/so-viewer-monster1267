@@ -75,6 +75,9 @@ export async function createWorld({
   // 성수 2041: 복원·정돈된 도시 — 틈의 이끼를 30 % 로(구운 마스크는 그대로, 비 · 눈 무드에서도 같다)
   const SEONGSU_MOSS = 0.3;
   if (worldVer !== 'ds2') uniforms.uMoss.value = SEONGSU_MOSS;
+  // 성수 2041 밤 거리 반사광(Task 12): 가로등 · 상점 창 불빛이 벽 아랫부분 · 노면에 번지는 세기(surface.js uNightFill)
+  const SEONGSU_NIGHT_FILL = 0.25;
+  if (worldVer !== 'ds2') uniforms.uNightFill.value = SEONGSU_NIGHT_FILL;
 
   // 3) 하늘 돔 + 조명 + 환경 반사맵(PMREM) 구성
   const sky = createSkyDome(uniforms);
@@ -194,13 +197,34 @@ export async function createWorld({
   // 노면에 붙은 태양광 띠(FU_road_pv.*, Task 10)도 같은 규칙으로 드리우지 않는다(노면 + 1 cm 판이 그림자 여드름만 만든다).
   const FAR_CASTER = /^FU_(tower|plaza|turbine|road_pv)/;
   // 깊이를 쓰지 않는 반투명 유리(재질 이름 → 불투명도). 그림자도 드리우지 않는다(불투명 그림자가 된다)
-  const GLASS_OPACITY = { NWF_tube_glass: 0.22, NWF_glass_rail: 0.3, NWF_kiosk_glass: 0.55 };   // 키오스크 유리 판(Task 10): UI 칸 발광 + 알파 0.55
+  const GLASS_OPACITY = { NWF_tube_glass: 0.55, NWF_glass_rail: 0.3, NWF_kiosk_glass: 0.55 };   // 키오스크 유리 판(Task 10): UI 칸 발광 + 알파 0.55
   // 정적 병합에서 빼는 반투명 재질. 병합은 재질(uuid)별 버킷이라 반투명이 불투명과 합쳐지는 일은 없다. 반투명 전체를 빼면
   // HAUS 유리 9 조각 · 유리 난간 6 조각이 따로 남아(양면 반투명 = 객체마다 2 그리기) 메인 패스가 +26 그리기 → 튜브 유리만 뺀다
   const NO_MERGE = new Set(['NWF_tube_glass']);
+  // 밤 조율(성수 Task 12): 재질별 발광 곱 [낮, 밤] — surface.js 발광 규칙(항상 · 밤에만 · 창)을 거친 값에 mix(낮, 밤, uNight) 를 곱한다.
+  // Blender 의 발광 세기(nw_emit day · night)는 웹 GLB 로 넘어오지 않으므로(발광 1.0 고정) 웹 세기는 여기서 정한다. DS2 는 쓰지 않는다
+  // 목표: 길(청록)과 튜브(흰빛)가 선으로 읽히고, 타워 · 상점 창은 따뜻한 실내등 정도로 낮춰 흰 판 · 블룸 번짐이 없게 한다
+  const NIGHT_EMIT = {
+    NWF_curtain: [1, 0.25],      // 신축 타워 창(밤에만): 흰 베이지 판 → 따뜻한 창
+    NWB_city: [1, 0.5],          // 원경 아파트 · 타워 창(밤에만)
+    NW_glass_window: [1, 0.35],  // 현재 층 상점 · 공장 창(밤에만): 1.35 배 흰 판이 블룸 문턱을 넘던 것을 낮춤
+    NWF_tube_led: [1, 3.0],      // 튜브 등줄기 LED: 화소보다 가는 선이 점선으로 끊기던 것 → 블룸으로 한 줄
+    NWF_road_led: [1, 0.6],      // 노면 청록 발광선: 밤에 흰색으로 날아가던 것 → 청록이 남게
+    NWF_led_bridge: [1, 0.8],    // 스카이브리지 소핏 LED
+    NWF_mover: [1, 0.6],         // 이동체 아틀라스(열차 창 · 포드 LED · 상태 화면, 밤에만): 열차 창 흰 판 → 따뜻한 창
+    NWF_tube_glass: [0, 0.25],   // 튜브 유리 밤 발광(아래 TUBE_GLASS_NIGHT 색, 낮 0)
+    NWB_tube: [0, 0.14],         // 원경 튜브 외피(불투명): 장면 튜브 유리(0.25 × 알파 0.55)와 같은 밤 밝기
+  };
+  // 튜브 유리 밤 발광(성수): 등줄기 LED 가 비추는 차가운 흰빛으로 유리 몸통이 밤에도 튜브로 읽히게 한다(낮 곱 0 = 낮에는 없음)
+  const TUBE_GLASS_NIGHT = '#BFE3F0';
   // 모바일 삼각형 예산(0.9 M): 튜브 리브 홀수 번째(→ 11 m 간격) · 화단의 늘어진 덩굴 카드를 그리지 않는다
   // · 거리 벤치(Task 10: 티크 재질 그리기 1 과 삼각형. 카페 테라스는 레퍼런스의 핵심이라 모바일에서도 그린다)
-  const MOBILE_HIDE = /^FU_(tube_(ribs_fine|planter_vines)_|bench)/;
+  // · 원경 BD_far_desk(Task 12: BD_far 에서 걸러진 원경 동 — 데스크톱만 그린다. 백드롭 GLB 는 데스크톱 · 모바일 공용)
+  const MOBILE_HIDE = /^(FU_(tube_(ribs_fine|planter_vines)_|bench)|BD_far_desk)/;
+  // 모바일에서도 솎지 않는 인스턴스(Task 12): 공원 느티나무 PR_zelkova_a(8 그루, 711 tris) · 카페 테라스 FU_terrace(6 조, 236 tris).
+  // 늘어난 삼각형(+5.2 K)은 원경 크림색 상자(backdrop.py FAR_*_KEEP, 줄이기 순서 1)를 덜어 맞춘다. 화분 가로수(PR_zelkova_b · PR_planter)는
+  // 예산이 모자라 아래 규칙대로 솎는다(Task 12 Step 2 줄이기 3: 화분형 가로수 수)
+  const MOBILE_FULL_INST = /^(PR_zelkova_a|FU_terrace)/;
   function isFarCaster(node) {
     for (let cur = node; cur; cur = cur.parent) {
       if (typeof cur.name === 'string' && FAR_CASTER.test(cur.name)) return true;
@@ -276,6 +300,10 @@ export async function createWorld({
           }
         }
         targetMat.userData._nwSig = sig;
+        if (worldVer !== 'ds2' && NIGHT_EMIT[targetMat.name]) {
+          targetMat.userData.nwEmitGain = NIGHT_EMIT[targetMat.name];
+          if (targetMat.name === 'NWF_tube_glass' || targetMat.name === 'NWB_tube') targetMat.emissive.set(TUBE_GLASS_NIGHT);
+        }
         patchSurfaceMaterial(targetMat, surf, uniforms, hasVertMask);
         // 2호선 유리 튜브(Task 9) · 유리 난간: 깊이를 쓰지 않는 반투명(튜브 안 열차 · 뒤 하늘이 비친다). 정적 병합 · 그림자에서 뺀다(아래)
         const glassOpacity = GLASS_OPACITY[targetMat.name];
@@ -283,6 +311,11 @@ export async function createWorld({
           targetMat.transparent = true;
           targetMat.opacity = glassOpacity;
           targetMat.depthWrite = false;
+          // 튜브 유리(Task 11b): 양면 반투명은 three 가 뒷면 → 앞면으로 두 번 그린다(객체마다 그리기 2). 한 색 · 한 알파라 섞는 순서가
+          // 바뀌어도 차이는 알파² × (앞 · 뒷면 음영 차) → 한 번에 그린다(승강장 구간 FU_tube_glass_s 를 더해도 모바일 조감 그리기 ≤ 180).
+          // Task 12 에 알파를 0.22 → 0.55 로 올려 그 비율이 5 % → 30 % 가 됐지만 앞 · 뒷면이 같은 색 · 같은 밤 발광이라 조감 · 골목 · 근접 캡처에서
+          // 순서 오류는 보이지 않았다
+          if (targetMat.name === 'NWF_tube_glass') targetMat.forceSinglePass = true;
         }
         patchedMaterials.add(targetMat);
         return targetMat;
@@ -299,7 +332,9 @@ export async function createWorld({
       }
       if (node.isInstancedMesh) {
         const triPerInst = (node.geometry?.index ? node.geometry.index.count : (node.geometry?.attributes?.position?.count || 0)) / 3;
-        if (quality.tier === 'mobile') {
+        if (quality.tier === 'mobile' && MOBILE_FULL_INST.test(node.name)) {
+          // 솎지 않음(모바일 공원 느티나무 · 카페 테라스 — 아래 MOBILE_FULL_INST)
+        } else if (quality.tier === 'mobile') {
           if (triPerInst > 350) {
             node.count = Math.min(node.count, 2);
           } else if (node.count > 2) {

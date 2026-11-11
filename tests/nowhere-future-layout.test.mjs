@@ -111,3 +111,62 @@ test('(h) 스마트 거리 소품: 투명 키오스크 solid 6 개, 배송로봇
     assert.deepEqual(hits, [], `${id} 길과 겹침: ${hits.join(', ')}`);
   }
 });
+
+test('(i) 승강장 구간 튜브: FU_tube_ribs_s 가 22.8 … 91.2 를 덮고, 서 · 승강장 · 동 리브 상자가 x 로 끊김 없이 이어진다', () => {
+  const s = solid('FU_tube_ribs_s');
+  assert.ok(s, 'FU_tube_ribs_s 없음');
+  assert.ok(s.min[0] <= 22.8 + 0.5 && s.max[0] >= 91.2 - 0.5, `승강장 튜브 x ${s.min[0]} … ${s.max[0]}`);
+  assert.ok(s.max[1] >= 14.5, `승강장 튜브 꼭대기 ${s.max[1]}`);
+  const w = solid('FU_tube_ribs_w'), e = solid('FU_tube_ribs_e');
+  assert.ok(Math.abs(w.max[0] - s.min[0]) <= 1.0 && Math.abs(s.max[0] - e.min[0]) <= 1.0, '구간 사이 틈');
+});
+
+// Task 12: GLB JSON 청크(노드 · 메시 · 재질)와 world.js 원문
+function glbJson(rel) {
+  const buf = readFileSync(new URL(rel, import.meta.url));
+  return JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8'));
+}
+const worldSrc = readFileSync(new URL('../public/src/nowhere/world.js', import.meta.url), 'utf8');
+const srcRegex = (name) => {
+  const m = worldSrc.match(new RegExp(`const ${name} = /(.+)/;`));
+  assert.ok(m, `world.js 에 ${name} 없음`);
+  return new RegExp(m[1]);
+};
+
+test('(j) 원경 · 모바일(Task 12): BD_far_desk 는 데스크톱 전용(모바일 숨김), 공원 느티나무 8 · 카페 테라스 6 은 모바일에서도 솎지 않는다', () => {
+  const MOBILE_HIDE = srcRegex('MOBILE_HIDE');
+  const MOBILE_FULL_INST = srcRegex('MOBILE_FULL_INST');
+  for (const rel of ['../public/assets/nowhere/nowhere-backdrop.glb', '../public/assets/nowhere/mobile/nowhere-backdrop.glb']) {
+    const names = new Set(glbJson(rel).nodes.map((n) => n.name));
+    assert.ok(names.has('BD_far') && names.has('BD_far_desk'), `${rel}: BD_far · BD_far_desk 없음`);
+  }
+  assert.ok(MOBILE_HIDE.test('BD_far_desk') && !MOBILE_HIDE.test('BD_far'), 'MOBILE_HIDE 가 BD_far_desk 만 숨겨야 한다');
+  // 모바일 GLB 의 인스턴스 노드: 메시 이름(GLTFLoader 가 InstancedMesh 이름으로 쓴다)과 인스턴스 수
+  const inst = (rel) => {
+    const j = glbJson(rel);
+    const out = {};
+    for (const n of j.nodes) {
+      const ext = n.extensions?.EXT_mesh_gpu_instancing;
+      if (ext) out[j.meshes[n.mesh].name] = j.accessors[Object.values(ext.attributes)[0]].count;
+    }
+    return out;
+  };
+  const present = inst('../public/assets/nowhere/mobile/nowhere-present.glb');
+  const future = inst('../public/assets/nowhere/mobile/nowhere-future.glb');
+  assert.equal(present.PR_zelkova_a, 8, '공원 느티나무 PR_zelkova_a 8 그루');
+  assert.equal(future.FU_terrace, 6, '카페 테라스 FU_terrace 6 조');
+  for (const nm of ['PR_zelkova_a', 'PR_zelkova_a_1', 'FU_terrace', 'FU_terrace_1']) assert.ok(MOBILE_FULL_INST.test(nm), `${nm} 를 솎는다`);
+  for (const nm of ['PR_zelkova_b', 'PR_planter', 'PR_shrub']) assert.ok(!MOBILE_FULL_INST.test(nm), `${nm} 는 솎아야 한다(모바일 예산)`);
+});
+
+test('(k) 튜브 유리(Task 12): future GLB 알파 = world.js GLASS_OPACITY, 짙은 청회색(옅은 #BFD8E6 아님)', () => {
+  const m = worldSrc.match(/NWF_tube_glass: ([0-9.]+), NWF_glass_rail/);
+  assert.ok(m, 'GLASS_OPACITY 에 NWF_tube_glass 없음');
+  for (const rel of ['../public/assets/nowhere/nowhere-future.glb', '../public/assets/nowhere/mobile/nowhere-future.glb']) {
+    const mat = glbJson(rel).materials.find((x) => x.name === 'NWF_tube_glass');
+    assert.ok(mat, `${rel}: NWF_tube_glass 없음`);
+    const [r, g, b, a] = mat.pbrMetallicRoughness.baseColorFactor;
+    assert.ok(Math.abs(a - Number(m[1])) < 1e-3, `알파 ${a} ≠ GLASS_OPACITY ${m[1]}`);
+    assert.ok(Math.max(r, g, b) < 0.3 && b > r, `유리 색(선형) ${[r, g, b].map((v) => v.toFixed(3))}`);
+  }
+});
