@@ -1885,6 +1885,43 @@ test('(i) 승강장 구간 튜브: FU_tube_ribs_s 가 22.8 … 91.2 를 덮고, 
 
 ---
 
+### Task 13: 아이패드 등급 판정, 모바일 주인공 건물 텍스처 2048 → 1024 (2026-11-11 승인)
+
+지난 진단(2026-11-10, 아이패드 5세대: A9, 메모리 2 GB, 2048 × 1536)의 결론이다.
+- iPadOS Safari는 기본이 데스크톱 모드라 UA에 `iPad` 대신 `Macintosh`가 들어간다. 화면 1024 × 768이고 `deviceMemory`를 주지 않아 `detectQualityTier`의 세 조건에 모두 걸리지 않는다. 그래서 가장 무거운 데스크톱 설정(해 그림자, 텍스처 GPU 약 994 MB)으로 실행된다.
+- 모바일 등급도 텍스처가 약 440 MB다. 모바일 장면 GLB 4종은 이미 512 px 이하이고, 2048 px는 두 주인공 건물(`gm_building.glb` 7장, `facearch.glb` 5장)에만 있다. 2048² 한 장은 GPU에서 밉맵 포함 약 22 MB다.
+
+**Files:**
+- Modify: `public/src/nowhere/quality.js`(`detectQualityTier`)
+- Modify: `public/src/nowhere/world.js`(주인공 건물 URL을 등급별로)
+- Create: `public/assets/mobile/gm_building.glb`, `public/assets/mobile/facearch.glb`(원본에서 텍스처만 줄인 사본)
+- Modify: `package.json`(사본을 만드는 스크립트 `nowhere:heroes:mobile`)
+- Test: `tests/nowhere-quality.test.mjs`, `tests/nowhere-assets.test.mjs`
+
+**Interfaces:**
+- `detectQualityTier(env)`는 `env.maxTouchPoints`(기본 `navigator.maxTouchPoints`)를 더 받는다. `Macintosh` UA이면서 `maxTouchPoints > 1`이면 `'mobile'`이다. 터치 없는 Mac(`maxTouchPoints` 0)은 지금처럼 판정한다.
+- `getQualityConfig(tier, worldVer)`의 반환에 주인공 건물 URL(예: `heroUrls: { haus, facearch }`)을 더한다. desktop은 원본, mobile은 `assets/mobile/…` 사본이다. 성수와 DS2 모두 같은 규칙을 쓴다.
+
+- [ ] **Step 1: 실패하는 테스트를 쓴다.**
+  - quality (a)에 iPadOS 데스크톱 모드 UA(`Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15`, 1024 × 768, `maxTouchPoints: 5`) → `'mobile'`을 더한다.
+  - 같은 UA에 `maxTouchPoints: 0`, 1440 × 900 → `'desktop'`을 더한다.
+  - assets에 모바일 사본 두 개가 있고, 사본 안 이미지의 긴 변이 모두 ≤ 1024인지 검사한다. 원본 두 개는 git 인덱스의 바이트와 같은지(크기·해시) 검사한다.
+  - assets의 모바일 전송량 합에는 사본 크기를 쓴다.
+- [ ] **Step 2: 판정을 고친다(`quality.js`).**
+- [ ] **Step 3: 모바일 사본을 만든다.** `@gltf-transform/cli@4.1.1`로 텍스처만 긴 변 1024로 줄인다. 원본의 형상 압축, 텍스처 형식, 노드 이름, 재질은 그대로 둔다. 원본은 바꾸지 않는다. 같은 명령을 `package.json` 스크립트로 남긴다.
+- [ ] **Step 4: 등급별로 싣는다(`world.js`).** 모바일 등급이면 사본을 읽는다. 실내(`interior.js`)나 다른 곳이 주인공 건물 GLB를 따로 읽으면 같은 규칙을 적용한다.
+- [ ] **Step 5: 확인한다.**
+  - `npm test`
+  - playwriter `?tier=mobile&stats=1`로 성수와 DS2에서 아래를 적는다.
+    - 텍스처 수·텍스처 MB(이전 → 이후)
+    - 그리기·삼각형
+    - 콘솔 오류 0
+  - HAUS 접근 시점과 FaceArch 근처에서 화질이 무너지지 않는지 1600 × 900 캡처로 본다.
+  - 데스크톱은 이전과 같아야 한다(같은 원본 URL, 화면 동일).
+- [ ] **Step 6: 커밋(또는 스테이징 + 메시지 제시)** — `perf(nowhere): 아이패드(데스크톱 모드 Safari)를 모바일 등급으로 · 모바일 주인공 건물 텍스처 1024`
+
+---
+
 ## 10. 위험과 대응
 
 | 위험 | 대응 |
@@ -1898,12 +1935,12 @@ test('(i) 승강장 구간 튜브: FU_tube_ribs_s 가 22.8 … 91.2 를 덮고, 
 | 새 구조물이 카메라 경로를 막음 | `layout.solids` + clearance 테스트가 인트로·비행 4경로·이동체를 매번 검사한다 |
 | 담쟁이 알파 카드가 창을 덮거나 검게 보임 | `holes`로 창 칸을 비운다. MASK 알파 유지를 Task 5 Step 1에서 확인한다 |
 | 전체 재구축이 느림 | `--no-bake` 빠른 빌드로 반복하고, 굽기는 CP1·CP2·마지막에만 한다 |
-| iPad 등급 오판(iPadOS가 데스크톱 UA) | 이 계획 범위 밖이다. 지난 진단의 등급 판정 수정은 따로 승인받아 진행한다. 데스크톱 등급으로 잡히면 해 그림자가 켜지므로, 그 수정 전에는 iPad에서 `?tier=mobile`로 확인한다 |
+| iPad 등급 오판(iPadOS가 데스크톱 UA) | 2026-11-11 사용자 승인으로 Task 13에서 고친다(`Macintosh` UA + 터치 지점 > 1 → mobile) |
 
 ## 11. 범위 밖
 
 - 보행자(D4, CP2에서 보류).
-- iPad 등급 판정과 모바일 텍스처 1024 → 512 축소(별도 승인 대기).
+- (2026-11-11 승인되어 Task 13으로 옮김) iPad 등급 판정, 모바일 주인공 건물 텍스처 2048 → 1024. 지난 진단의 제안은 "2048 → 1024"였고, 이 줄의 옛 표기 "1024 → 512"는 잘못 옮겨 적은 것이다.
 - DS2 월드 변경.
 - 실내(HAUS 내부) 변경.
 - 날씨·시간 UI 재디자인(버튼 하나 추가만).

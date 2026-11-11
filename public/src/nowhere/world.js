@@ -154,8 +154,8 @@ export async function createWorld({
     { key: 'present', url: `${quality.assetDir}/nowhere-present.glb`, fallbackSurface: 'wall' },
     { key: 'future', url: `${quality.assetDir}/nowhere-future.glb`, fallbackSurface: 'metal' },
     { key: 'backdrop', url: `${quality.assetDir}/nowhere-backdrop.glb`, fallbackSurface: 'wall' },
-    { key: 'haus', url: 'assets/gm_building.glb', fallbackSurface: 'building' },
-    { key: 'facearch', url: 'assets/facearch.glb', fallbackSurface: 'building' },
+    { key: 'haus', url: quality.heroUrls.haus, fallbackSurface: 'building' },
+    { key: 'facearch', url: quality.heroUrls.facearch, fallbackSurface: 'building' },
   ];
 
   let completed = 0;

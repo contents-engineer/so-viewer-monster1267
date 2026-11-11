@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -47,15 +48,19 @@ function parseGlbJson(filePath) {
 
 test('(a) GLB 4개(데스크톱) + mobile 4개 및 마스크·HDRI 파일이 존재하고 용량 예산 이내다 (seongsu & ds2)', () => {
   let bldBytes = 0;
+  let bldMobileBytes = 0;
   for (const bld of BUILDINGS) {
     const p = resolve(ASSETS, bld);
     assert.ok(existsSync(p), `건물 원본 GLB가 없다: ${bld}`);
     bldBytes += statSync(p).size;
+    const m = resolve(ASSETS, 'mobile', bld);
+    assert.ok(existsSync(m), `건물 모바일 사본 GLB가 없다: mobile/${bld}`);
+    bldMobileBytes += statSync(m).size;
   }
 
   for (const [ver, dirPath] of WORLD_DIRS) {
     let desktopBytes = bldBytes;
-    let mobileBytes = bldBytes;
+    let mobileBytes = bldMobileBytes;   // 모바일은 텍스처를 줄인 사본(assets/mobile)을 싣는다
 
     for (const layer of LAYERS) {
       const deskPath = resolve(dirPath, `nowhere-${layer}.glb`);
@@ -181,5 +186,79 @@ test('(c) GLB JSON 청크 검증: extras.nw_surface 값이 §5 허용 목록 안
         }
       }
     }
+  }
+});
+
+// ── Task 13: 모바일 주인공 건물 사본(텍스처 ≤ 1024)과 원본 불변 ──
+// 원본의 sha256 은 2026-11-11 git 인덱스(HEAD)의 바이트에서 계산해 고정했다. 원본을 바꾸면 이 테스트가 깨진다.
+const HERO_ORIGINALS = {
+  'gm_building.glb': { size: 2453112, sha256: '7baa5dfc5d8099474cf4404fe5635159dc27c10dc6c31b86604f21ebd2ea9b7b' },
+  'facearch.glb': { size: 3493780, sha256: 'bb1a890456cae94c4ba3872839987453c47782712ec17622a09cedee5b47e455' },
+};
+
+/** GLB 이미지(webp / png / jpeg)의 크기를 디코더 없이 헤더에서 읽는다. */
+function imageSize(buf) {
+  if (buf.subarray(0, 4).toString('latin1') === 'RIFF' && buf.subarray(8, 12).toString('latin1') === 'WEBP') {
+    const kind = buf.subarray(12, 16).toString('latin1');
+    if (kind === 'VP8X') return [1 + buf.readUIntLE(24, 3), 1 + buf.readUIntLE(27, 3)];
+    if (kind === 'VP8L') {
+      const b = buf.readUInt32LE(21);
+      return [1 + (b & 0x3fff), 1 + ((b >> 14) & 0x3fff)];
+    }
+    if (kind === 'VP8 ') return [buf.readUInt16LE(26) & 0x3fff, buf.readUInt16LE(28) & 0x3fff];
+  }
+  if (buf.readUInt32BE(0) === 0x89504e47) return [buf.readUInt32BE(16), buf.readUInt32BE(20)];
+  if (buf[0] === 0xff && buf[1] === 0xd8) {
+    for (let i = 2; i < buf.length - 9; ) {
+      if (buf[i] !== 0xff) { i++; continue; }
+      const m = buf[i + 1];
+      if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) return [buf.readUInt16BE(i + 7), buf.readUInt16BE(i + 5)];
+      i += 2 + buf.readUInt16BE(i + 2);
+    }
+  }
+  throw new Error('알 수 없는 이미지 형식');
+}
+
+function glbImageSizes(filePath) {
+  const buf = readFileSync(filePath);
+  const gltf = parseGlbJson(filePath);
+  const binStart = 20 + buf.readUInt32LE(12) + 8;
+  return (gltf.images || []).map((img) => {
+    const bv = gltf.bufferViews[img.bufferView];
+    const off = binStart + (bv.byteOffset || 0);
+    return imageSize(buf.subarray(off, off + bv.byteLength));
+  });
+}
+
+test('(h) 주인공 건물 원본은 바이트 그대로이고, 모바일 사본은 텍스처만 1024 이하로 줄었다', () => {
+  for (const [name, want] of Object.entries(HERO_ORIGINALS)) {
+    const orig = resolve(ASSETS, name);
+    const buf = readFileSync(orig);
+    assert.equal(buf.byteLength, want.size, `${name} 원본 크기가 바뀌었다`);
+    assert.equal(createHash('sha256').update(buf).digest('hex'), want.sha256, `${name} 원본 바이트가 바뀌었다`);
+
+    const mob = resolve(ASSETS, 'mobile', name);
+    assert.ok(existsSync(mob), `모바일 사본이 없다: mobile/${name}`);
+    const origSizes = glbImageSizes(orig);
+    const mobSizes = glbImageSizes(mob);
+    assert.ok(origSizes.some(([w, h]) => Math.max(w, h) > 1024), `${name} 원본에 1024 초과 텍스처가 있어야 비교가 의미 있다`);
+    assert.equal(mobSizes.length, origSizes.length, `${name} 사본의 이미지 수가 원본과 다르다`);
+    for (const [w, h] of mobSizes) assert.ok(Math.max(w, h) <= 1024, `${name} 사본 텍스처가 ${w}×${h} 로 1024 를 넘는다`);
+    mobSizes.forEach(([w, h], i) => {
+      const [ow, oh] = origSizes[i];
+      assert.equal(Math.round((w / h) * 100), Math.round((ow / oh) * 100), `${name} 이미지 ${i} 가로세로비가 바뀌었다`);
+    });
+
+    // 형상 · 재질 · 노드 이름 · 확장은 원본과 같다
+    const og = parseGlbJson(orig);
+    const mg = parseGlbJson(mob);
+    assert.deepEqual(mg.nodes.map((n) => n.name), og.nodes.map((n) => n.name), `${name} 노드 이름이 다르다`);
+    assert.deepEqual((mg.materials || []).map((m) => m.name), (og.materials || []).map((m) => m.name), `${name} 재질 이름이 다르다`);
+    assert.deepEqual([...mg.extensionsUsed].sort(), [...og.extensionsUsed].sort(), `${name} extensionsUsed 가 다르다`);
+    assert.deepEqual([...(mg.extensionsRequired || [])].sort(), [...(og.extensionsRequired || [])].sort(), `${name} extensionsRequired 가 다르다`);
+    assert.deepEqual(mg.meshes.map((m) => m.primitives.length), og.meshes.map((m) => m.primitives.length), `${name} 프리미티브 수가 다르다`);
+    const count = (g) => g.meshes.flatMap((m) => m.primitives).map((p) => g.accessors[p.indices].count);
+    assert.deepEqual(count(mg), count(og), `${name} 삼각형(인덱스) 수가 다르다`);
+    assert.ok(statSync(mob).size < statSync(orig).size, `${name} 사본이 원본보다 작아야 한다`);
   }
 });

@@ -62,6 +62,19 @@ test('(a) detectQualityTier: UA·화면 크기·deviceMemory 조합별 등급 �
     }),
     'desktop',
   );
+
+  // iPadOS Safari 는 기본이 데스크톱 모드라 UA 가 Macintosh 다 — 터치 지점이 2 개 이상이면 아이패드로 본다
+  const IPADOS_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15';
+  assert.equal(detectQualityTier({ userAgent: IPADOS_UA, width: 1024, height: 768, maxTouchPoints: 5 }), 'mobile');
+  assert.equal(detectQualityTier({ userAgent: IPADOS_UA, width: 1440, height: 900, maxTouchPoints: 5 }), 'mobile', '화면이 커도 터치 Mac 은 아이패드');
+  assert.equal(detectQualityTier({ userAgent: IPADOS_UA, width: 1440, height: 900, maxTouchPoints: 0 }), 'desktop', '터치 없는 Mac 은 데스크톱');
+  assert.equal(detectQualityTier({ userAgent: IPADOS_UA, width: 1440, height: 900, maxTouchPoints: 1 }), 'desktop', '터치 지점 1 개는 아이패드로 보지 않는다');
+  assert.equal(detectQualityTier({ userAgent: IPADOS_UA, width: 1440, height: 900 }), 'desktop', 'maxTouchPoints 를 안 주면 터치 없음으로 본다(테스트 환경에 navigator 없음)');
+  // Windows 터치 노트북은 Macintosh 가 아니므로 영향이 없다
+  assert.equal(
+    detectQualityTier({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125.0 Safari/537.36', width: 1920, height: 1080, maxTouchPoints: 10 }),
+    'desktop',
+  );
 });
 
 test('(b) getQualityConfig: 데스크톱(1024/6000/bloom on) vs 모바일(512/1800/bloom off) 설정 반환', () => {
@@ -94,4 +107,11 @@ test('(s) 해 그림자: 데스크톱만 켠다(모바일은 그림자 패스 �
   assert.equal(getQualityConfig('desktop').sunShadows, true);
   assert.equal(getQualityConfig('mobile').sunShadows, false);
   assert.equal(getQualityConfig('desktop', 'ds2').sunShadows, true, 'DS2 는 world.js 에서 끈다(등급 값은 공통)');
+});
+
+test('(t) heroUrls: 데스크톱은 원본, 모바일은 assets/mobile 사본(성수·DS2 공통)', () => {
+  for (const ver of ['seongsu', 'ds2']) {
+    assert.deepEqual(getQualityConfig('desktop', ver).heroUrls, { haus: 'assets/gm_building.glb', facearch: 'assets/facearch.glb' });
+    assert.deepEqual(getQualityConfig('mobile', ver).heroUrls, { haus: 'assets/mobile/gm_building.glb', facearch: 'assets/mobile/facearch.glb' });
+  }
 });
