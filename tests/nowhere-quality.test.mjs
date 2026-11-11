@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { detectQualityTier, getQualityConfig } from '../public/src/nowhere/quality.js';
+import { existsSync } from 'node:fs';
 
 test('(a) detectQualityTier: UA·화면 크기·deviceMemory 조합별 등급 판정', () => {
   assert.equal(
@@ -113,5 +114,10 @@ test('(t) heroUrls: 데스크톱은 원본, 모바일은 assets/mobile 사본(�
   for (const ver of ['seongsu', 'ds2']) {
     assert.deepEqual(getQualityConfig('desktop', ver).heroUrls, { haus: 'assets/gm_building.glb', facearch: 'assets/facearch.glb' });
     assert.deepEqual(getQualityConfig('mobile', ver).heroUrls, { haus: 'assets/mobile/gm_building.glb', facearch: 'assets/mobile/facearch.glb' });
+    for (const tier of ['desktop', 'mobile']) {
+      for (const url of Object.values(getQualityConfig(tier, ver).heroUrls)) {
+        assert.ok(existsSync(new URL(`../public/${url}`, import.meta.url)), `${ver}/${tier}: ${url} 파일이 없다`);
+      }
+    }
   }
 });

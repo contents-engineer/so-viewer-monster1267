@@ -287,6 +287,14 @@ export function weatherNamesFor(worldVer = 'seongsu') {
 export function defaultWeather(worldVer = 'seongsu') {
   return worldVer === 'ds2' ? 'overcast' : 'clear';
 }
+/** URL(weather=) 기상 이름을 월드에 맞춘다: 빈 값과 그 월드에서 고를 수 없는 기상(DS2 의 맑음)은 기본 기상으로 되돌리고,
+ *  옛 프리셋 이름(dusk · night)은 그대로 둔다(컨트롤러가 시각으로 옮겨 적용). 월드를 바꿔도 URL 의 weather=clear 가 남아 DS2 가
+ *  맑은 룩이 되던 것(활성 버튼 없음)을 막는다. */
+export function resolveWeather(name, worldVer = 'seongsu') {
+  if (!name) return defaultWeather(worldVer);
+  if (WEATHER_NAMES.includes(name) && !weatherNamesFor(worldVer).includes(name)) return defaultWeather(worldVer);
+  return name;
+}
 export const DAY_HOUR = 14;          // 기준 시각: 각 월드의 설계 해 방향(대표 렌더)과 같은 시각
 export const TIME_QUICK = { day: 14, dusk: 18.5, night: 21.5 };
 const SUNRISE = 6.0;
@@ -423,8 +431,12 @@ export function createWeatherController({
   timeDuration = 0.6,
   presets = PRESETS,
   sunBaseDir = null,
+  worldVer = 'seongsu',
 }) {
-  let weatherName = WEATHER_NAMES.includes(initialPreset) ? initialPreset : 'overcast';
+  const allowedWeather = weatherNamesFor(worldVer);   // DS2 = 맑음 없음(맑음 버튼도 숨긴다)
+  const firstWeather = resolveWeather(initialPreset, worldVer);
+  // 옛 프리셋 이름(dusk · night)이나 모르는 이름은 월드 기본 기상(성수 맑음 · DS2 흐림)에 그 시각을 얹는다
+  let weatherName = allowedWeather.includes(firstWeather) ? firstWeather : defaultWeather(worldVer);
   let hour = Number.isFinite(initialHour)
     ? clampHour(initialHour)
     : initialPreset === 'dusk'
@@ -519,7 +531,7 @@ export function createWeatherController({
   }
 
   function setWeather(name, instant = false) {
-    if (!WEATHER_NAMES.includes(name)) return currentState;
+    if (!allowedWeather.includes(name)) return currentState;
     weatherName = name;
     return retarget(instant ? 0 : duration);
   }

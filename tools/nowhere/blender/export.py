@@ -10,7 +10,8 @@
 #      - solids (경로 여유 검사용 상자: 건물 표 · 아파트 · 고가 상판 · HAUS · FaceArch · nw_solid=1 객체, solid_boxes())
 #      모든 좌표는 Blender Z-up (x, y, z) → Three.js Y-up (x, z, −y) 로 변환.
 #   2) public/assets/nowhere/sky-1k.hdr 복사 (build/nowhere-src/hdri/urban_street_03_1k.hdr).
-#   3) 히어로·카메라 렌더를 WebP(1280×720)로 public/assets/nowhere/renders/*.webp 에 저장.
+#   3) (--hero-from-captures 를 줄 때만) 히어로·카메라 렌더 원본 PNG(웹 캡처, README §2)를 WebP(1280×720)로
+#      public/assets/nowhere/renders/*.webp 에 저장. 플래그가 없으면 출하 WebP 를 건드리지 않는다.
 #   4) glTF 내보내기용 재질 단순화:
 #      Blender 의 NW_Surface / _grime_material 노드 그룹은 웹(surface.js)이 실시간 GLSL 로 처리하므로,
 #      glTF 내보내기 직전에 각 재질의 Principled BSDF 에 (색 보정이 적용된) 알베도·ARM·노멀·발광 텍스처를 직접 연결한다.
@@ -44,8 +45,10 @@ def to_three(v):
 
 
 # ───────────────────────────── 카메라 · 앵커 메타데이터
-# 렌더 원본(build/nowhere/renders): Task 12 부터 7 장 모두 웹 캡처(맑음 14:00, 밤거리는 21:30, 1600 × 900 → 1280 × 720, UI 없이 캔버스만).
-# lib.MOODS 에 'clear' 가 없어 Blender 렌더로는 2041 모습(맑음 · 해 그림자)을 만들 수 없다. 옛 렌더는 renders/old-hero-t12/ · t2-* · t4-* 에 남아 있다
+# 렌더 원본(build/nowhere/renders, git 무시): Task 12 부터 7 장 모두 웹 캡처(맑음 14:00, 밤거리는 21:30, 1600 × 900 → 1280 × 720,
+# UI 없이 캔버스만 — 절차는 README §2). lib.MOODS 에 'clear' 가 없어 Blender 렌더로는 2041 모습(맑음 · 해 그림자)을 만들 수 없다.
+# 출하 WebP(public/assets/nowhere/renders, git 추적)가 기준이고, 빌드는 --hero-from-captures 를 줄 때만 이 원본으로 다시 만든다(최종 수정 I4).
+# 웹은 layout.cameras[].render 를 읽지 않는다(로딩 화면 배경 hero-street.webp 는 nowhere.css 가 직접 쓴다) — 카메라 표의 메타데이터다
 CAM_ORDER = [
     ('street',  '거리 시점 — 연무장길',       'hero-street.png',  'hero-street.webp'),
     ('aerial',  '조감 — 성수 블록과 4겹 능선', 'hero-aerial.png',  'hero-aerial.webp'),
@@ -122,7 +125,7 @@ ANCHOR_META = {
         'facts': [['구현', 'present.py AGE_SCALE 0.35 — 벽 정점 마스크의 그을음·빗물 얼룩·하단 이끼를 옛 세기의 35 %로'], ['걷어낸 것', '옥상 물탱크·실외기·옥상 광고판, 내려진 셔터(1층은 유리 상점)'], ['소재', 'church_bricks_02 · brick_wall_001 · CC0']],
         'lore': '2041년 성수 도시재생 사업은 골목 위 전선 다발을 땅속으로 묻고(지중화), 공장 띠의 적벽돌은 헐지 않고 세척했다. 그을음과 빗물 자국을 걷어내자 붉은 벽이 다시 드러났고, 내려져 있던 셔터 자리에는 유리 상점이 들어섰다.',
         'source': 'docs/nowhere/research/seongsu.md',
-        'render': 'assets/nowhere/renders/hero-viaduct.webp',
+        'render': 'assets/nowhere/renders/hero-future.webp',   # 최종 수정 I4: 앵커 자리(골목 서쪽 벽, y 74) = 2041 골목 시점의 양쪽 복원 벽돌
     },
     'workshop': {
         'facts': [['유형', '1–2F 골함석 지붕·외벽 소규모 금속·수제화 작업동'], ['부품', '1층 개구부는 유리 상점(내려진 셔터는 철거) · 박공 지붕 해 쪽 면 태양광'], ['소재', 'corrugated_iron_03 · CC0']],
@@ -207,38 +210,35 @@ ANCHOR_META = {
 
 
 # ───────────────────────────── 렌더 WebP 변환 및 HDRI 복사
-def export_renders_and_hdri(sc):
-    os.makedirs(PUB_REN_DIR, exist_ok=True)
-    # CAM_lot 렌더가 없으면 한 장 렌더해 둔다
-    lot_png = os.path.join(lib.OUT, 'renders', 't2-lot.png')
-    if not os.path.exists(lot_png) and bpy.data.objects.get('CAM_lot') is not None:
-        lib.apply_mood(sc, 'overcast', bake=False)
-        lib.render(sc, bpy.data.objects['CAM_lot'], lot_png, res=(1280, 720), samples=32)
-
-    converted = []
-    for cid, _, src_name, dst_name in CAM_ORDER:
-        src = os.path.join(lib.OUT, 'renders', src_name)
-        if not os.path.exists(src):
-            # 대체 후보
-            for alt in (f'hero-{cid}.png', f't4-{cid}-iter2.png', f't3-{cid}.png', f't2-{cid}.png', 'hero-street.png'):
-                p = os.path.join(lib.OUT, 'renders', alt)
-                if os.path.exists(p):
-                    src = p
-                    break
-        dst = os.path.join(PUB_REN_DIR, dst_name)
-        im = bpy.data.images.load(src, check_existing=False)
-        _ = im.pixels[0]  # filepath_raw 변경 전에 픽셀 버퍼를 메모리에 강제 로드
-        im.filepath_raw = dst
-        im.file_format = 'WEBP'
-        im.save()
-        bpy.data.images.remove(im)
-        converted.append((dst_name, os.path.getsize(dst)))
+def export_renders_and_hdri(sc, hero_from_captures=False):
+    """sky-1k.hdr 를 복사한다. hero_from_captures(--hero-from-captures)일 때만 CAM_ORDER 의 원본 PNG(build/nowhere/renders/hero-<id>.png,
+    README §2 의 웹 캡처)를 출하 WebP 로 바꾼다. 원본이 없는 장은 건너뛰고 경고만 낸다(출하 WebP 는 그대로).
+    옛 대체 후보(다른 시점 · 옛 흐림 렌더)와 CAM_lot Blender 렌더는 없앴다 — 다른 머신에서 빌드해도 출하 이미지가 조용히 바뀌지 않게."""
+    converted, skipped = [], []
+    if hero_from_captures:
+        os.makedirs(PUB_REN_DIR, exist_ok=True)
+        for cid, _, src_name, dst_name in CAM_ORDER:
+            src = os.path.join(lib.OUT, 'renders', src_name)
+            if not os.path.exists(src):
+                skipped.append(src_name)
+                print(f'[export] 경고: 렌더 원본 {src} 없음 — {dst_name} 은 그대로 둔다')
+                continue
+            dst = os.path.join(PUB_REN_DIR, dst_name)
+            im = bpy.data.images.load(src, check_existing=False)
+            _ = im.pixels[0]  # filepath_raw 변경 전에 픽셀 버퍼를 메모리에 강제 로드
+            im.filepath_raw = dst
+            im.file_format = 'WEBP'
+            im.save()
+            bpy.data.images.remove(im)
+            converted.append((dst_name, os.path.getsize(dst)))
+    else:
+        print('[export] 렌더 WebP 는 건드리지 않는다(다시 만들려면 --hero-from-captures, README §2)')
 
     hdr_src = os.path.join(lib.SRC, 'hdri', 'urban_street_03_1k.hdr')
     hdr_dst = os.path.join(PUB_DIR, 'sky-1k.hdr')
     os.makedirs(PUB_DIR, exist_ok=True)
     shutil.copy2(hdr_src, hdr_dst)
-    print('exported renders:', converted, 'sky-1k.hdr:', os.path.getsize(hdr_dst))
+    print('exported renders:', converted, 'skipped:', skipped, 'sky-1k.hdr:', os.path.getsize(hdr_dst))
     return converted
 
 
@@ -785,10 +785,10 @@ def export_collection_glbs():
     return out_files
 
 
-def export_all():
+def export_all(hero_from_captures=False):
     t0 = time.time()
     sc = lib.get_scene(True)
-    export_renders_and_hdri(sc)
+    export_renders_and_hdri(sc, hero_from_captures)
     export_layout(sc)
     prepare_materials_for_export()
     prepare_meshes_for_export()
@@ -798,4 +798,4 @@ def export_all():
 
 
 if __name__ == '__main__':
-    export_all()
+    export_all('--hero-from-captures' in sys.argv)

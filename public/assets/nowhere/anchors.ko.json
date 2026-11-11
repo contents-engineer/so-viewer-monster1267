@@ -181,7 +181,7 @@
     "title": "복원한 벽돌 — 오염을 걷어낸 공장 띠",
     "summary": "그을음·빗물 얼룩 35 %",
     "priority": 70,
-    "render": "assets/nowhere/renders/hero-viaduct.webp",
+    "render": "assets/nowhere/renders/hero-future.webp",
     "facts": [
       ["구현", "present.py AGE_SCALE 0.35 — 벽 정점 마스크의 그을음·빗물 얼룩·하단 이끼를 옛 세기의 35 %로"],
       ["걷어낸 것", "옥상 물탱크·실외기·옥상 광고판, 내려진 셔터(1층은 유리 상점)"],

@@ -73,3 +73,36 @@ test('(d) 이동체 경로: 드론은 solid 에서 3 m, 포드는 1.5 m, 배송�
   }
   assert.ok((layout.movers || []).length > 0, 'movers 없음');
 });
+
+// 이동체 차체(three y 위): 포드 = future.py taxi_mesh 4.3 × 1.85 × 1.55 + 지붕 센서 돔 0.1, 배송로봇 = BOT 0.7 × 0.55 × 0.6 + 바닥 틈 0.1
+const BODY = { pod: { half: 0.925, roof: 1.65 }, bot: { half: 0.275, roof: 0.7 } };
+const CAM_CLEAR = 1.5;   // m — 지상 카메라와 차체 옆면 사이 수평 거리
+function segDist2D(px, pz, a, b) {
+  const dx = b[0] - a[0], dz = b[2] - a[2];
+  const L2 = dx * dx + dz * dz;
+  const t = L2 > 0 ? Math.min(1, Math.max(0, ((px - a[0]) * dx + (pz - a[2]) * dz) / L2)) : 0;
+  return Math.hypot(px - (a[0] + t * dx), pz - (a[2] + t * dz));
+}
+
+test('(e) 지상 카메라: 포드 · 배송로봇 경로(차체 반폭 포함)에서 수평 1.5 m 이상(차체 지붕보다 1 m 넘게 높은 카메라는 제외)', () => {
+  let checked = 0;
+  for (const cam of layout.cameras) {
+    const [cx, cy, cz] = cam.pos;
+    for (const m of layout.movers || []) {
+      const body = BODY[m.kind];
+      if (!body) continue;
+      const P = m.path;
+      const nSeg = P.length - 1 + (m.mode === 'loop' ? 1 : 0);   // wrap 은 끝 → 처음이 순간 이동, pingpong 은 열린 선
+      let best = { d: Infinity, at: null };
+      for (let i = 0; i < nSeg; i++) {
+        const a = P[i], b = P[(i + 1) % P.length];
+        if (cy > Math.max(a[1], b[1]) + body.roof + 1.0) continue;   // 지붕 위로 1 m 넘게 높으면 차체가 렌즈를 스치지 않는다
+        checked += 1;
+        const d = segDist2D(cx, cz, a, b) - body.half;
+        if (d < best.d) best = { d, at: a.map((v) => Number(v.toFixed(1))) };
+      }
+      assert.ok(best.d >= CAM_CLEAR, `카메라 ${cam.id} ↔ ${m.id}: 차체 옆면까지 ${best.d.toFixed(2)} m @ ${best.at}`);
+    }
+  }
+  assert.ok(checked > 0, '검사한 구간이 없다');
+});

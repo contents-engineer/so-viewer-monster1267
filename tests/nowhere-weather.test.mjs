@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PRESETS, getPresets, lerp, srgbToLinear, linearToSrgb, composeState, WEATHER_NAMES, weatherNamesFor, defaultWeather, parseHexLinear, LOOK_KEYS, INTERIOR_LOOK } from '../public/src/nowhere/weather.js';
+import { PRESETS, getPresets, lerp, srgbToLinear, linearToSrgb, composeState, WEATHER_NAMES, weatherNamesFor, defaultWeather, resolveWeather, createWeatherController, parseHexLinear, LOOK_KEYS, INTERIOR_LOOK } from '../public/src/nowhere/weather.js';
 
 test('(a) PRESETS 5종(overcast, rain, dusk, night, snow)이 존재하고 키 집합이 모두 동일하다', () => {
   const names = ['overcast', 'rain', 'dusk', 'night', 'snow'];
@@ -160,4 +160,34 @@ test('(l) 월드별 기상 목록 · 기본 기상: 성수 = 맑음 포함 · �
   assert.deepEqual(WEATHER_NAMES, weatherNamesFor('seongsu'));
   assert.equal(getPresets('ds2').overcast.sunHaze, 1.0, 'DS2 덮어쓰기 유지');
   for (const n of ['overcast', 'rain', 'dusk', 'night', 'snow']) assert.equal(PRESETS[n].cloudCover, 0, n);
+});
+
+test('(m) DS2 에 맑음이 새지 않는다: URL weather=clear · 월드 전환 뒤에도 기본 기상(흐림), setWeather(clear) 도 무시', () => {
+  assert.equal(resolveWeather('clear', 'ds2'), 'overcast');
+  assert.equal(resolveWeather(null, 'ds2'), 'overcast');
+  assert.equal(resolveWeather('rain', 'ds2'), 'rain');
+  assert.equal(resolveWeather('night', 'ds2'), 'night', '옛 프리셋 이름은 시각으로 옮겨 적용하도록 그대로 둔다');
+  assert.equal(resolveWeather('clear', 'seongsu'), 'clear');
+  assert.equal(resolveWeather('', 'seongsu'), 'clear');
+  // 컨트롤러(장면 객체는 값만 받는 가짜)
+  const U = (v = 0) => ({ value: v });
+  const C = () => ({ value: { set() {} } });
+  const fakeWorld = () => ({
+    uniforms: { uWet: U(), uRain: U(), uSnow: U(), uNight: U(), uFogB: U(), uFogK: U(), uFogColor: C(), uFogFarColor: C(), uEmitGain: U(), uSunHaze: U() },
+    sky: { uniforms: { uSkyHorizon: C(), uSkyZenith: C(), uSkyGround: C() } },
+    lights: { sunLight: { color: { set() {} } }, hemiLight: { color: { set() {} }, groundColor: { set() {} } } },
+  });
+  const ds2 = createWeatherController({ world: fakeWorld(), post: null, renderer: {}, initialPreset: 'clear', presets: getPresets('ds2'), worldVer: 'ds2' });
+  assert.equal(ds2.getWeather(), 'overcast');
+  ds2.setWeather('clear', true);
+  assert.equal(ds2.getWeather(), 'overcast', 'DS2 에서 맑음으로 바꿀 수 없다');
+  ds2.setWeather('snow', true);
+  assert.equal(ds2.getWeather(), 'snow');
+  const ss = createWeatherController({ world: fakeWorld(), post: null, renderer: {}, initialPreset: 'clear', presets: getPresets('seongsu'), worldVer: 'seongsu' });
+  assert.equal(ss.getWeather(), 'clear');
+  // 옛 이름 weather=night: 성수는 맑은 밤(기본 기상 + 21:30), DS2 는 흐린 밤 그대로
+  const ssNight = createWeatherController({ world: fakeWorld(), post: null, renderer: {}, initialPreset: 'night', presets: getPresets('seongsu'), worldVer: 'seongsu' });
+  assert.deepEqual([ssNight.getWeather(), ssNight.getHour()], ['clear', 21.5]);
+  const ds2Night = createWeatherController({ world: fakeWorld(), post: null, renderer: {}, initialPreset: 'night', presets: getPresets('ds2'), worldVer: 'ds2' });
+  assert.deepEqual([ds2Night.getWeather(), ds2Night.getHour()], ['overcast', 21.5]);
 });

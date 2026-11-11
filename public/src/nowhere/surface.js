@@ -50,6 +50,10 @@ export function createSharedUniforms(groundMaskTex = null, maskRect = [-170, -21
     uPudMetal: { value: 0.88 },
     // 밤 거리 반사광(성수 Task 12): 가로등 · 상점 창 불빛이 벽 아랫부분과 노면에 번지는 세기. 0 = 끔(DS2 · 기본값)
     uNightFill: { value: 0.0 },
+    // 물길 정원(성수 최종 수정 I1): 사각형(Blender x0, y0, x1, y1 — uMaskRect 와 같은 규약) 안의 웅덩이 · 물길은 max(uWet, uPondWet) 로
+    // 차 있다 — 맑음(uWet 0.05)에도 수면으로 보인다. 0 = 끔(DS2 · 기본값: 지금과 같다)
+    uPondWet: { value: 0.0 },
+    uPondRect: { value: new THREE.Vector4(0, 0, 0, 0) },
     uMaskRect: {
       value: new THREE.Vector4(maskRect[0], maskRect[1], maskRect[2], maskRect[3]),
     },
@@ -258,6 +262,8 @@ uniform float uNwBeamLen;
 uniform float uNwEmitDay;
 uniform float uNwEmitNight;
 uniform float uNightFill;
+uniform float uPondWet;
+uniform vec4 uPondRect;
 
 varying vec3 vNwWorld;
 varying vec3 vNwWorldNormal;
@@ -316,8 +322,13 @@ vec4 nwM = nwSampleMask();
 float nwSplash = smoothstep(1.35, 0.0, vNwWorld.y) * 0.45;
 float nwBaseWet = (uNwSurfaceKind == 10) ? nwSplash : nwM.g;
 float nwWet = clamp(uWet * (nwBaseWet + 0.35 * (1.0 - nwM.b) + nwSplash * 0.5), 0.0, 1.0);
+// 물길 정원(uPondRect 안)은 맑은 날에도 물이 차 있다: 웅덩이 세기만 max(uWet, uPondWet)(노면 젖음 · 어두워짐은 uWet 그대로)
+float nwPudWet = uWet;
+if (uPondWet > 0.0 && vNwWorld.x > uPondRect.x && vNwWorld.x < uPondRect.z && -vNwWorld.z > uPondRect.y && -vNwWorld.z < uPondRect.w) {
+  nwPudWet = max(uWet, uPondWet);
+}
 float nwPud = (uNwSurfaceKind == 1)
-  ? smoothstep(0.18, 0.48, nwM.a) * uWet
+  ? smoothstep(0.18, 0.48, nwM.a) * nwPudWet
   : 0.0;
 if (uNwSurfaceKind == 6) {
   nwWet = 1.0;

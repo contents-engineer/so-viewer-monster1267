@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { detectQualityTier, getQualityConfig } from './quality.js';
 import { createWorld, updateMoverActors, updateLegacyDrones } from './world.js';
 import { createPostPipeline } from './post.js';
-import { createWeatherController, getPresets, parseTimeParam, TIME_QUICK, weatherNamesFor, defaultWeather } from './weather.js';
+import { createWeatherController, getPresets, parseTimeParam, TIME_QUICK, weatherNamesFor, resolveWeather } from './weather.js';
 import { createRainSystem } from './rain.js';
 import { createCameraController } from './camera.js';
 import { createHelpOverlay, createWalkHud } from './help.js';
@@ -133,7 +133,8 @@ async function boot() {
   });
 
   // 기상(맑음·흐림·비·눈)과 시간(0~24시)을 따로 고른다. URL: weather=clear|overcast|rain|snow(옛 dusk·night 는 시간으로), time=21.5 | 21:30
-  const initialWeather = params.get('weather') || defaultWeather(worldVer);
+  // 그 월드에서 고를 수 없는 기상(DS2 의 weather=clear — 월드를 바꿔도 URL 에 남는다)은 월드 기본 기상으로 되돌린다
+  const initialWeather = resolveWeather(params.get('weather'), worldVer);
   const weather = createWeatherController({
     world,
     post,
@@ -143,6 +144,7 @@ async function boot() {
     duration: 2.5,
     presets: getPresets(worldVer),
     sunBaseDir: world.sunBaseDir,
+    worldVer,
   });
   if (worldVer === 'ds2' && post?.gradePass) {
     // 참조 화면: 역광으로 어두운 근경 + 화면 가장자리 감광

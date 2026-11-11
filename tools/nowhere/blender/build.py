@@ -2,12 +2,14 @@
 # 실행:
 #   /Applications/Blender.app/Contents/MacOS/Blender -b build/nowhere/nowhere.blend --python tools/nowhere/blender/build.py
 #   (전체 재구축 시 끝에 -- --rebuild, 강제 재굽기 시 -- --bake, 굽기를 건너뛰는 빠른 빌드는 -- --no-bake 전달.
-#    --no-bake 로 만든 장면은 nw_baked=False 로 저장되어 다음 일반 빌드가 굽는다)
+#    --no-bake 로 만든 장면은 nw_baked=False 로 저장되어 다음 일반 빌드가 굽는다.
+#    -- --hero-from-captures 를 주면 build/nowhere/renders/hero-*.png(웹 캡처, README §2)로 출하 renders/*.webp 를 다시 만든다)
 #
 # 단계:
 #   1) nowhere.blend 가 없거나 --rebuild 플래그가 있으면 ground → present → future → backdrop 순으로 장면을 구축한다.
 #   2) bake.bake() 를 실행해 2048×2048 지면 마스크(nowhere-ground-mask.webp)와 정점 AO(nw_mask)를 굽고 nowhere.blend 에 저장한다.
-#   3) export.export_all() 을 실행해 layout.json, sky-1k.hdr, renders/*.webp, build/nowhere/raw/nowhere-{ground,present,future,backdrop}.glb 를 내보낸다.
+#   3) export.export_all() 을 실행해 layout.json, sky-1k.hdr, build/nowhere/raw/nowhere-{ground,present,future,backdrop}.glb 를 내보낸다
+#      (renders/*.webp 는 --hero-from-captures 일 때만).
 import bpy, os, sys, time, importlib
 
 ROOT = os.environ.get('NW_ROOT', '/Users/gm_yeonho/new-work/so/so-viewer-monster1267')
@@ -31,6 +33,7 @@ def main(argv=None):
     rebuild = '--rebuild' in argv
     no_bake = '--no-bake' in argv
     force_bake = ('--bake' in argv or rebuild) and not no_bake
+    hero_from_captures = '--hero-from-captures' in argv
 
     t0 = time.time()
     blend_path = os.path.join(lib.OUT, 'nowhere.blend')
@@ -71,7 +74,7 @@ def main(argv=None):
         print('[nowhere:build] Scene already baked (nw_baked=True); skipping bake.')
 
     print('[nowhere:build] Running export_all()...')
-    export.export_all()
+    export.export_all(hero_from_captures)
     print(f'[nowhere:build] Done in {round(time.time() - t0, 1)} s')
 
 

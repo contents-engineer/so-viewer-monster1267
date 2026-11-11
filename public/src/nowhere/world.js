@@ -78,6 +78,14 @@ export async function createWorld({
   // 성수 2041 밤 거리 반사광(Task 12): 가로등 · 상점 창 불빛이 벽 아랫부분 · 노면에 번지는 세기(surface.js uNightFill)
   const SEONGSU_NIGHT_FILL = 0.25;
   if (worldVer !== 'ds2') uniforms.uNightFill.value = SEONGSU_NIGHT_FILL;
+  // 포켓 공원 물길 정원(최종 수정 I1): 공원 사각형(tools/nowhere/blender/ground.py LOT, Blender x0 · y0 · x1 · y1) 안의 웅덩이 · 물길은
+  // 맑음(uWet 0.05)에도 물이 차 수면(웅덩이 반사)으로 보인다(surface.js uPondWet — 그리기 · 삼각형은 그대로). DS2 는 0(끔)
+  const SEONGSU_POND_RECT = [28.0, -22.0, 65.8, 40.0];
+  const SEONGSU_POND_WET = 0.85;
+  if (worldVer !== 'ds2') {
+    uniforms.uPondWet.value = SEONGSU_POND_WET;
+    uniforms.uPondRect.value.fromArray(SEONGSU_POND_RECT);
+  }
 
   // 3) 하늘 돔 + 조명 + 환경 반사맵(PMREM) 구성
   const sky = createSkyDome(uniforms);
@@ -215,13 +223,17 @@ export async function createWorld({
     NWF_tube_glass: [0, 0.25],   // 튜브 유리 밤 발광(아래 TUBE_GLASS_NIGHT 색, 낮 0)
     NWB_tube: [0, 0.14],         // 원경 튜브 외피(불투명): 장면 튜브 유리(0.25 × 알파 0.55)와 같은 밤 밝기
   };
+  // 태양광 노면 띠(성수 최종 수정 I2): 알베도 곱(텍스처 × 이 색, 선형). 거리 시점 맑음 14:00 에서 셀이 청회색(≈ 97, 112, 134)이었다.
+  // 비스듬히 보는 띠는 밉맵이 남색 셀과 밝은 격자를 섞고, 그 위에 해 · 하늘(반구광) 확산광이 얹힌 값이다 — 정반사를 꺼도 −6,
+  // 환경맵 세기는 0 으로 해도 화소가 같았다(웹 측정) → 확산 알베도를 남색 쪽으로 낮춘다. 셀 ≈ (64, 81, 110), 격자는 그 위로 밝게 남는다
+  const PV_TINT = [0.24, 0.32, 0.5];
   // 튜브 유리 밤 발광(성수): 등줄기 LED 가 비추는 차가운 흰빛으로 유리 몸통이 밤에도 튜브로 읽히게 한다(낮 곱 0 = 낮에는 없음)
   const TUBE_GLASS_NIGHT = '#BFE3F0';
-  // 모바일 삼각형 예산(0.9 M): 튜브 리브 홀수 번째(→ 11 m 간격) · 화단의 늘어진 덩굴 카드를 그리지 않는다
+  // 모바일 삼각형 예산(0.9 M, 성수만 — DS2 는 이 표를 쓰지 않는다): 튜브 리브 홀수 번째(→ 11 m 간격) · 화단의 늘어진 덩굴 카드를 그리지 않는다
   // · 거리 벤치(Task 10: 티크 재질 그리기 1 과 삼각형. 카페 테라스는 레퍼런스의 핵심이라 모바일에서도 그린다)
   // · 원경 BD_far_desk(Task 12: BD_far 에서 걸러진 원경 동 — 데스크톱만 그린다. 백드롭 GLB 는 데스크톱 · 모바일 공용)
   const MOBILE_HIDE = /^(FU_(tube_(ribs_fine|planter_vines)_|bench)|BD_far_desk)/;
-  // 모바일에서도 솎지 않는 인스턴스(Task 12): 공원 느티나무 PR_zelkova_a(8 그루, 711 tris) · 카페 테라스 FU_terrace(6 조, 236 tris).
+  // 모바일에서도 솎지 않는 인스턴스(Task 12, 성수만): 공원 느티나무 PR_zelkova_a(8 그루, 711 tris) · 카페 테라스 FU_terrace(6 조, 236 tris).
   // 늘어난 삼각형(+5.2 K)은 원경 크림색 상자(backdrop.py FAR_*_KEEP, 줄이기 순서 1)를 덜어 맞춘다. 화분 가로수(PR_zelkova_b · PR_planter)는
   // 예산이 모자라 아래 규칙대로 솎는다(Task 12 Step 2 줄이기 3: 화분형 가로수 수)
   const MOBILE_FULL_INST = /^(PR_zelkova_a|FU_terrace)/;
@@ -300,6 +312,7 @@ export async function createWorld({
           }
         }
         targetMat.userData._nwSig = sig;
+        if (worldVer !== 'ds2' && targetMat.name === 'NWF_road_pv') targetMat.color.setRGB(...PV_TINT);
         if (worldVer !== 'ds2' && NIGHT_EMIT[targetMat.name]) {
           targetMat.userData.nwEmitGain = NIGHT_EMIT[targetMat.name];
           if (targetMat.name === 'NWF_tube_glass' || targetMat.name === 'NWB_tube') targetMat.emissive.set(TUBE_GLASS_NIGHT);
@@ -325,14 +338,14 @@ export async function createWorld({
 
       // 고폴리 반복 소품(덮개 차량 등) 및 모바일 등급 소품 감축으로 데스크톱(≤2.0M)·모바일(≤0.9M) 예산 충족
       if (quality.tier === 'mobile') {
-        if (node.name === 'PR_wires' || node.name.startsWith('BD_mid_') || MOBILE_HIDE.test(node.name)) {
+        if (node.name === 'PR_wires' || node.name.startsWith('BD_mid_') || (worldVer !== 'ds2' && MOBILE_HIDE.test(node.name))) {
           node.visible = false;
           return;
         }
       }
       if (node.isInstancedMesh) {
         const triPerInst = (node.geometry?.index ? node.geometry.index.count : (node.geometry?.attributes?.position?.count || 0)) / 3;
-        if (quality.tier === 'mobile' && MOBILE_FULL_INST.test(node.name)) {
+        if (quality.tier === 'mobile' && worldVer !== 'ds2' && MOBILE_FULL_INST.test(node.name)) {
           // 솎지 않음(모바일 공원 느티나무 · 카페 테라스 — 아래 MOBILE_FULL_INST)
         } else if (quality.tier === 'mobile') {
           if (triPerInst > 350) {
@@ -457,7 +470,15 @@ export async function createWorld({
   const _fwd = new THREE.Vector3();
   const _focus = new THREE.Vector3();
   const _toSun = new THREE.Vector3();
-  /** 그림자 상자를 카메라 앞 SHADOW_AHEAD m 로 옮긴다(1 m 단위로 붙여 걸을 때 가장자리가 떨지 않게). */
+  const _lightRot = new THREE.Matrix4();
+  const _lx = new THREE.Vector3();
+  const _ly = new THREE.Vector3();
+  const _lz = new THREE.Vector3();
+  const _origin = new THREE.Vector3();
+  const SHADOW_TEXEL = (2 * SHADOW_HALF) / (quality.shadowMapSize || 1);   // 그림자 맵 한 텍셀의 월드 크기(m)
+  /** 그림자 상자를 카메라 앞 SHADOW_AHEAD m 로 옮긴다. 광원 공간(그림자 카메라의 가로 · 세로 축)에서 텍셀 단위로 붙여 걸을 때 그림자
+   *  가장자리가 떨지 않게 한다 — 그림자 카메라 위치의 가로 · 세로 성분이 텍셀의 배수면 텍셀 격자가 월드에 고정된다. 옛 방식(월드 축 1 m
+   *  반올림)은 1 m 가 텍셀(≈ 0.107 m)의 배수가 아니고 광원 축과도 어긋나 격자가 매번 다른 자리에 걸렸다(최종 수정 M3). */
   function followSun(camera) {
     if (!shadowsOn) return;
     camera.getWorldDirection(_fwd);
@@ -465,8 +486,14 @@ export async function createWorld({
     if (_fwd.lengthSq() < 1e-6) _fwd.set(0, 0, -1);
     _fwd.normalize();
     _focus.copy(camera.position).addScaledVector(_fwd, SHADOW_AHEAD);
+    _focus.y = 0;
     _toSun.copy(sunLight.position).sub(sunLight.target.position).normalize();
-    sunLight.target.position.set(Math.round(_focus.x), 0, Math.round(_focus.z));
+    // 그림자 카메라와 같은 기저: LightShadow 는 광원 위치에서 대상을 lookAt 한다(z = 해 쪽, up = 그림자 카메라 up)
+    _lightRot.lookAt(_toSun, _origin, sunLight.shadow.camera.up);
+    _lightRot.extractBasis(_lx, _ly, _lz);
+    const u = Math.round(_focus.dot(_lx) / SHADOW_TEXEL) * SHADOW_TEXEL;
+    const v = Math.round(_focus.dot(_ly) / SHADOW_TEXEL) * SHADOW_TEXEL;
+    sunLight.target.position.copy(_lx).multiplyScalar(u).addScaledVector(_ly, v).addScaledVector(_lz, _focus.dot(_lz));
     sunLight.target.updateMatrixWorld();
     sunLight.position.copy(sunLight.target.position).addScaledVector(_toSun, SHADOW_DIST);
   }

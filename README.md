@@ -29,7 +29,7 @@ npm run start:lan  # 같은 Wi-Fi 기기에서 http://<PC IP>:4173
 | `Enter` | 모달에서 강조된(또는 포커스된) 버튼 선택 |
 | `?` / `조작 안내` 버튼 | 공통 · 카메라 시점 · 보행 시점 조작 키를 한 장으로 보여 주는 안내 열기/닫기 |
 | `P` (키보드 없는 기기는 주소에 `?stats=1`) | 오른쪽 위 성능 표시 켜기/끄기: FPS · 평균/최대 프레임 시간, 그리기 호출 · 삼각형, 올라간 텍스처 수 · 메모리 추정, JS 힙(Chrome 만), 그리기 해상도 · DPR · 기기 등급(desktop/mobile), GPU 이름. 왼쪽 띠 색: 50 fps 이상 초록 · 30 이상 노랑 · 그 아래 빨강 |
-| `V` / `보행 시점` 버튼 | 지면 위 1.7 m 눈높이 보행 시점 토글. `WASD` 걷기(5 m/s), `Shift` 누른 채 달리기(10 m/s), `Space` 점프(약 1.1 m — 낮은 바위·턱을 넘거나 그 위에 올라섬), `↑`/`↓` 올려다보기·내려다보기(±80°), `←`/`→` 좌우로 돌아보기, 화면 클릭 시 마우스 시선 고정(마우스만 움직여 둘러보기, 화면 중앙 조준점 표시, `Esc` 해제), 마우스 드래그로도 제자리에서 둘러보기. 지형 기복을 따라 걷고, 건물·바위·전주 등 장애물과 50° 넘는 급경사는 통과하지 못함(벽을 따라 미끄러짐), 0.5 m 넘는 낙차에서는 떨어짐 |
+| `V` / `보행 시점` 버튼 | 지면 위 1.7 m 눈높이 보행 시점 토글. `WASD` 걷기(5 m/s), `Shift` 누른 채 달리기(10 m/s), `Space` 점프(약 1.1 m — 낮은 바위·턱을 넘거나 그 위에 올라섬), `↑`/`↓` 올려다보기·내려다보기(±80°), `←`/`→` 좌우로 돌아보기, 화면 클릭 시 마우스 시선 고정(마우스만 움직여 둘러보기, 화면 중앙 조준점 표시, `Esc` 해제), 마우스 드래그로도 제자리에서 둘러보기. 지형 기복을 따라 걷고, 건물·바위 등 장애물과 50° 넘는 급경사는 통과하지 못함(벽을 따라 미끄러짐), 0.5 m 넘는 낙차에서는 떨어짐 |
 | `투어 시작` 버튼(첫 방문 시 자동) | 인트로 비행 → 「어떤 건물로 이동하시겠습니까?」(하우스노웨어 성수 · 하우스노웨어 몽골) → 건물 정면 비행 → 성수: 「입장하시겠습니까?」 예 → 실내 1F 로비 / 몽골: 「준비중입니다」. 도착 모달에서 `하우스노웨어 몽골로 이동`(성수) · `하우스노웨어 성수로 이동`(몽골)을 고르면 다른 건물 정면으로 바로 비행. 인트로 중 아무 입력은 건물 선택으로 건너뛰고, `Esc` 는 투어 종료 |
 | `건물 이동` 버튼 | 건물 선택 모달부터 다시 시작 |
 | 실내(성수 B1F · 1F · 12F · 13F) | 1F 로비에서 보행 시점으로 시작(이동 · 달리기 · 점프 · 충돌 그대로). 왼쪽 위 층 버튼(`13` · `12` · `1` · `B1`) 또는 엘리베이터 문 앞 「층 선택」으로 층 이동, `이 층 둘러보기` 는 첫 볼거리로 화면 전환(어두워졌다 밝아짐)한 뒤 나머지를 차례로 비행하며 자막, 끝까지 보면 마지막 지점에서 보행 시점으로 복귀(아무 입력으로 멈추면 그 자리에 머묾). 창밖은 그 층 높이의 외관 풍경(기상 · 시간 반영, 지하 제외), 밤에는 실내 조명이 따뜻해짐. 1F 디스플레이는 월드 시각(시간 슬라이더) · 기상. `밖으로 나가기` 또는 1F 정문 쪽 출구에서 외관 HAUS 정면으로 복귀 |
@@ -40,7 +40,7 @@ npm run start:lan  # 같은 Wi-Fi 기기에서 http://<PC IP>:4173
 # 1) Poly Haven CC0 에셋·OFL 글꼴 다운로드 및 SHA-256 검증 + Three.js r170 JSM 애드온 벤더링
 npm run nowhere:fetch
 
-# 2-A) 성수 2041: Blender 씬 조립 + 마스크·Cycles AO 베이킹 + GLB·layout.json·렌더 내보내기 및 최적화
+# 2-A) 성수 2041: Blender 씬 조립 + 마스크·Cycles AO 베이킹 + GLB·layout.json 내보내기 및 최적화(히어로 렌더 WebP 는 아래 절차)
 npm run nowhere:build
 npm run nowhere:optimize
 
@@ -55,6 +55,28 @@ npm run nowhere:inner:optimize
 # 3) 단위·스키마·자산 예산·금지어 검증 테스트 (node:test)
 npm test
 ```
+
+### 성수 히어로 렌더(`public/assets/nowhere/renders/hero-*.webp`) 다시 만들기
+
+- 출하 WebP 7장(1280 × 720, git 추적)이 기준입니다. `npm run nowhere:build`는 이 파일을 건드리지 않습니다.
+- 원본은 웹 캡처 PNG `build/nowhere/renders/hero-<id>.png`(git 무시)입니다. Blender 무드에는 맑음이 없어 2041 모습은 웹에서 찍습니다.
+- 절차
+  1. `npm start` 후 데스크톱 Chrome 에서 뷰포트를 **1600 × 900**(DPR 1)로 맞춥니다.
+  2. `http://localhost:4173/nowhere?noIntro=1&cam=<id>&time=14`를 엽니다(밤거리는 `cam=night&time=21.5`). `nowhere.html`로 열면 쿼리가 사라지니 `/nowhere`를 씁니다. 기상은 기본(맑음)입니다.
+  3. 3초쯤 기다려 기상 전환이 끝나면, **UI 없이 캔버스만** 저장합니다. 개발자 도구 콘솔에서 그레인을 끄고 이동체 시각을 고정해 한 프레임을 그린 직후 캔버스를 읽습니다(DOM 위 버튼 · 성능 표시는 캔버스에 들어가지 않습니다).
+
+     ```js
+     const app = __NW_APP, wm = await import('/src/nowhere/world.js'), t = 30;   // t: 근경을 포드가 가리지 않는 시각
+     app.post.gradePass.uniforms.uGrain.value = 0;
+     app.world.uniforms.uTime.value = t; wm.updateMoverActors(app.world.moverActors, t);
+     app.world.followSun(app.camera); app.post.composer.render();
+     Object.assign(document.createElement('a'), { href: app.renderer.domElement.toDataURL('image/png'), download: 'hero-<id>-1600.png' }).click();
+     ```
+  4. 1600 × 900 PNG 를 **1280 × 720**으로 줄여 `build/nowhere/renders/hero-<id>.png`로 둡니다.
+     `uv run --with pillow python -c "from PIL import Image; Image.open('hero-<id>-1600.png').resize((1280, 720), Image.LANCZOS).save('build/nowhere/renders/hero-<id>.png')"`
+  5. `npm run nowhere:build -- -- --hero-from-captures`로 WebP 를 다시 만듭니다. 원본이 없는 장은 건너뛰고 경고만 냅니다(그 WebP 는 그대로).
+- 파일 이름(`<id>` = 카메라 프리셋): `hero-street` · `hero-aerial` · `hero-viaduct` · `hero-night`(21:30) · `hero-ground` · `hero-lot` · `hero-future`.
+  웹은 로딩 화면 배경(`hero-street`)만 직접 씁니다. 나머지는 `layout.json` 앵커 · 카메라의 `render` 메타데이터입니다.
 
 ## 3. 리서치 및 소재 출처 문서
 
