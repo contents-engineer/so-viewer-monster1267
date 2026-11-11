@@ -15,6 +15,10 @@ import {
 import { createSkyDome } from './sky.js';
 import { createHeightGrid, createGroundQuery, createOccupancyGrid, isBlockedAt, obstacleTopAt } from './terrain.js';
 import { rasterizeMeshes, markObstacleMeshes } from './terrain-mesh.js';
+import { buildTrack, moverPose, spinAngle } from './movers.js';
+
+// 경로 이동체 노드(layout.movers 의 object): 정적 병합 · 보행 장애물에서 뺀다
+const MOVER_NODE = /^FU_(drone|taxi|train|bot|turbine_rotor)/;
 
 export async function createWorld({
   renderer,
@@ -174,19 +178,29 @@ export async function createWorld({
   const meshesBySurface = {};
   const layerGroups = {};
   const patchedMaterials = new WeakSet();
+  const sigClones = new Map();
 
+  // 경로 이동체(Task 11, layout.movers): 드론 · 포드 · 튜브 열차 · 배송로봇 · 풍력 회전자는 정적 병합과 보행 장애물에서 뺀다
+  // (DS2 의 옛 드론 이름 'FU_drone_del_mesh_*' 같은 '…drone…' 도 그대로 뺀다)
   function isAnimatedNode(node) {
-    let cur = node;
-    while (cur) {
-      if (typeof cur.name === 'string' && cur.name.includes('drone')) return true;
-      cur = cur.parent;
+    for (let cur = node; cur; cur = cur.parent) {
+      if (typeof cur.name === 'string' && (MOVER_NODE.test(cur.name) || cur.name.includes('drone'))) return true;
     }
     return false;
   }
 
   // 장면 밖 원경(성수 2041 신축 타워 · 둘레 광장 · 풍력): 카메라를 따라가는 해 그림자 상자에 들지 않으므로 드리우지 않는다(받기는 그대로).
   // 병합되면 이름이 NW_Merged_* 로 바뀌므로 병합할 때 묶음이 모두 원경이면 nw_noCast 를 단다.
-  const FAR_CASTER = /^FU_(tower|plaza|turbine)/;
+  // 노면에 붙은 태양광 띠(FU_road_pv.*, Task 10)도 같은 규칙으로 드리우지 않는다(노면 + 1 cm 판이 그림자 여드름만 만든다).
+  const FAR_CASTER = /^FU_(tower|plaza|turbine|road_pv)/;
+  // 깊이를 쓰지 않는 반투명 유리(재질 이름 → 불투명도). 그림자도 드리우지 않는다(불투명 그림자가 된다)
+  const GLASS_OPACITY = { NWF_tube_glass: 0.22, NWF_glass_rail: 0.3, NWF_kiosk_glass: 0.55 };   // 키오스크 유리 판(Task 10): UI 칸 발광 + 알파 0.55
+  // 정적 병합에서 빼는 반투명 재질. 병합은 재질(uuid)별 버킷이라 반투명이 불투명과 합쳐지는 일은 없다. 반투명 전체를 빼면
+  // HAUS 유리 9 조각 · 유리 난간 6 조각이 따로 남아(양면 반투명 = 객체마다 2 그리기) 메인 패스가 +26 그리기 → 튜브 유리만 뺀다
+  const NO_MERGE = new Set(['NWF_tube_glass']);
+  // 모바일 삼각형 예산(0.9 M): 튜브 리브 홀수 번째(→ 11 m 간격) · 화단의 늘어진 덩굴 카드를 그리지 않는다
+  // · 거리 벤치(Task 10: 티크 재질 그리기 1 과 삼각형. 카페 테라스는 레퍼런스의 핵심이라 모바일에서도 그린다)
+  const MOBILE_HIDE = /^FU_(tube_(ribs_fine|planter_vines)_|bench)/;
   function isFarCaster(node) {
     for (let cur = node; cur; cur = cur.parent) {
       if (typeof cur.name === 'string' && FAR_CASTER.test(cur.name)) return true;
@@ -250,12 +264,26 @@ export async function createWorld({
 
         // 같은 재질이라도 정점 마스크 유무나 표면 종류가 다르면 복제해 패치
         const sig = `${surf}_${hasVertMask ? 1 : 0}`;
+        // 복제본은 (재질, 표면 서명)마다 하나만 둔다: 같은 재질을 다른 표면 객체가 번갈아 쓰면(타워 유리 난간 'glass' ↔ 스카이브리지 'wall')
+        // 만날 때마다 새 복제본이 생겨 같은 서명 노드끼리도 병합되지 않았다
         let targetMat = m;
         if (patchedMaterials.has(m) && m.userData._nwSig !== sig) {
-          targetMat = m.clone();
+          const ck = `${m.uuid}|${sig}`;
+          targetMat = sigClones.get(ck);
+          if (!targetMat) {
+            targetMat = m.clone();
+            sigClones.set(ck, targetMat);
+          }
         }
         targetMat.userData._nwSig = sig;
         patchSurfaceMaterial(targetMat, surf, uniforms, hasVertMask);
+        // 2호선 유리 튜브(Task 9) · 유리 난간: 깊이를 쓰지 않는 반투명(튜브 안 열차 · 뒤 하늘이 비친다). 정적 병합 · 그림자에서 뺀다(아래)
+        const glassOpacity = GLASS_OPACITY[targetMat.name];
+        if (glassOpacity !== undefined) {
+          targetMat.transparent = true;
+          targetMat.opacity = glassOpacity;
+          targetMat.depthWrite = false;
+        }
         patchedMaterials.add(targetMat);
         return targetMat;
       });
@@ -264,7 +292,7 @@ export async function createWorld({
 
       // 고폴리 반복 소품(덮개 차량 등) 및 모바일 등급 소품 감축으로 데스크톱(≤2.0M)·모바일(≤0.9M) 예산 충족
       if (quality.tier === 'mobile') {
-        if (node.name === 'PR_wires' || node.name.startsWith('BD_mid_')) {
+        if (node.name === 'PR_wires' || node.name.startsWith('BD_mid_') || MOBILE_HIDE.test(node.name)) {
           node.visible = false;
           return;
         }
@@ -290,6 +318,7 @@ export async function createWorld({
         layerKey !== 'backdrop' &&
         !Array.isArray(node.material) &&
         node.material &&
+        !NO_MERGE.has(node.material.name) && // 큰 반투명 튜브 유리는 객체마다 깊이 정렬되도록 합치지 않는다(아래 NO_MERGE)
         node.geometry &&
         !isAnimatedNode(node) &&
         vertCount <= 120000
@@ -385,7 +414,7 @@ export async function createWorld({
         if (!n.isMesh) return;
         n.receiveShadow = true;
         n.castShadow = key !== 'ground' && !NO_CAST.has(n.userData?.nw_surface) && !/^FU_tube_glass/.test(n.name) &&
-          !n.userData?.nw_noCast && !isFarCaster(n);
+          !(n.material?.name in GLASS_OPACITY) && !n.userData?.nw_noCast && !isFarCaster(n);
       });
     }
   }
@@ -435,7 +464,7 @@ export async function createWorld({
     const obstacleMeshes = [];
     const pick = (n) => {
       if (!n.isMesh || !n.visible) return;
-      if (PASS_SURFACES.has(n.userData?.nw_surface) || /^FU_drone/.test(n.name)) return;
+      if (PASS_SURFACES.has(n.userData?.nw_surface) || isAnimatedNode(n)) return;
       obstacleMeshes.push(n);
     };
     for (const key of ['ground', 'present', 'future', 'building_haus', 'building_facearch']) {
@@ -455,10 +484,49 @@ export async function createWorld({
     return walkBlocker;
   }
 
-  // 6) 드론 객체 연결 (Task 7 비행 애니메이션용)
+  // 6) 경로 이동체(드론 · 포드 · 열차 · 배송로봇 · 풍력 회전자) — layout.movers(Blender future.py mover_table)
+  //    옛 layout.drones 만 있는 월드(DS2)는 Task 11 전 드론 비행을 그대로 쓴다(legacyDrones · updateLegacyDrones)
   const futureRoot = layerGroups.future;
-  const droneActors = [];
-  if (futureRoot && Array.isArray(layout.drones)) {
+  const moverActors = [];
+  const legacyDrones = [];
+  if (futureRoot && Array.isArray(layout.movers)) {
+    const byGltfName = new Map();   // GLTFLoader 는 노드 이름의 '.' 을 지운다(FU_taxi.0 → FU_taxi0) — 원래 이름은 userData.name
+    futureRoot.traverse((n) => {
+      if (n.userData?.name) byGltfName.set(n.userData.name, n);
+    });
+    for (const def of layout.movers) {
+      const obj = byGltfName.get(def.object) || futureRoot.getObjectByName(def.object);
+      if (!obj) {
+        console.warn(`[nowhere] 이동체 ${def.id}: ${def.object} 없음`);
+        continue;
+      }
+      // optimize 의 위치 양자화가 노드 원점을 메시 상자 가운데로 옮겼다 → Blender 원점 · 방위(origin · yaw0)에 피벗을 두고 붙여 그 피벗을 움직인다
+      let target = obj;
+      if (def.origin) {
+        target = new THREE.Group();
+        target.name = `${def.object}_pivot`;
+        target.position.fromArray(def.origin);
+        target.rotation.y = def.yaw0 || 0;
+        futureRoot.add(target);
+        target.updateMatrixWorld(true);
+        target.attach(obj);
+      }
+      if (def.kind === 'spin') {
+        moverActors.push({ def, object: target, base: target.quaternion.clone() });
+        continue;
+      }
+      let beam = def.beam ? futureRoot.getObjectByName(def.beam) : null;
+      let beamYaw = 0;
+      if (beam) {
+        beam = pivotBeam(beam, def.path[0], futureRoot);
+        // 원뿔 축의 수평 방위를 진행 방향(앞 = 로컬 +X 를 yawOffset 만큼 돌린 쪽)에 맞춘다
+        const axis = beamAxis(beam, def.path[0]);
+        beamYaw = Math.PI / 2 - (def.yawOffset || 0) - Math.atan2(axis.x, axis.z);
+      }
+      moverActors.push({ def, object: target, beam, beamYaw, track: buildTrack(def.path, def.mode === 'loop') });
+    }
+  } else if (futureRoot && Array.isArray(layout.drones)) {
+    // DS2: Task 11 전 드론 블록 그대로(후보 이름 · 빔 피벗 · 닫힌 Catmull-Rom 곡선 · 위상 = 찾은 순번 × 0.27)
     for (const d of layout.drones) {
       const candidates = [
         d.object,
@@ -471,44 +539,18 @@ export async function createWorld({
         if (obj) break;
       }
       let beam = d.beam ? futureRoot.getObjectByName(d.beam) : null;
-      if (beam && Array.isArray(d.path) && d.path.length) {
-        // meshopt 양자화로 빔 메시의 원점이 원뿔 중심(bbox 중심)으로 옮겨져 있다. 그대로 드론 위치에 두면
-        // 원뿔 가운데가 드론에 붙어 위아래로 뻗는다 → Blender 원점(= 원뿔 꼭짓점 = 드론 경로 첫 점)에 피벗을 두고 붙인다.
-        const apexWorld = new THREE.Vector3().fromArray(d.path[0]);
-        beam.updateWorldMatrix(true, false);
-        const apexLocal = beam.worldToLocal(apexWorld.clone());
-        beam.traverse((n) => {
-          if (!n.isMesh || !n.geometry?.attributes?.position) return;
-          const bp = n.geometry.attributes.position;
-          let len = 0;
-          for (let i = 0; i < bp.count; i++) {
-            len = Math.max(len, Math.hypot(bp.getX(i) - apexLocal.x, bp.getY(i) - apexLocal.y, bp.getZ(i) - apexLocal.z));
-          }
-          for (const m of Array.isArray(n.material) ? n.material : [n.material]) {
-            if (!m) continue;
-            m.userData.nwBeamApex = apexLocal.toArray();   // 셰이더 축 감쇠 기준(로컬 양자화 단위)
-            m.userData.nwBeamLen = len;
-          }
-        });
-        const pivot = new THREE.Group();
-        pivot.name = `${beam.name}_pivot`;
-        pivot.position.copy(apexWorld);
-        futureRoot.add(pivot);
-        pivot.updateMatrixWorld(true);
-        pivot.attach(beam);
-        beam = pivot;
-      }
+      if (beam && Array.isArray(d.path) && d.path.length) beam = pivotBeam(beam, d.path[0], futureRoot);
       if (obj && Array.isArray(d.path) && d.path.length >= 2) {
         const pts = d.path.map((p) => new THREE.Vector3(p[0], p[1], p[2]));
         const curve = new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.5);
-        droneActors.push({
+        legacyDrones.push({
           id: d.id,
           object: obj,
           beam,
           speed: d.speed || 8.0,
           curve,
           length: Math.max(1, curve.getLength()),
-          phase: droneActors.length * 0.27,
+          phase: legacyDrones.length * 0.27,
         });
       }
     }
@@ -523,7 +565,8 @@ export async function createWorld({
     uniforms,
     sky,
     lights: { hemiLight, sunLight },
-    droneActors,
+    moverActors,
+    legacyDrones,
     groundHeightAt,
     getWalkBlocker,
     followSun,
@@ -531,4 +574,93 @@ export async function createWorld({
     sunBaseDir: sunBaseDir,
     updateEnvironmentMap,
   };
+}
+
+/** 서치라이트 원뿔을 꼭짓점(apex = 드론 경로 첫 점 = Blender 원점)에 둔 피벗에 붙인다 → 피벗(THREE.Group).
+ *  meshopt 양자화로 빔 메시의 원점이 원뿔 중심(bbox 중심)으로 옮겨져 있다. 그대로 드론 위치에 두면 원뿔 가운데가 드론에 붙어
+ *  위아래로 뻗는다 → Blender 원점(= 원뿔 꼭짓점)에 피벗을 두고 붙인다. */
+function pivotBeam(beam, apex, root) {
+  const apexWorld = new THREE.Vector3().fromArray(apex);
+  beam.updateWorldMatrix(true, false);
+  const apexLocal = beam.worldToLocal(apexWorld.clone());
+  beam.traverse((n) => {
+    if (!n.isMesh || !n.geometry?.attributes?.position) return;
+    const bp = n.geometry.attributes.position;
+    let len = 0;
+    for (let i = 0; i < bp.count; i++) {
+      len = Math.max(len, Math.hypot(bp.getX(i) - apexLocal.x, bp.getY(i) - apexLocal.y, bp.getZ(i) - apexLocal.z));
+    }
+    for (const m of Array.isArray(n.material) ? n.material : [n.material]) {
+      if (!m) continue;
+      m.userData.nwBeamApex = apexLocal.toArray();   // 셰이더 축 감쇠 기준(로컬 양자화 단위)
+      m.userData.nwBeamLen = len;
+    }
+  });
+  const pivot = new THREE.Group();
+  pivot.name = `${beam.name}_pivot`;
+  pivot.position.copy(apexWorld);
+  root.add(pivot);
+  pivot.updateMatrixWorld(true);
+  pivot.attach(beam);
+  return pivot;
+}
+
+/** 원뿔 축(월드, 꼭짓점 → 정점 무게중심). 테두리 정점이 축 둘레로 고르게 있어 무게중심이 축 위에 놓인다. */
+function beamAxis(pivot, apex) {
+  const sum = new THREE.Vector3();
+  const v = new THREE.Vector3();
+  let k = 0;
+  pivot.updateMatrixWorld(true);
+  pivot.traverse((n) => {
+    const bp = n.isMesh ? n.geometry?.attributes?.position : null;
+    if (!bp) return;
+    for (let i = 0; i < bp.count; i++, k++) sum.add(v.fromBufferAttribute(bp, i).applyMatrix4(n.matrixWorld));
+  });
+  return sum.divideScalar(Math.max(k, 1)).sub(new THREE.Vector3().fromArray(apex));
+}
+
+const _qSpin = new THREE.Quaternion();
+const _xAxis = new THREE.Vector3(1, 0, 0);
+/** 매 프레임: 경로 위 위치 · 방향, 회전자 각도, 드론 서치라이트. */
+export function updateMoverActors(actors, elapsed) {
+  for (const a of actors) {
+    if (a.def.kind === 'spin') {
+      a.object.quaternion.copy(a.base).multiply(_qSpin.setFromAxisAngle(_xAxis, spinAngle(a.def, elapsed)));
+      continue;
+    }
+    const p = moverPose(a.def, a.track, elapsed);
+    a.object.position.set(p.pos[0], p.pos[1], p.pos[2]);
+    a.object.rotation.set(0, p.yaw, 0);
+    if (a.beam) {
+      // 원뿔 수평 방위 = 진행 방향(beamYaw 로 맞춤) + 예전과 같은 흔들림
+      a.beam.position.copy(a.object.position);
+      a.beam.rotation.y = p.yaw + a.beamYaw + Math.sin(elapsed * 1.1) * 0.22;
+    }
+  }
+}
+
+const _legPos = new THREE.Vector3();
+const _legNext = new THREE.Vector3();
+const _legLook = new THREE.Vector3();
+/** DS2(옛 layout.drones) 드론 비행 — Task 11 전 camera.js 의 갱신 식 그대로: 곡선 길이 비례 위치, 0.015 앞을 lookAt(앞 = +Z),
+ *  흔들림 0.28 m, 빔은 객체 rotation.y + 흔들림. */
+export function updateLegacyDrones(drones, elapsed) {
+  if (!Array.isArray(drones)) return;
+  for (const d of drones) {
+    const u = ((elapsed * d.speed) / d.length + d.phase) % 1.0;
+    const uNext = (u + 0.015) % 1.0;
+    d.curve.getPointAt(u, _legPos);
+    d.curve.getPointAt(uNext, _legNext);
+    _legPos.y += Math.sin(elapsed * 2.4 + d.phase * 10) * 0.28;
+    d.object.position.copy(_legPos);
+
+    _legLook.copy(_legNext);
+    _legLook.y = _legPos.y;
+    d.object.lookAt(_legLook);
+
+    if (d.beam) {
+      d.beam.position.copy(_legPos);
+      d.beam.rotation.y = d.object.rotation.y + Math.sin(elapsed * 1.1) * 0.22;
+    }
+  }
 }

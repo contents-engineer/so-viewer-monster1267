@@ -6,7 +6,7 @@
 #      - buildings (BLD_haus, BLD_facearch)
 #      - cameras (CAM_street, CAM_aerial, CAM_viaduct, CAM_night, CAM_ground, CAM_lot, CAM_future)
 #      - anchors (ANCHOR_* 24개: id, layer, pos, title, facts, lore, source, render)
-#      - drones (DRONE_PATHS 4개: sec, d1, d2, d3)
+#      - movers (이동체 표: future.py 가 장면 속성 nw_movers 에 기록한 드론 · 포드 · 열차 · 배송로봇 · 풍력 회전자)
 #      - solids (경로 여유 검사용 상자: 건물 표 · 아파트 · 고가 상판 · HAUS · FaceArch · nw_solid=1 객체, solid_boxes())
 #      모든 좌표는 Blender Z-up (x, y, z) → Three.js Y-up (x, z, −y) 로 변환.
 #   2) public/assets/nowhere/sky-1k.hdr 복사 (build/nowhere-src/hdri/urban_street_03_1k.hdr).
@@ -18,7 +18,6 @@
 #   5) 정점 속성 정리:
 #      - NW_ground 광역 지면 메시에서 nw_drive(FLOAT_COLOR)를 제거해 COLOR_0 으로 나가지 않게 하고,
 #        UVMap_mask 가 두 번째 UV(TEXCOORD_1)로 나가도록 정리.
-#      - FU_drone_del.0..2 는 웹에서 개별 경로 비행을 위해 고유 메시 사본으로 분리.
 #   6) 컬렉션별 원시 GLB 내보내기 → build/nowhere/raw/nowhere-{ground,present,future,backdrop}.glb
 import bpy, os, sys, math, json, shutil, time, importlib
 import numpy as np
@@ -283,7 +282,6 @@ def solid_boxes():
 
 
 def export_layout(sc):
-    import future
     haus = bpy.data.objects.get('BLD_haus')
     fa = bpy.data.objects.get('BLD_facearch')
     buildings = {
@@ -339,23 +337,21 @@ def export_layout(sc):
                 'render': meta.get('render', 'assets/nowhere/renders/hero-street.webp'),
             })
 
-    drones = []
-    for did, pts in future.DRONE_PATHS.items():
-        obj_name = 'FU_drone_sec' if did == 'sec' else f'FU_drone_del.{int(did[1:]) - 1}'
-        drones.append({
-            'id': did,
-            'object': obj_name,
-            'beam': 'FU_drone_sec_beam' if did == 'sec' else None,
-            'speed': future.DRONE_SPEED.get(did, 8.0),
-            'path': [to_three(p) for p in pts],
-        })
+    movers = json.loads(sc.get('nw_movers', '[]'))
+    for m in movers:
+        if 'path' in m:
+            m['path'] = [to_three(p) for p in m['path']]
+        if 'origin' in m:
+            m['origin'] = to_three(m['origin'])
+        if m.get('beam') is None:
+            m.pop('beam', None)
 
     x0, y0, x1, y1 = lib.MASK_RECT
     layout = {
         'buildings': buildings,
         'cameras': cameras,
         'anchors': anchors,
-        'drones': drones,
+        'movers': movers,
         'solids': solid_boxes(),
         'maskRect': [x0, y0, x1, y1],
     }
@@ -363,7 +359,7 @@ def export_layout(sc):
     os.makedirs(PUB_DIR, exist_ok=True)
     with open(out_path, 'w', encoding='utf-8') as f:
         json.dump(layout, f, ensure_ascii=False, indent=2)
-    print(f'wrote {out_path}: {len(cameras)} cameras, {len(anchors)} anchors, {len(drones)} drones, {len(layout["solids"])} solids')
+    print(f'wrote {out_path}: {len(cameras)} cameras, {len(anchors)} anchors, {len(movers)} movers, {len(layout["solids"])} solids')
     return layout
 
 
@@ -377,9 +373,10 @@ def _lin_to_srgb(arr):
     return np.where(arr <= 0.0031308, arr * 12.92, 1.055 * (arr ** (1.0 / 2.4)) - 0.055)
 
 
-def _grade_diff_image(mat_name, tid, res, sat=1.0, tint=None, gain=1.0, paint_hex=None):
+def _grade_diff_image(mat_name, tid, res, sat=1.0, tint=None, gain=1.0, paint_hex=None, brick=None):
     """Poly Haven 알베도 이미지에 Blender 재질의 grade(sat, tint, gain) 및 도장(paint_hex)을 적용한
-    1024 px PNG 를 만들어 이미지 데이터블록으로 돌려준다."""
+    1024 px PNG 를 만들어 이미지 데이터블록으로 돌려준다.
+    brick(성수 2041 Task 8b, present.brick_prep): 벽돌색 흔들림을 평균 벽돌색 쪽으로 줄이고 줄눈 마스크 위를 밝은 회백으로."""
     os.makedirs(GEN_EXP_DIR, exist_ok=True)
     out_path = os.path.join(GEN_EXP_DIR, f'exp_{mat_name}_diff.png')
     f = lib.tex_files(tid, res)
@@ -394,6 +391,7 @@ def _grade_diff_image(mat_name, tid, res, sat=1.0, tint=None, gain=1.0, paint_he
         h, w = rgba.shape[:2]
 
     lin = _srgb_to_lin(rgba[..., :3])
+    raw_lum = lin @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
     if sat != 1.0:
         lum = (0.2126 * lin[..., 0] + 0.7152 * lin[..., 1] + 0.0722 * lin[..., 2])[..., None]
         lin = lum + (lin - lum) * sat
@@ -401,6 +399,18 @@ def _grade_diff_image(mat_name, tid, res, sat=1.0, tint=None, gain=1.0, paint_he
         lin = lin * np.array(tint[:3], dtype=np.float32)[None, None, :]
     if gain != 1.0:
         lin = lin * float(gain)
+    if brick:
+        lin = lin + (np.array(brick['flat'], dtype=np.float32)[None, None, :] - lin) * float(brick['amt'])
+        mim = bpy.data.images.get(brick['mask']) or lib.img(brick['file'], True)
+        mw, mh = mim.size[0], mim.size[1]
+        mbuf = np.zeros(mw * mh * 4, dtype=np.float32)
+        mim.pixels.foreach_get(mbuf)
+        m = mbuf.reshape((mh, mw, 4))[..., 0]
+        if (mh, mw) != (h, w):
+            raise RuntimeError(f'{mat_name}: 줄눈 마스크 {mw}×{mh} 가 알베도 {w}×{h} 와 다르다')
+        k = np.clip(np.sqrt(raw_lum / float(brick['mref'])), 0.8, 1.15)[..., None]
+        mcol = np.array(srgb(brick['mortar'])[:3], dtype=np.float32)[None, None, :] * k
+        lin = lin * (1.0 - m[..., None]) + mcol * m[..., None]
     if paint_hex is not None:
         # NW_brick_painted: 도장색 위에 벽돌 줄눈 명암과 약간의 박리 반영
         pc = np.array(srgb(paint_hex)[:3], dtype=np.float32)[None, None, :]
@@ -447,6 +457,7 @@ FLAT_MAT_SPECS = {
     'NW_steel_galv':     ('#8E9291', 0.42, 0.80, 1.0),
     'NW_field_turf':     ('#3C5A3A', 0.85, 0.0,  1.0),   # 학교 운동장 인조잔디(공원 잔디 NW_turf 는 aerial_grass_rock 텍스처 경로)
     'NW_roof_planter':   ('#5E5A52', 0.80, 0.0,  1.0),   # 성수 2041 옥상 화단 옆면(Task 6)
+    'NW_stone_trim':     ('#D8D2C6', 0.75, 0.0,  1.0),   # 성수 2041 벽돌 동 창턱 · 인방(Task 8b, present.STONE_HEX)
     'NWF_alu_dark':      ('#2A2D31', 0.38, 0.85, 1.0),
     'NWF_black':         ('#121416', 0.60, 0.0,  1.0),
     'NWF_pearl':         ('#C9CDD0', 0.32, 0.15, 1.0),
@@ -610,7 +621,7 @@ def prepare_materials_for_export():
             sat = g0.get('sat', 1.0)
             tint = g0.get('tint', None)
             gain = g0.get('gain', 1.0)
-            diff_im = _grade_diff_image(name, tid, res, sat=sat, tint=tint, gain=gain, paint_hex=paint_map.get(name))
+            diff_im = _grade_diff_image(name, tid, res, sat=sat, tint=tint, gain=gain, paint_hex=paint_map.get(name), brick=g0.get('brick'))
             files = lib.tex_files(tid, res)
             arm_im = lib.img(files['arm'], True) if 'arm' in files else None
             nor_im = lib.img(files['nor_gl'], True) if 'nor_gl' in files else None
@@ -666,14 +677,7 @@ def prepare_meshes_for_export():
     """1) 모든 메시와 재질에 nw_surface 태그를 복제해 gltf-transform 후에도 유지되게 한다.
     2) NW_ground 에서 nw_drive 를 제거하고, nw_mask 전용 소품에서는 UVMap_mask 를 제거한다.
     3) nw_streak · nw_tint 정점 속성을 제거해 불필요한 버퍼 용량을 줄인다.
-    4) 배송 드론(FU_drone_del.0..2)은 개별 애니메이션을 위해 고유 메시 사본으로 분리한다."""
-    # 배송 드론 메시 분리
-    for i in range(3):
-        o = bpy.data.objects.get(f'FU_drone_del.{i}')
-        if o is not None and o.type == 'MESH':
-            o.data = o.data.copy()
-            o.data.name = f'FU_drone_del_mesh_{i}'
-
+    (이동체 FU_drone_d1 … d5 · FU_taxi.* · FU_bot.* 는 future.py 가 이미 각자 단일 사용자 메시로 만든다.)"""
     for cname in ('NW_ground', 'NW_present', 'NW_future', 'NW_backdrop'):
         c = bpy.data.collections.get(cname)
         if c is None:
@@ -717,6 +721,8 @@ def export_collection_glbs():
     # 기존 링크 백업
     orig_objs = list(ctx_sc.collection.objects)
     orig_ch = list(ctx_sc.collection.children)
+    # 이동체 표(장면 속성 nw_movers, 약 180 KB JSON)는 layout.movers 로 이미 나갔다 — export_extras 가 GLB 마다 장면 extras 로 싣지 않게 잠시 뺀다
+    movers_prop = ctx_sc.pop('nw_movers', None)
 
     out_files = {}
     try:
@@ -732,7 +738,7 @@ def export_collection_glbs():
                 raise RuntimeError(f'컬렉션이 없다: {cname}')
             target_coll.hide_viewport = False
             target_coll.hide_render = False
-            # 빈 객체(PATH_drone_*)는 layout.json 으로 이미 내보냈으므로 GLB 에서는 숨긴다
+            # 빈 객체는 GLB 에서 숨긴다(이동체 경로는 layout.movers 로 나간다)
             hidden_empties = []
             for o in target_coll.all_objects:
                 if o.type == 'EMPTY':
@@ -773,6 +779,8 @@ def export_collection_glbs():
             ctx_sc.collection.objects.link(o)
         for ch in orig_ch:
             ctx_sc.collection.children.link(ch)
+        if movers_prop is not None:
+            ctx_sc['nw_movers'] = movers_prop
 
     return out_files
 

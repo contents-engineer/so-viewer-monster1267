@@ -63,3 +63,13 @@ test('(c) 투어 비행 4 경로(거리 → 성수 · 몽골, 성수 ↔ 몽골)
     assert.ok(r.d >= MIN_CLEAR, `${name}: ${r.id} ${r.d.toFixed(2)} m @ ${r.at}`);
   }
 });
+
+test('(d) 이동체 경로: 드론은 solid 에서 3 m, 포드는 1.5 m, 배송로봇은 0.7 m 이상', () => {
+  const R = { drone: 3.0, pod: 1.5, bot: 0.7 };
+  for (const m of layout.movers || []) {
+    if (!(m.kind in R)) continue;
+    const r = nearest(m.path);
+    assert.ok(r.d >= R[m.kind], `${m.id}: ${r.id} ${r.d.toFixed(2)} m @ ${r.at}`);
+  }
+  assert.ok((layout.movers || []).length > 0, 'movers 없음');
+});

@@ -535,28 +535,3 @@ export function createCameraController({
     update,
   };
 }
-
-const _dronePos = new THREE.Vector3();
-const _droneNext = new THREE.Vector3();
-const _droneLook = new THREE.Vector3();
-
-export function updateDroneActors(droneActors, elapsed) {
-  if (!Array.isArray(droneActors)) return;
-  for (const d of droneActors) {
-    const u = ((elapsed * d.speed) / d.length + d.phase) % 1.0;
-    const uNext = (u + 0.015) % 1.0;
-    d.curve.getPointAt(u, _dronePos);
-    d.curve.getPointAt(uNext, _droneNext);
-    _dronePos.y += Math.sin(elapsed * 2.4 + d.phase * 10) * 0.28;
-    d.object.position.copy(_dronePos);
-
-    _droneLook.copy(_droneNext);
-    _droneLook.y = _dronePos.y;
-    d.object.lookAt(_droneLook);
-
-    if (d.beam) {
-      d.beam.position.copy(_dronePos);
-      d.beam.rotation.y = d.object.rotation.y + Math.sin(elapsed * 1.1) * 0.22;
-    }
-  }
-}

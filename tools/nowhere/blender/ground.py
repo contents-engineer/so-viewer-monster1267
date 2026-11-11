@@ -30,6 +30,7 @@ Z_CURB = Z_GUT + CURB_H            # 경계석 윗면 = 보도 바깥 끝(−0.0
 R_C = 3.5                          # 교차로 모서리 반지름
 TT = (-48.5, -35.5)                # 뚝섬로 4차로(차로 3.25 m), 중심선 y −42
 TT_C = -42.0
+TT_MEDIAN = (-43.1, -40.9)          # 성수 2041(Task 10): 뚝섬로 가운데 태양광 띠(future.PV_Y −43 … −41)와 가장자리 청록선 — 황색 중앙선 대신
 WR = (-108.0, -102.0)              # 서쪽 이면도로(x −105, 6 m, 양방향)
 AL = (67.0, 73.0)                  # 동쪽 일방 골목(x +70, 6 m)
 NR = (67.0, 73.0)                  # 북쪽 이면도로(y +70, 6 m)
@@ -56,7 +57,7 @@ INNER = {k: rr.inset_sides(*w) for k, (rr, w) in BLOCKS.items()}
 CURBIN = {k: rr.inset_sides(*[CURB_W if v > 0 else 0.0 for v in w]) for k, (rr, w) in BLOCKS.items()}
 
 # 맨홀(차로 안, 원형 주철 Ø 0.8 테두리)과 빗물받이(측구, 0.9 × 0.4)
-MANHOLES = [(-95, -40.4), (-62, -44.0), (-31, -38.6), (8, -45.6), (36, -40.1), (74, -43.3), (110, -38.4), (142, -45.0),
+MANHOLES = [(-95, -40.4), (-62, -44.0), (-31, -38.6), (8, -45.6), (36, -40.1), (74, -44.3), (110, -38.4), (142, -45.0),
             (-105.4, 12), (-104.6, 96), (70.3, 22), (69.6, 108), (-40, 69.6), (110, 70.4),
             (-60, 140.9), (58, 144.2), (120, 140.6)]
 DRAINS = []   # (x, y, 각도) — 경계석을 따라
@@ -85,6 +86,10 @@ CHANNEL = [(63.8, 38.5), (59.5, 31.5), (56.0, 24.5), (53.0, 19.0), (49.5, 12.5),
 PARK_PATH = [(32.0, -18.0), (60.0, -18.0), (63.0, 10.0), (58.0, 37.0), (34.0, 37.0), (31.0, 10.0)]   # 닫힌 산책로(present.PARK_PATH)
 PARK_PATH_W = 2.0                  # 산책로 폭(보도블록 concrete_pavers_02, 잔디 + 0.02 m)
 PAINT_WEAR = 0.2                   # 차선·정지선 마모(닳아 아스팔트가 비치는 정도의 최대값). 성수 2041: 다시 칠했다(옛 1.0)
+# 성수 2041(Task 8b): 다시 포장한 차도. 바퀴 자국(소성 변형) 깊이 · 그 자국에 고이는 물을 이 비율로(옛 1.0). 웹 맑은 낮 골목의 밝은
+# 십자형 얼룩은 이 물 고임이 지면 마스크 A(웅덩이)로 구워져 uWet 0.05 에서도 밝은 uPudColor 가 비친 것이었다(보고서 Step 1)
+RUT_K = 0.0
+CRACK_K = 0.0                      # 실링 균열(타르 줄, Blender 재질) 세기(옛 1.0) — 새로 포장한 길이라 끈다
 
 
 # ═════════════════════════════ 높이·마스크 구동 함수 ═════════════════════════════
@@ -142,7 +147,7 @@ def road_z(x, y):
     d = max(0.0, d_curb(x, y))
     z = Z_GUT + 0.02 * min(d, 6.5)                 # 횡단 경사 2 %(가장자리 측구 → 중앙)
     z -= 0.022 * math.exp(-d / 0.28)               # 측구: 경계석 앞 오목한 물길
-    z -= 0.016 * rut(x, y)                          # 바퀴 자국 1.6 cm
+    z -= 0.016 * RUT_K * rut(x, y)                  # 바퀴 자국 1.6 cm(성수 2041: 다시 포장 → RUT_K)
     z += 0.028 * undul(x, y) * (0.5 + 0.5 * smoothstep(0.0, 1.2, d))
     z -= 0.014 * _near(MANHOLES, x, y, 1.1)        # 맨홀 둘레 침하
     z -= 0.012 * _near(DRAIN_XY, x, y, 0.8)        # 빗물받이로 모이는 경사
@@ -155,7 +160,7 @@ def road_drive(x, y):
     low = clamp01(0.5 - 0.9 * u)
     g = math.exp(-d / 0.75)
     rt = rut(x, y)
-    water = max(g * (0.6 + 0.6 * low), rt * (0.02 + 1.15 * low))
+    water = max(g * (0.6 + 0.6 * low), RUT_K * rt * (0.02 + 1.15 * low))   # 성수 2041: 바퀴 자국 물 고임 → RUT_K
     water = max(water, 0.75 * _near(MANHOLES, x, y, 1.0) * (0.4 + 0.6 * low), 0.8 * _near(DRAIN_XY, x, y, 0.9))
     shelter = 0.9 * math.exp(-d / 0.22) + 0.45 * _near(MANHOLES, x, y, 0.55)
     traffic = smoothstep(0.5, 1.6, d) * (0.55 + 0.45 * rt)
@@ -298,7 +303,7 @@ def mat_asphalt():
     cn = b.noise(P, 0.22, 3.0, 0.55, dist=0.4)
     line = b.sub(1.0, b.smooth(0.0, 0.009, b.math('ABSOLUTE', b.sub(cn, 0.5))))
     gate = b.smooth(0.5, 0.6, b.noise(P, 0.05, 2.0, 0.5))
-    crack = b.mul(line, gate)
+    crack = b.mul(b.mul(line, gate), CRACK_K)                  # 성수 2041: 새로 포장한 길(CRACK_K)
     col = b.col(crack, col, srgb('#1A1918'))
     rough = b.flt(crack, rough, 0.38)
     hgt = b.flt(crack, hgt, 0.15)
@@ -1069,9 +1074,8 @@ def build_markings(G, MAT, road_s, walk_s):
     def vline(acc, y0, y1, x, w):
         acc.add(*strip([(x, y0), (x, y1)], w))
 
-    # 뚝섬로: 황색 이중 중앙선, 백색 차선(3 m 칠 / 5 m 빈칸, 정지선 앞 30 m 실선), 정지선, 횡단보도
-    for yo in (-0.125, 0.125):
-        hline(Y, X0 + 0.3, XW - CW - 2.0, TT_C + yo, 0.15); hline(Y, XW + CW + 2.0, X1 - 0.3, TT_C + yo, 0.15)
+    # 뚝섬로: 백색 차선(3 m 칠 / 5 m 빈칸, 정지선 앞 30 m 실선), 정지선, 횡단보도. 성수 2041(Task 10): 황색 이중 중앙선은 걷었다 —
+    # 가운데를 태양광 띠(future FU_road_pv, TT_MEDIAN)가 덮고, 노면 표시(+0.005)가 띠(+0.012) 위로 비쳤다. 정지선도 띠 가장자리에서 끊는다
     sb_w = XW - CW - 2.0; sb_e = XW + CW + 2.0
     hline(W, sb_w - 30.0, sb_w, -45.25, 0.15)
     dashes(X0 + 1.0, sb_w - 30.0, -45.25, 0.15)
@@ -1079,8 +1083,8 @@ def build_markings(G, MAT, road_s, walk_s):
     hline(W, sb_e, sb_e + 30.0, -38.75, 0.15)
     dashes(X0 + 1.0, sb_w, -38.75, 0.15)
     dashes(sb_e + 30.0, X1, -38.75, 0.15)
-    vline(W, TT[0] + 0.25, TT_C - 0.25, sb_w - 0.225, 0.45)
-    vline(W, TT_C + 0.25, TT[1] - 0.25, sb_e + 0.225, 0.45)
+    vline(W, TT[0] + 0.25, TT_MEDIAN[0] - 0.05, sb_w - 0.225, 0.45)
+    vline(W, TT_MEDIAN[1] + 0.05, TT[1] - 0.25, sb_e + 0.225, 0.45)
     for k in range(14):
         yc = TT[1] - 0.425 - 0.225 - k * 0.9
         V, F = rect_strip(XW - CW, yc - 0.225, XW + CW, yc + 0.225, 0.5, 0.15)

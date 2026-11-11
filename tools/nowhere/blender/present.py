@@ -18,7 +18,8 @@
 #                    공장 창·차고 문, 관목. Task 4 가 실외기·공중전화·덮개 씌운 차·방호벽(RETIRED_PROPS)을 걷어냈다
 #     PR_park_*      포켓 공원(빈터 자리, build_lot_park): 현무암 조경석 3, 물길 정원 현무암 경계석, 관목 화단 4, 벤치 6
 #     PR_ginkgo.*    은행나무 가로수(저폴리 줄기 + 알파 카드, 성수 2041: 여름 녹색 잎)
-#     PR_ivy         담쟁이(성수 2041 Task 5): street 면 10 곳, 벽 앞 0.07 m 의 1 m 칸 판, NW_ivy(알파 MASK) 하나
+#     PR_ivy         담쟁이(성수 2041 Task 5): street 면 10 곳, 벽 앞 0.07 m 의 1 m 칸 판, NW_ivy(알파 MASK) 하나.
+#                    Task 8b: 두께 — 바깥 겹(+0.08 … 0.25 m, 칸의 절반) · 위 가장자리 늘어진 카드 · 면 끝 45° 카드
 #     PR_greenwall_* 수직정원 3 면(side 면): 깊이 0.25 m 강판 테두리 상자 + NW_greenwall 앞면
 #     PR_zelkova_a.* 포켓 공원 느티나무 8(링크 복제), PR_zelkova_b.* + PR_planter.* 화분형 가로수(뚝섬로 북측 · 북쪽 이면도로)
 #   NW_anchors        ANCHOR_* 빈 객체(nw_layer ∈ building·present·nature, nw_title) — layout.json 으로만 나간다
@@ -76,8 +77,15 @@ IVY_FACES = [  # (건물, 면, 덮는 높이 비율 최소, 최대) — 모두 s
 IVY_OFF = 0.07      # 벽에서 띄우는 거리(m)
 IVY_CELL = 1.0      # 칸(m)
 IVY_PAD = 0.1       # 담쟁이가 비우는 창 · 문 둘레 여유(m) — 창턱(0.06 · 0.09 m)까지 비운다
-IVY_DENS = (0.35, 0.6, 0.85, 0.95)    # paint_ivy 아틀라스 칸 (0,0) (½,0) (0,½) (½,½) 의 잎 밀도 = ivy_shell 의 dens 0 … 3
+IVY_DENS = (0.3, 0.5, 0.7, 0.82)     # paint_ivy 아틀라스 칸 (0,0) (½,0) (0,½) (½,½) 의 잎 밀도 = ivy_shell 의 dens 0 … 3
+                                     # (Task 8b: 옛 0.35 · 0.6 · 0.85 · 0.95 — 빽빽한 칸이 불투명한 초록 판으로 읽혀 잎 사이로 벽이 비치게)
 IVY_HOLES = {}      # (건물, 면) → [(u0, v0, u1, v1)] — building() 이 담쟁이 면의 개구부를 적어 두고 ivy_shell 이 비운다
+IVY_OUT = (0.08, 0.25)      # 성수 2041(Task 8b): 바깥 겹이 안쪽 판보다 더 나오는 거리(m)
+IVY_OUT_P = 0.5            # 바깥 겹이 덮는 칸 비율
+IVY_OUT_PAD = 0.25         # 바깥 겹 · 카드가 비우는 창 둘레 여유(m) — 벽에서 멀어 비스듬히 볼 때 창을 덮지 않게
+IVY_HANG = (0.45, 0.85)    # 위 가장자리에서 늘어지는 잎 카드 길이(m, 위 경계 위 0.15 m 를 더해 한 칸 1 m 를 넘지 않는다)
+IVY_HANG_D = 0.32          # 늘어진 카드 아래 끝이 안쪽 판보다 더 나오는 거리(m)
+IVY_SIDE = 0.35            # 면 양 끝 잎 카드가 면 밖 · 앞으로 나오는 거리(m, 45°)
 GREEN_WALLS = [     # 수직정원(건물, 면, u0, u1, z0, z1) — 모두 side 면. building() 이 이 구간의 개구부를 ops 에서 뺀다
     ('B6', 'E', 2.0, 20.0, 0.6, 8.0), ('B1', 'E', 2.0, 13.5, 0.6, 9.5), ('B3', 'W', 3.0, 18.0, 0.8, 14.0),
 ]
@@ -91,6 +99,13 @@ PLANTER_CANDIDATES = [                 # §4.3: 뚝섬로 북측 y −34.5 · �
     (-90.0, 64.5), (-70.0, 64.5), (-40.0, 64.5), (-5.0, 64.5), (30.0, 64.5),
 ]
 ROBOT_PROP_Y = -33.6                   # 배송로봇 길(뚝섬로 북측 보도 y −32.9 … −31.5)을 비운다 — 이 보도의 소품 북쪽 끝은 y ≤ −33.6
+BOT1_LANE = (73.525, -28.0, 74.275, 132.0)   # 배송로봇 bot1 길(동쪽 골목 동측 보도 x 73.9 ± 몸 반폭 0.275 + 0.1) — 이 안에는 소품을 두지 않는다
+                                             # Task 11: x 74.2 → 73.9(키오스크 x 74.71 에서 경로 여유 0.7 m, tests/nowhere-clearance (d))
+# 거리 입간판(x, y, rz)과 화분(x, y): build_street 가 놓고, future.py 가 새 소품 자리를 고를 때 피한다(입간판은 한 객체로 합쳐져 이름으로
+# 못 찾는다). Task 10: 골목 동측 보도의 입간판 (73.6, 26.5) · 화분 (73.6, 33.8)은 bot1 길에 걸려 건물(E1b x 76) 쪽 x 75.1 로 옮겼다
+AFRAME_SIGNS = [(27.5, 130.3, 0.2), (-92.0, -31.0, 0.1), (-76.0, -56.6, 2.9), (75.1, 26.5, 1.5), (-10.0, 131.3, -0.2), (-48.0, 49.0, 0.4),
+                (121.0, 132.0, 0.0)]
+STREET_POTS = [(20.6, 129.4), (23.2, 129.5), (32.6, 129.4), (18.0, 125.0), (18.0, 121.5), (75.1, 33.8)]
 STREET_LIGHTS_N = (-95, -65, -35, -5, 32, 62, 92, 122, 152)   # 뚝섬로 북측 보도 가로등 x(y = TT[1] + 0.55)
 STREET_LIGHTS_S = (-75, -45, 15, 45, 75, 105, 135)            # 남측 보도 가로등 x(y = TT[0] − 0.55)
 
@@ -397,7 +412,8 @@ def paint_leaves(buf, w, h):
 
 # ─── 성수 2041(Task 5): 담쟁이 · 수직정원 · 화단 · 느티나무 텍스처(§5). numpy 로 그린다(행 0 = 아래 = UV v 0)
 LEAF_PAL = ('#2F5A2C', '#4E7A3A', '#6E9A45', '#8DB35A')     # §5 잎(마지막 = 하이라이트)
-IVY_PAL = ('#3F6B2E', '#4E7A3A', '#5D8A3A')                 # §5 담쟁이
+IVY_DARK = ('#1E3518', '#27421E')                            # §5 담쟁이 — 성수 2041(Task 8b): 아래 깔린 그늘 잎
+IVY_LIGHT = ('#5A8434', '#729C40')                           # 성수 2041(Task 8b): 위 잎(해 받는 면, 레퍼런스의 노란 기 도는 초록)
 
 
 def _np_out(buf, arr):
@@ -462,22 +478,34 @@ def _tile_noise(rng, S, kmax=3, n=7):
     return (f - f.min()) / max(1e-6, f.max() - f.min())
 
 
+def _shade_under(img, mask, y0, x0, k):
+    """img(h, w, 4) 에서 mask 자리(왼쪽 아래 = (y0, x0), 감음) 중 이미 칠한 잎(알파 > 0.5)만 k 배로 어둡게 — 위 잎이 드리우는 그늘."""
+    import numpy as np
+    H_, W_ = img.shape[:2]
+    yy, xx = np.nonzero(mask)
+    ys = (yy + y0) % H_; xs = (xx + x0) % W_
+    on = img[ys, xs, 3] > 0.5
+    img[ys[on], xs[on], :3] *= k
+
+
 def paint_ivy(buf, w, h):
-    """담쟁이 아틀라스(2 × 2 칸, 칸 하나 = 담쟁이 판 1 m 칸): 잎 밀도 IVY_DENS(0.35 · 0.6 · 0.85 · 0.95). 세 갈래 잎 지름
-    10–18 px(잎끝은 대개 아래), 잎 사이 알파 0. 굽이쳐 오르는 덩굴 줄기를 먼저 긋고 잎은 대개 줄기 둘레에 무리 지어 단다
-    (성긴 칸 = 덩굴손 끝이 보이는 들쭉날쭉한 위 경계). 아래 깔린 잎은 어둡고 맨 위 잎은 밝으며, 칸 안 저주파 빛 얼룩이
-    잎 무리를 만든다 — 꽉 찬 칸이 평평한 초록 칠로 보이지 않게(look 2 회차). 칸마다 가장자리를 감아 이음매가 없다."""
+    """담쟁이 아틀라스(2 × 2 칸, 칸 하나 = 담쟁이 판 1 m 칸): 잎 밀도 IVY_DENS. 굽이쳐 오르는 덩굴 줄기를
+    먼저 긋고 잎은 대개 줄기 둘레에 무리 지어 단다(성긴 칸 = 들쭉날쭉한 위 경계). 칸마다 가장자리를 감아 이음매가 없다.
+    성수 2041(Task 8b): 잎 하나하나가 보이게 — 세 갈래 잎 지름 20–36 px(1 m = 512 px 에서 4–7 cm, 옛 10–18 px 는 거리에서
+    칠한 무늬로 읽혔다), 아래 깔린 잎은 어두운 두 색(IVY_DARK), 위 잎은 밝은 두 색(IVY_LIGHT), 새 잎마다 아래 잎에 그늘(오른쪽 아래
+    4 px, × 0.5)을 드리워 잎 사이가 어둡다. 칸 안 저주파 얼룩(20–40 cm)이 밝은 잎 덩이와 어두운 틈을 갈라 거리에서도 덩어리로 읽힌다.
+    잎 사이 알파 0."""
     import numpy as np
     rng = np.random.default_rng(1241)
     S = w // 2
-    pal = np.array([_hex(c) for c in IVY_PAL])
+    dark = np.array([_hex(c) for c in IVY_DARK]); light = np.array([_hex(c) for c in IVY_LIGHT])
     bg = np.array(_hex('#3A5E2A'))                 # 투명 칸 색(밉맵 번짐이 초록이 되게)
     stem = np.array(_hex('#58533B'))
     disc = np.add.outer(np.arange(-1, 2) ** 2, np.arange(-1, 2) ** 2) <= 1
     out = np.zeros((h, w, 4)); out[..., :3] = bg
     for k, dens in enumerate(IVY_DENS):
         cell = np.zeros((S, S, 4)); cell[..., :3] = bg
-        macro = _tile_noise(rng, S)
+        macro = _tile_noise(rng, S, kmax=5, n=10)     # 파장 20 cm … 1 m 의 잎 덩이 얼룩
         pts = []
         for _ in range((5, 6, 8, 10)[k]):          # 덩굴: 아래에서 위로, 좌우로 굽이친다
             x = rng.uniform(0, S); y = rng.uniform(0, S); a = math.pi / 2 + rng.uniform(-0.5, 0.5)
@@ -489,18 +517,22 @@ def paint_ivy(buf, w, h):
                 x += 2.0 * math.cos(a); y += 2.0 * math.sin(a)
         pts = np.array(pts)
         p_vine = 0.92 if dens < 0.7 else 0.6
-        sig = 6.0 + 12.0 * dens
+        sig = 10.0 + 20.0 * dens
         cov = 0.0
         while cov < dens:
             layer = (cov / dens) ** 0.6                # 0 아래 깔린 잎 … 1 맨 위 잎
-            for _ in range(120):
+            for _ in range(40):
                 if rng.random() < p_vine:
                     px, py = pts[int(rng.integers(0, len(pts)))] + rng.normal(0.0, sig, 2)
                 else:
                     px, py = rng.uniform(0, S, 2)
-                m, sh, r = _ivy_leaf(rng.uniform(5.0, 9.0), -math.pi / 2 + rng.normal(0.0, 0.75))
-                lum = (0.42 + 0.7 * layer) * (0.84 + 0.3 * macro[int(py) % S, int(px) % S]) * rng.uniform(0.88, 1.12)
+                m, sh, r = _ivy_leaf(rng.uniform(10.0, 18.0), -math.pi / 2 + rng.normal(0.0, 0.75))
+                mac = macro[int(py) % S, int(px) % S]
+                top = rng.random() < (0.1 + 0.85 * layer) * (0.35 + 0.9 * mac)    # 잎 덩이(밝은 무리)와 그늘진 틈(어두운 잎)
+                pal = light if top else dark
+                lum = (0.72 + 0.5 * mac) * rng.uniform(0.9, 1.1)
                 base = pal[int(rng.integers(0, len(pal)))] * lum
+                _shade_under(cell, m, int(py) - r - 4, int(px) - r + 3, 0.5)
                 _stamp(cell, m, int(py) - r, int(px) - r, np.clip(base * sh[..., None], 0.0, 1.0))
             cov = float((cell[..., 3] > 0.5).mean())
         x0, y0 = (k % 2) * S, (k // 2) * S
@@ -712,14 +744,16 @@ def _streaks(M, color, amount, dark=(0.34, 0.31, 0.29, 1.0)):
 
 def mat_tex(name, tid, size, tint=None, sat=1.0, gain=1.0, res='2k', normal=1.0, base_wet=0.25, moss_bias=0.0,
             crevice_moss=2.0, porosity=0.5, wet_gloss=0.6, streak=0.0, rot=0.0, micro=0.0, surface='wall', var=0.14,
-            streak_col=(0.34, 0.31, 0.29, 1.0), tint_var=False, paint=None):
-    """텍스처 PBR + 정점 마스크(이끼·젖음·AO) + 빗물 얼룩. 벽·지붕·교각 공용."""
+            streak_col=(0.34, 0.31, 0.29, 1.0), tint_var=False, paint=None, brick=None):
+    """텍스처 PBR + 정점 마스크(이끼·젖음·AO) + 빗물 얼룩. 벽·지붕·교각 공용. brick: brick_prep() 결과(성수 2041 복원 벽돌)."""
     _guard(name)
     M = lib.Mat(name); b = M.b
     vec = M.uv(size, rot=rot)
     t = M.texset(tid, vec, res, False, normal)
     nrm = M.micro(t['normal'], tid, size / 6.0, micro, res) if micro > 0 else t['normal']
     c = M.grade(t['color'], sat, tint, gain)
+    if brick is not None:
+        c = _brick_2041(M, c, t['color'], vec, brick)
     c = M.macro_var(c, var, 0.07)
     if tint_var:
         c = _tint_var(M, c)
@@ -843,9 +877,87 @@ def mat_alpha_flat(name, hexcol, alpha=0.35, rough=0.6, surface='metal'):
     return M.m
 
 
-BRICK_TINT = {'brick': (2.05, 1.1, 0.84, 1.0), 'brick_old': (2.1, 1.15, 0.88, 1.0)}   # 렌더 측정으로 맞춘 값(보고서 휘도 절)
+# 성수 2041(Task 8b): 복원 벽돌 — 주황 · 연어색(CP1 tint (2.05, 1.1, 0.84) · (2.1, 1.15, 0.88))을 깊은 적갈색으로. 웹 맑음 14:00
+# 골목 시점 오른쪽 벽 중앙값 #BA8A6D(색상 22.5°) → #9D6C5F(색상 12.6°, 휘도 −20 %) — 보고서 회차 표. 원본 텍스처는 이미 적갈색이고
+# 주황빛은 이 보정값에서 왔다(Step 1)
+BRICK_TINT = {'brick': (0.455, 0.128, 0.172, 1.0), 'brick_old': (0.68, 0.185, 0.19, 1.0)}
 BRICK_GAIN = {'brick': 1.6, 'brick_old': 1.85}
 BRICK_SAT = {'brick': 1.15, 'brick_old': 0.95}
+BRICK_TILE = {'brick': 3.6, 'brick_old': 0.95}     # 타일(m): 단 높이 church_bricks_02 5.8 cm(그대로) · brick_wall_001 9.6 → 6.8 cm
+BRICK_FLAT = {'brick': 0.3, 'brick_old': 0.45}     # 벽돌마다의 색 흔들림을 평균 벽돌색 쪽으로 줄이는 비율(그을린 검정 · 바랜 흰 벽돌 → 고른 적갈색,
+                                                   # 0.95 m 타일 반복이 거리에서 무늬로 읽히지 않게)
+MORTAR = {'church_bricks_02': (12, 0.08, 0.20), 'brick_wall_001': (0, 0.08, 0.20)}   # 줄눈 마스크: (높이 고역 반지름 px · 0 = 높이 그대로,
+                                                   # 분위 시작 · 끝) — 낮은 높이 = 줄눈. church 는 높이맵에 큰 기복이 있어 국소 평균을 뺀다
+MORTAR_HEX = '#ABA69C'                             # 밝은 회백 줄눈(텍스처의 회갈 · 그을린 줄눈을 덮는다). 맑은 낮에 회백으로 읽히는 알베도
+STONE_HEX = '#D8D2C6'                              # 벽돌 동 창턱 · 인방(밝은 돌, NW_stone_trim)
+PAINT_BRICK = ((2.05, 1.1, 0.84, 1.0), 1.6)        # NW_brick_painted 밑 벽돌(도장이 84 % 덮는다): CP1 값 그대로
+
+
+def _img_np(path, noncolor=False):
+    """텍스처 파일 → numpy (h, w, 4) 0..1(아래 행부터, 색 이미지는 sRGB 값 그대로)."""
+    import numpy as np
+    im = lib.img(path, noncolor)
+    w, h = im.size
+    a = np.zeros(w * h * 4, np.float32); im.pixels.foreach_get(a)
+    return a.reshape(h, w, 4)
+
+
+def _box_wrap(a, r):
+    """이어 붙는 타일의 상자 흐림(반지름 r px, 가장자리를 감는다)."""
+    import numpy as np
+    for ax in (0, 1):
+        p = np.concatenate([a.take(range(-r, 0), ax), a, a.take(range(r), ax)], ax)
+        c = np.cumsum(p, ax, dtype=np.float64)
+        c = np.concatenate([np.zeros_like(c.take([0], ax)), c], ax)
+        n = a.shape[ax]
+        a = (c.take(range(2 * r + 1, 2 * r + 1 + n), ax) - c.take(range(n), ax)) / (2 * r + 1)
+    return a
+
+
+def brick_prep(tid, sat, tint, gain, amt):
+    """성수 2041 벽돌(Task 8b): 줄눈 마스크 이미지(1024², build/nowhere/gen/NW_gen_mortar_<tid>.png)와 상수를 만든다.
+    Blender 재질(_brick_2041)과 웹 내보내기(export._grade_diff_image)가 같은 마스크 · 상수를 쓴다.
+    → dict(mask 이미지 이름, file, flat = 보정 뒤 평균 벽돌색(선형), amt, mortar = MORTAR_HEX, mref = 줄눈 원본 평균 휘도(선형))"""
+    import numpy as np
+    r, q0, q1 = MORTAR[tid]
+    f = lib.tex_files(tid, '2k')
+    d = _img_np(f['diff'])[..., :3].astype(np.float64)
+    hgt = _img_np(f['disp'], True)[..., 0].astype(np.float64)
+    if r:
+        hgt = hgt - _box_wrap(hgt, r)
+    lo, hi = np.quantile(hgt, [q0, q1])
+    t = np.clip((hgt - lo) / max(1e-6, hi - lo), 0.0, 1.0)
+    m = 1.0 - t * t * (3.0 - 2.0 * t)
+    if m.shape[0] >= 2048:                      # export 가 2k → 1k 로 줄이는 것과 같은 2 × 2 평균
+        m = 0.25 * (m[0::2, 0::2] + m[1::2, 0::2] + m[0::2, 1::2] + m[1::2, 1::2])
+        d = 0.25 * (d[0::2, 0::2] + d[1::2, 0::2] + d[0::2, 1::2] + d[1::2, 1::2])
+    lin = np.where(d <= 0.04045, d / 12.92, ((d + 0.055) / 1.055) ** 2.4)
+    lum = lin @ np.array([0.2126, 0.7152, 0.0722])
+    g = lum[..., None] + (lin - lum[..., None]) * sat
+    g = g * np.array(tint[:3]) * gain
+    flat = g[m < 0.5].mean(0)
+    mref = float(lum[m > 0.5].mean())
+    rgba = np.ones(m.shape + (4,), np.float32); rgba[..., 0] = rgba[..., 1] = rgba[..., 2] = m
+    name = f'NW_gen_mortar_{tid}'
+    path = os.path.join(GEN, name + '.png')
+    im = lib.save_image(name, rgba, path, tag=TAG, noncolor=True)
+    return {'mask': im.name, 'file': path, 'flat': [round(float(v), 5) for v in flat], 'amt': amt, 'mortar': MORTAR_HEX,
+            'mref': round(mref, 5), 'frac': round(float(m.mean()), 3)}
+
+
+def _brick_2041(M, c, raw, vec, bp):
+    """벽돌 색 흔들림 줄이기(평균 벽돌색 쪽으로 bp['amt']) + 밝은 회백 줄눈(마스크 위, 원본 휘도로 ±15 % 결)."""
+    b = M.b
+    c = b.col(bp['amt'], c, tuple(bp['flat']) + (1.0,))
+    mt = b.node('ShaderNodeTexImage'); mt.image = bpy.data.images[bp['mask']]; mt.interpolation = 'Linear'
+    b.L.new(vec, mt.inputs['Vector'])
+    m = b.sep(mt.outputs['Color'])[0]
+    bw = b.node('ShaderNodeRGBToBW'); b.L.new(raw, bw.inputs['Color'])
+    k = b.mn(b.mx(b.math('SQRT', b.math('DIVIDE', bw.outputs['Val'], bp['mref'])), 0.8), 1.15)
+    mc = srgb(bp['mortar'])
+    mcol = b.col(1.0, (mc[0], mc[1], mc[2], 1.0), b.rgb(k, k, k), 'MULTIPLY')
+    M.meta['grade'][-1]['brick'] = bp           # export._grade_diff_image 가 같은 값으로 웹 알베도를 굽는다
+    return b.col(m, c, mcol)
 
 
 def materials():
@@ -864,13 +976,19 @@ def materials():
         'pv': gen_image('NW_gen_pv', 512, 512, paint_pv),
     }
     M = {}
-    # 붉은 벽돌 두 가지: 고른 주황 벽돌(church_bricks_02, 3.6 m 타일)과 그을린 옛 벽돌(brick_wall_001, 1.35 m)
-    M['brick'] = mat_tex('NW_brick_red', 'church_bricks_02', 3.6, tint=BRICK_TINT['brick'], sat=BRICK_SAT['brick'], gain=BRICK_GAIN['brick'], streak=1.0,
-                         crevice_moss=3.0, porosity=0.55, wet_gloss=0.45, micro=0.4, tint_var=True)
-    M['brick_old'] = mat_tex('NW_brick_old', 'brick_wall_001', 1.35, tint=BRICK_TINT['brick_old'], sat=BRICK_SAT['brick_old'], gain=BRICK_GAIN['brick_old'],
-                             streak=1.0, crevice_moss=3.0, porosity=0.55, wet_gloss=0.45, tint_var=True)
+    # 붉은 벽돌 두 가지: 고른 벽돌(church_bricks_02, 3.6 m 타일)과 옛 벽돌(brick_wall_001). 성수 2041(Task 8b): 깊은 적갈색 · 밝은 회백 줄눈 ·
+    # 고른 벽돌색(BRICK_FLAT), 빗물 얼룩은 옛 세기의 30 %(Blender 셰이더 얼룩 — 웹은 정점 마스크만 쓴다)
+    bp = {k: brick_prep(tid, BRICK_SAT[k], BRICK_TINT[k], BRICK_GAIN[k], BRICK_FLAT[k])
+          for k, tid in (('brick', 'church_bricks_02'), ('brick_old', 'brick_wall_001'))}
+    M['brick'] = mat_tex('NW_brick_red', 'church_bricks_02', BRICK_TILE['brick'], tint=BRICK_TINT['brick'], sat=BRICK_SAT['brick'], gain=BRICK_GAIN['brick'],
+                         streak=0.3, crevice_moss=3.0, porosity=0.55, wet_gloss=0.45, micro=0.4, tint_var=True, brick=bp['brick'])
+    M['brick_old'] = mat_tex('NW_brick_old', 'brick_wall_001', BRICK_TILE['brick_old'], tint=BRICK_TINT['brick_old'], sat=BRICK_SAT['brick_old'],
+                             gain=BRICK_GAIN['brick_old'], streak=0.3, crevice_moss=3.0, porosity=0.55, wet_gloss=0.45, tint_var=True, brick=bp['brick_old'])
+    print('brick prep', {k: (v['flat'], v['mref'], v['frac']) for k, v in bp.items()})
+    # 벽돌 동 창턱 · 인방(성수 2041 Task 8b, 레퍼런스의 밝은 돌): building() 이 벽돌 벽 동에만 MM['sill'] 로 쓴다
+    M['stone'] = mat_flat('NW_stone_trim', STONE_HEX, rough=0.75, var=0.06, surface='wall', porosity=0.35)
     # 벽돌 위 흰·회색 도장, 연립의 흰 타일(성수 리서치 §2·§6)
-    M['brick_paint'] = mat_tex('NW_brick_painted', 'church_bricks_02', 3.6, tint=BRICK_TINT['brick'], sat=0.9, gain=BRICK_GAIN['brick'],
+    M['brick_paint'] = mat_tex('NW_brick_painted', 'church_bricks_02', 3.6, tint=PAINT_BRICK[0], sat=0.9, gain=PAINT_BRICK[1],
                                streak=1.0, crevice_moss=2.5, porosity=0.4, normal=0.7, tint_var=True, paint='#D6D3CB')
     M['tile_white'] = mat_tex('NW_tile_white', 'church_bricks_02', 1.5, tint=(5.2, 6.0, 7.2, 1), sat=0.06, streak=0.9, normal=0.6,
                               porosity=0.25, crevice_moss=2.0, var=0.08, tint_var=True)
@@ -1151,6 +1269,10 @@ def _join_proto(name, objs, canon, ratio, origin, sc, tmp):
 
 # ═════════════════════════════ 벽 · 개구부 · 지붕 ═════════════════════════════
 SPLASH = (0.45, 1.1)          # 빗물 튐 띠(하단 1 m) 경계 — 정점이 있어야 마스크 경사가 생긴다
+# 성수 2041(Task 8b): 창 밑 그늘 띠(m). 창 아래 정점 AO(창턱 · 창 안쪽에 닿은 정점은 Cycles AO ≈ 0)가 창 아래 벽 한 칸 전체(다음 층
+# 인방까지 1–2.5 m)로 번져 어두운 띠가 되던 것을, wall() 이 창 바닥 v0 아래 이 높이에 정점 줄을 더해 이 띠 안에서 끝낸다.
+# 창턱(0.09 m) 아래로 약 0.11 m 가 그늘로 남는다. 창 밑 빗물 얼룩(A)도 이 띠 안에서 0 이 된다
+SILL_SHADOW = 0.2
 
 
 def wall_mask(age, H, ops, par_top, streak=None):
@@ -1164,7 +1286,7 @@ def wall_mask(age, H, ops, par_top, streak=None):
         st = 0.0
         for o in ops:
             if o.get('streak', True) and o['u0'] - 0.15 <= u <= o['u1'] + 0.15 and v <= o['v0'] + 1e-4:
-                st = max(st, 0.95 * math.exp(-(o['v0'] - v) / 4.5))
+                st = max(st, 0.95 * max(0.0, 1.0 - (o['v0'] - v) / SILL_SHADOW))     # 옛: exp(−Δv / 4.5 m) 로 아래 층까지 흘렀다
         if par_top is not None:
             st = max(st, (0.35 + 0.4 * h01(int(u / 1.9), 7)) * math.exp(-(par_top - v) / 4.5))
         return (moss, wet, ao, st * sk)
@@ -1186,6 +1308,8 @@ def wall(acc, a, b, H, ops, M, u_off, vb=-0.3, ubands=(), vbands=(), lintel=0.0,
         us |= {o['u0'], o['u1']}; vs |= {o['v0'], o['v1']}
         if lintel and o.get('lintel', True):
             vs.add(min(H, o['v1'] + lintel))
+        if o.get('sill') and o['v0'] - SILL_SHADOW > vb:
+            vs.add(o['v0'] - SILL_SHADOW)          # 성수 2041: 창턱 밑 그늘 띠 끝(정점 AO · 얼룩이 여기서 끝난다)
     for u0, u1 in ubands:
         us |= {max(0.0, u0), min(L, u1)}
     for v0, v1 in vbands:
@@ -1209,7 +1333,7 @@ def wall(acc, a, b, H, ops, M, u_off, vb=-0.3, ubands=(), vbands=(), lintel=0.0,
             if any(p0 < uc < p1 for p0, p1 in ubands) or any(p0 < vc < p1 for p0, p1 in vbands):
                 mat = M['trim']
             elif lintel and any(o['u0'] < uc < o['u1'] and o['v1'] < vc < o['v1'] + lintel and o.get('lintel', True) for o in ops):
-                mat = M['trim']
+                mat = M.get('sill', M['trim'])     # 성수 2041: 벽돌 동은 밝은 돌 인방(NW_stone_trim)
             acc.poly([P(u0, v0), P(u1, v0), P(u1, v1), P(u0, v1)],
                      [(u_off + u0, v0), (u_off + u1, v0), (u_off + u1, v1), (u_off + u0, v1)], mat,
                      [mk(u0, v0), mk(u1, v0), mk(u1, v1), mk(u0, v1)], (nx, ny, 0))
@@ -1245,15 +1369,16 @@ def opening(acc, P, t, n, o, M, u_off, wmat):
     if o.get('sill'):
         e = 0.06; s0 = v0 - 0.09; out = -0.07
         top = (0.3, 0.7, 0.9, 0.0); side = (0.05, 0.45, 0.85, 0.0)
+        sm = M.get('sill', M['trim'])              # 성수 2041: 벽돌 동은 밝은 돌 창턱(NW_stone_trim)
         acc.poly([P(u0 - e, v0, out), P(u1 + e, v0, out), P(u1 + e, v0, 0), P(u0 - e, v0, 0)],
-                 [(u_off + u0, 0), (u_off + u1, 0), (u_off + u1, 0.07), (u_off + u0, 0.07)], M['trim'], top, (0, 0, 1))
+                 [(u_off + u0, 0), (u_off + u1, 0), (u_off + u1, 0.07), (u_off + u0, 0.07)], sm, top, (0, 0, 1))
         acc.poly([P(u0 - e, s0, out), P(u1 + e, s0, out), P(u1 + e, v0, out), P(u0 - e, v0, out)],
-                 [(u_off + u0, s0), (u_off + u1, s0), (u_off + u1, v0), (u_off + u0, v0)], M['trim'], side, N)
+                 [(u_off + u0, s0), (u_off + u1, s0), (u_off + u1, v0), (u_off + u0, v0)], sm, side, N)
         acc.poly([P(u0 - e, s0, out), P(u1 + e, s0, out), P(u1 + e, s0, 0), P(u0 - e, s0, 0)],
-                 [(u_off + u0, 0), (u_off + u1, 0), (u_off + u1, 0.07), (u_off + u0, 0.07)], M['trim'], side, (0, 0, -1))
+                 [(u_off + u0, 0), (u_off + u1, 0), (u_off + u1, 0.07), (u_off + u0, 0.07)], sm, side, (0, 0, -1))
         for uu, sg in ((u0 - e, -1), (u1 + e, 1)):
             acc.poly([P(uu, s0, out), P(uu, v0, out), P(uu, v0, 0), P(uu, s0, 0)],
-                     [(0, s0), (0, v0), (0.07, v0), (0.07, s0)], M['trim'], side, (T[0] * sg, T[1] * sg, 0))
+                     [(0, s0), (0, v0), (0.07, v0), (0.07, s0)], sm, side, (T[0] * sg, T[1] * sg, 0))
     inst = o.get('inst')
     if inst:
         key, w0, h0, depth = inst
@@ -1562,6 +1687,7 @@ def building(acc, sp, M):
     seed = sp.get('seed', int(x0 * 7 + y0 * 13))
     W_ = WIN[sp.get('win', 'factory')]
     MM = dict(M); MM['wall'] = M[sp.get('wall', 'brick')]; MM['trim'] = M[sp.get('trim', 'trim')]
+    MM['sill'] = M['stone'] if sp.get('wall', 'brick') in ('brick', 'brick_old') else MM['trim']   # 성수 2041: 벽돌 동 창턱 · 인방 = 밝은 돌
     ridge = sp.get('ridge', 'x' if (x1 - x0) >= (y1 - y0) else 'y')
     rise = 0.0
     if roof == 'gable':
@@ -1640,41 +1766,88 @@ def _face(sp, side):
 # ═════════════════════════════ 담쟁이 · 수직정원(성수 2041 Task 5) ═════════════════════════════
 def ivy_shell(acc, sp, side, lo, hi, mat, holes):
     """sp 의 side 면 앞 IVY_OFF 에 1 m 칸 담쟁이 판. 위 경계 = 벽 높이 × (lo … hi, 노이즈), 창(holes: (u0, v0, u1, v1)) 칸은 비운다.
-    UV = 아틀라스 2 × 2 칸 중 위 경계까지 거리로 밀도를 고른다(위로 갈수록 성기게)."""
+    UV = 아틀라스 2 × 2 칸 중 위 경계까지 거리로 밀도를 고른다(위로 갈수록 성기게).
+    성수 2041(Task 8b): 한 겹 판은 벽에 칠한 무늬로 읽혀 잎 덩어리의 두께를 더한다 —
+      (1) 바깥 겹: 칸의 IVY_OUT_P 에 안쪽 판보다 IVY_OUT 만큼 더 나온 성긴 잎 판(반 칸 옆으로 비켜 안쪽 칸 줄과 어긋나고, 칸마다
+          앞뒤로 조금 기울어 빛을 다르게 받는다), (2) 위 가장자리: 칸마다 위 경계에서 늘어지며 끝이 벽에서 IVY_HANG_D 나오는 잎 카드,
+      (3) 면 양 끝: 45° 로 면 밖 · 앞으로 IVY_SIDE 나오는 잎 카드. 바깥 겹 · 카드는 창 둘레를 IVY_OUT_PAD 만큼 더 넓게 비운다."""
     P, L, t, n = _face(sp, side)
     H = sp['gf'] + (sp['fl'] - 1) * sp['fh']
     seed = zlib.crc32(f"{sp['name']}{side}".encode()) % 997
+    nm = sp['name']
     # look 5 회차: 칸 가운데만 보던 창 검사(여유 0.15 m)는 1 m 칸이 창 가장자리를 0.35 m 까지 덮었다(854 칸 중 295) →
     # 칸을 창 경계(여유 IVY_PAD — 창턱 0.06 · 0.09 m 와 IVY_OFF 높이의 창턱 앞면을 비운다)에서 잘라 창 쪽 조각을 버린다
     hx = [(h0 - IVY_PAD, v0 - IVY_PAD, h1 + IVY_PAD, v1 + IVY_PAD) for h0, v0, h1, v1 in holes]
-    for i in range(int(L // IVY_CELL)):
-        u0, u1 = i * IVY_CELL, (i + 1) * IVY_CELL
+    hx2 = [(h0 - IVY_OUT_PAD, v0 - IVY_OUT_PAD, h1 + IVY_OUT_PAD, v1 + IVY_OUT_PAD) for h0, v0, h1, v1 in holes]
+    ncol = int(L // IVY_CELL)
+    uend = ncol * IVY_CELL
+
+    def atlas(dens):
+        return (dens % 2) * 0.5, (dens // 2) * 0.5
+
+    def card(u0, u1, z0, z1, d0, d1, dens, flip, hset, vflip=False):
+        """u0 … u1 × z0 … z1 잎 판(벽에서 아래 끝 d0 → 위 끝 d1), 아틀라스 칸 dens. hset 의 창 칸에 닿는 조각은 잘라 버린다."""
+        cu, cv = atlas(dens)
+        hit = [h for h in hset if h[0] < u1 and h[2] > u0 and h[1] < z1 and h[3] > z0]   # 이 칸에 닿는 창만
+        us = sorted({u0, u1} | {e for h in hit for e in (h[0], h[2]) if u0 < e < u1})
+        zs = sorted({z0, z1} | {e for h in hit for e in (h[1], h[3]) if z0 < e < z1})
+        fu = lambda u: cu + 0.5 * ((u1 - u) if flip else (u - u0)) / IVY_CELL
+        fv = lambda v: cv + 0.5 * ((z1 - v) if vflip else (v - z0)) / IVY_CELL
+        dd = lambda v: d0 + (d1 - d0) * (v - z0) / max(1e-6, z1 - z0)
+        for a0, a1 in zip(us[:-1], us[1:]):
+            for b0, b1 in zip(zs[:-1], zs[1:]):
+                if a1 - a0 < 0.05 or b1 - b0 < 0.05:
+                    continue
+                ac, bc = (a0 + a1) / 2, (b0 + b1) / 2
+                if any(h0 < ac < h1 and v0 < bc < v1 for h0, v0, h1, v1 in hset):
+                    continue
+                pts = [P(a0, b0, dd(b0)), P(a1, b0, dd(b0)), P(a1, b1, dd(b1)), P(a0, b1, dd(b1))]
+                uvs = [(fu(a0), fv(b0)), (fu(a1), fv(b0)), (fu(a1), fv(b1)), (fu(a0), fv(b1))]
+                acc.poly([tuple(p) for p in pts], uvs, mat, (0.0, 0.25, 0.9, 0.0), want=(n[0], n[1], 0.0))
+
+    tops = []
+    for i in range(ncol):
+        u0 = i * IVY_CELL
         # look 3 회차: n2 가 격자선(y = 0, 정수 z) 위라 ±0.4 밖에 안 흔들려 위 경계가 1 m 칸 줄에 반듯이 맞았다 →
         # 노이즈를 2.2 배로 펴고(lo … hi 를 다 쓴다) 칸마다 ±0.6 m 를 더해 들쭉날쭉하게
         top = H * (lo + (hi - lo) * 0.5 * (1.0 + max(-1.0, min(1.0, 2.2 * lib.n2(u0 + 0.5, 0.0, 0.15, seed)))))
-        top += (h01(sp['name'], side, i, 'top') - 0.5) * 1.2
+        top += (h01(nm, side, i, 'top') - 0.5) * 1.2
+        tops.append(top)
+    for i, top in enumerate(tops):
+        u0, u1 = i * IVY_CELL, (i + 1) * IVY_CELL
         z = 0.0
         while z < top - 0.25:
             z1 = min(z + IVY_CELL, top)
             gap = top - z1
             dens = 3 if gap > 2.0 else 2 if gap > 1.0 else 1 if gap > 0.4 else 0
-            cu, cv = (dens % 2) * 0.5, (dens // 2) * 0.5
-            flip = h01(sp['name'], side, i, round(z, 2)) < 0.5     # look 2 회차: 1 m 반복을 깨려 칸 반을 좌우로 뒤집는다(거울 이음)
-            hit = [h for h in hx if h[0] < u1 and h[2] > u0 and h[1] < z1 and h[3] > z]   # 이 칸에 닿는 창만
-            us = sorted({u0, u1} | {e for h in hit for e in (h[0], h[2]) if u0 < e < u1})
-            zs = sorted({z, z1} | {e for h in hit for e in (h[1], h[3]) if z < e < z1})
-            for a0, a1 in zip(us[:-1], us[1:]):
-                for b0, b1 in zip(zs[:-1], zs[1:]):
-                    if a1 - a0 < 0.05 or b1 - b0 < 0.05:
-                        continue
-                    ac, bc = (a0 + a1) / 2, (b0 + b1) / 2
-                    if any(h0 < ac < h1 and v0 < bc < v1 for h0, v0, h1, v1 in hx):
-                        continue
-                    fu = lambda u: cu + 0.5 * ((u1 - u) if flip else (u - u0)) / IVY_CELL
-                    fv = lambda v: cv + 0.5 * (v - z) / IVY_CELL
-                    pts = [P(a0, b0, IVY_OFF), P(a1, b0, IVY_OFF), P(a1, b1, IVY_OFF), P(a0, b1, IVY_OFF)]
-                    uvs = [(fu(a0), fv(b0)), (fu(a1), fv(b0)), (fu(a1), fv(b1)), (fu(a0), fv(b1))]
-                    acc.poly([tuple(p) for p in pts], uvs, mat, (0.0, 0.25, 0.9, 0.0), want=(n[0], n[1], 0.0))
+            flip = h01(nm, side, i, round(z, 2)) < 0.5     # look 2 회차: 1 m 반복을 깨려 칸 반을 좌우로 뒤집는다(거울 이음)
+            card(u0, u1, z, z1, IVY_OFF, IVY_OFF, dens, flip, hx)
+            # (1) 바깥 겹: 반 칸 오른쪽으로 비켜, 성긴 칸(0 · 1)
+            if h01(nm, side, i, round(z, 2), 'out') < IVY_OUT_P and u1 + 0.5 * IVY_CELL <= uend:
+                d = IVY_OFF + IVY_OUT[0] + (IVY_OUT[1] - IVY_OUT[0]) * h01(nm, side, i, round(z, 2), 'od')
+                tl = 0.06 * (2.0 * h01(nm, side, i, round(z, 2), 'tl') - 1.0)
+                card(u0 + 0.5 * IVY_CELL, u1 + 0.5 * IVY_CELL, z, z1, d + tl, d - tl, 1 if gap > 1.0 else 0, not flip, hx2)
+            z = z1
+        # (2) 위 가장자리에서 늘어지는 잎 카드(아틀라스 칸 1 을 위아래로 뒤집어 들쭉날쭉한 끝이 아래로)
+        if top > 1.2:
+            lh = IVY_HANG[0] + (IVY_HANG[1] - IVY_HANG[0]) * h01(nm, side, i, 'hang')
+            card(u0, u1, top - lh, top + 0.15, IVY_OFF + IVY_HANG_D, IVY_OFF + 0.04, 1, h01(nm, side, i, 'hf') < 0.5, hx2, vflip=True)
+    # (3) 면 양 끝: 45° 로 면 밖 · 앞으로 나오는 잎 카드(칸 높이마다, 성긴 칸)
+    for ue, sg, top in ((0.0, -1.0, tops[0] if tops else 0.0), (uend, 1.0, tops[-1] if tops else 0.0)):
+        ua, ub = sorted((ue, ue + sg * IVY_SIDE))
+        z = 0.0
+        while z < top - 0.25:
+            z1 = min(z + IVY_CELL, top)
+            gap = top - z1
+            if not any(h[0] < ub and h[2] > ua and h[1] < z1 and h[3] > z for h in hx2):
+                cu, cv = atlas(1 if gap > 1.0 else 0)                  # 성긴 칸: 면 끝이 판이 아니라 잎 가장자리로 읽히게
+                a, b = P(ue, z, IVY_OFF), P(ue + sg * IVY_SIDE, z, IVY_OFF + IVY_SIDE)
+                c, d = P(ue + sg * IVY_SIDE, z1, IVY_OFF + IVY_SIDE), P(ue, z1, IVY_OFF)
+                w = 0.5 * IVY_SIDE * math.sqrt(2.0) / IVY_CELL
+                fv = lambda v: cv + 0.5 * (v - z) / IVY_CELL
+                nn = (n[0] - sg * t[0], n[1] - sg * t[1], 0.0)          # 면 밖 · 앞 대각 방향
+                acc.poly([tuple(a), tuple(b), tuple(c), tuple(d)], [(cu, fv(z)), (cu + w, fv(z)), (cu + w, fv(z1)), (cu, fv(z1))],
+                         mat, (0.0, 0.25, 0.9, 0.0), want=nn)
             z = z1
 
 
@@ -2469,7 +2642,7 @@ def _za(x, xa, xb):
 
 
 def via_span_mesh(M):
-    """경간 모듈(로컬 x: 교각 중심 0 … 다음 교각 22, y: 0 … 10 = 고가 폭). 교각 + 아치 + 상판 + 난간·방음벽 + 도상·레일.
+    """경간 모듈(로컬 x: 교각 중심 0 … 다음 교각 22, y: 0 … 10 = 고가 폭). 교각 + 아치 + 상판(테두리 턱) + 도상·레일.
     남쪽 상판 테두리(y −0.7, z 7.9) 아래 모서리는 깨끗이 비워 둔다(Task 4 파란 LED 선 자리)."""
     acc = Acc()
     hw = VIA_PIER / 2; xa, xb = hw, VIA_SPAN - hw; W = VIA_Y1 - VIA_Y0
@@ -2507,24 +2680,15 @@ def via_span_mesh(M):
         ye = yy + sy * 0.7
         acc.poly([(x_0, yy, DECK_B), (x_1, yy, DECK_B), (x_1, ye, DECK_B), (x_0, ye, DECK_B)], [(x_0, 0), (x_1, 0), (x_1, 0.7), (x_0, 0.7)],
                  C, (0.0, 0.4, 0.6, 0.0), (0, 0, -1))
-        acc.poly([(x_0, ye, DECK_B), (x_1, ye, DECK_B), (x_1, ye, DECK_T + 1.1), (x_0, ye, DECK_T + 1.1)],
-                 [(x_0, DECK_B), (x_1, DECK_B), (x_1, DECK_T + 1.1), (x_0, DECK_T + 1.1)], C,
+        # 성수 2041(Task 9): 난간벽 · 방음벽을 걷었다 — 유리 튜브(future.build_tube)가 선로를 덮고, 상판 테두리에는 튜브 바깥
+        # 화단(y 149.2 … 150.3 · 159.7 … 160.8, 윗면 9.6)이 놓인다. 테두리는 도상 높이(DECK_T + 0.3)의 턱으로 끝난다(원경 BD_infra 상판과 같은 높이).
+        zt = DECK_T + 0.3
+        acc.poly([(x_0, ye, DECK_B), (x_1, ye, DECK_B), (x_1, ye, zt), (x_0, ye, zt)],
+                 [(x_0, DECK_B), (x_1, DECK_B), (x_1, zt), (x_0, zt)], C,
                  lambda p, n: (0.0, 0.3, 0.95, 0.6 * smoothstep(DECK_B + 0.4, DECK_T + 1.1, p[2])), (0, sy, 0))
         yi = ye - sy * 0.25
-        acc.poly([(x_0, ye, DECK_T + 1.1), (x_1, ye, DECK_T + 1.1), (x_1, yi, DECK_T + 1.1), (x_0, yi, DECK_T + 1.1)],
+        acc.poly([(x_0, ye, zt), (x_1, ye, zt), (x_1, yi, zt), (x_0, yi, zt)],
                  [(x_0, 0), (x_1, 0), (x_1, 0.25), (x_0, 0.25)], M['trim'], (0.55, 0.6, 0.95, 0.0), (0, 0, 1))
-        acc.poly([(x_0, yi, DECK_T + 0.3), (x_1, yi, DECK_T + 0.3), (x_1, yi, DECK_T + 1.1), (x_0, yi, DECK_T + 1.1)],
-                 [(x_0, 0), (x_1, 0), (x_1, 0.8), (x_0, 0.8)], C, (0.3, 0.6, 0.7, 0.0), (0, -sy, 0))
-        # 방음벽: 기둥(2.2 m) + 패널(가로 골판)
-        for k in range(10):
-            px = x_0 + 1.1 + 2.2 * k
-            acc.box((px - 0.07, yi - (0.16 if sy > 0 else 0.0), DECK_T + 1.1), (px + 0.07, yi + (0.16 if sy < 0 else 0.0), DECK_T + 2.9),
-                    M['galv'], (0.0, 0.4, 0.9, 0.0), faces='xXyYZ')
-        yp = yi - sy * 0.06
-        acc.poly([(x_0, yp, DECK_T + 1.1), (x_1, yp, DECK_T + 1.1), (x_1, yp, DECK_T + 2.8), (x_0, yp, DECK_T + 2.8)],
-                 [(x_0, 0), (x_1, 0), (x_1, 1.7), (x_0, 1.7)], M['ribbed'], (0.0, 0.35, 0.95, 0.4), (0, sy, 0))
-        acc.poly([(x_0, yp, DECK_T + 1.1), (x_1, yp, DECK_T + 1.1), (x_1, yp, DECK_T + 2.8), (x_0, yp, DECK_T + 2.8)],
-                 [(x_0, 0), (x_1, 0), (x_1, 1.7), (x_0, 1.7)], M['ribbed'], (0.0, 0.35, 0.8, 0.2), (0, -sy, 0))
     # 도상(자갈) + 레일 4줄
     yi0, yi1 = -0.7 + 0.25, W + 0.7 - 0.25
     acc.poly([(x_0, yi0, DECK_T + 0.3), (x_1, yi0, DECK_T + 0.3), (x_1, yi1, DECK_T + 0.3), (x_0, yi1, DECK_T + 0.3)],
@@ -2586,6 +2750,9 @@ def via_station(M, acc):
         for x in (xa, xb):
             acc.poly([(x, lo, zs), (x, hi, zs), (x, hi, zf), (x, lo, zf)], [(lo, zs), (hi, zs), (hi, zf), (lo, zf)], M['conc'],
                      (0.0, 0.4, 0.8, 0.0), (-1 if x == xa else 1, 0, 0))
+        # 승강장 선로 쪽 끝면(Task 9: 상판 난간벽을 걷어 도상 턱 DECK_T + 0.3 위가 드러난다)
+        acc.poly([(xa, y_in, DECK_T + 0.3), (xb, y_in, DECK_T + 0.3), (xb, y_in, zf), (xa, y_in, zf)],
+                 [(xa, DECK_T + 0.3), (xb, DECK_T + 0.3), (xb, zf), (xa, zf)], M['conc'], (0.0, 0.4, 0.8, 0.0), (0, -sy, 0))
         # 승강장 바깥 난간 + 지붕 기둥
         yr = y_out - sy * 0.1
         acc.cyl((xa, yr, zf + 1.1), (xb, yr, zf + 1.1), 0.04, 0.04, 4, M['galv'], (0, 0.4, 0.9, 0))
@@ -3200,10 +3367,12 @@ def build_street(c, M, P, protos, gz):
     for i, (x, y) in enumerate(pits):
         place(f'PR_ginkgo.{i:03d}', trees[i % 2], c, (x, y, gz.z(x + 0.8, y, -0.03)), rnd.uniform(0, 6.3), rnd.uniform(0.92, 1.08), surface='foliage')
     # 거리 소품(Poly Haven)
+    # 성수 2041 Task 10: 배송로봇 길을 비운다 — 뚝섬로 북측 보도(y −32.9 … −31.5, ROBOT_PROP_Y)의 함 · 휴지통은 차도 쪽으로(옛 (−95, −31.9) ·
+    # (−90, −32.0)), 동쪽 골목 동측 보도(BOT1_LANE)의 휴지통은 건물 쪽 x 75.1 로(옛 (73.9, 79.0))
     items = [
         ('payphone_post', (-86.0, -55.3), 0.0), ('ubox', (-70.0, -55.6), 0.0), ('ubox', (-30.0, -55.6), 0.0), ('trash', (-79.0, -55.3), 0.0),
-        ('trash', (6.0, -55.3), 0.3), ('ubox', (-95.0, -31.9), math.pi), ('trash', (-90.0, -32.0), 2.0), ('extinguisher', (-84.2, -14.0), -math.pi / 2),
-        ('ubox', (66.3, 60.0), math.pi / 2), ('trash', (66.2, 30.0), 1.0), ('trash', (73.9, 70.0 + 9.0), 0.5), ('extinguisher', (75.8, 41.0), math.pi / 2),
+        ('trash', (6.0, -55.3), 0.3), ('ubox', (-89.0, -34.3), math.pi), ('trash', (-86.6, -34.2), 2.0), ('extinguisher', (-84.2, -14.0), -math.pi / 2),
+        ('ubox', (66.3, 60.0), math.pi / 2), ('trash', (66.2, 30.0), 1.0), ('trash', (75.1, 79.0), 0.5), ('extinguisher', (75.8, 41.0), math.pi / 2),
         ('ubox', (-100.6, 60.0), -math.pi / 2), ('trash', (-62.0, 74.0), 0.2), ('ubox', (17.8, 73.6), 0.0), ('trash', (40.0, 136.0), 0.0),
         ('extinguisher', (31.0, 96.3), math.pi), ('ubox', (-10.0, 136.2), math.pi), ('trash', (90.0, 136.0), 0.4),
     ]
@@ -3232,11 +3401,10 @@ def build_street(c, M, P, protos, gz):
     # 배달 오토바이: 저폴리 실루엣이라 15 m 밖(고가 하부 가로 남측 보도·카페 앞)에만 둔다
     for i, (x, y, rz) in enumerate(((-6.5, 136.7, 0.15), (-5.2, 136.5, 0.3), (36.0, 136.9, 3.0), (-30.0, 148.6, 0.0), (60.0, 148.4, 3.1))):
         place(f'PR_scooter.{i:03d}', protos['scooter'], c, (x, y, gz.z(x, y)), rz, surface='metal')
-    # 입간판·화분(카페·가게 앞)
-    for i, (x, y, rz) in enumerate(((27.5, 130.3, 0.2), (-92.0, -31.0, 0.1), (-76.0, -56.6, 2.9), (73.6, 26.5, 1.5), (-10.0, 131.3, -0.2),
-                                    (-48.0, 49.0, 0.4), (121.0, 132.0, 0.0))):
+    # 입간판·화분(카페·가게 앞) — 자리는 AFRAME_SIGNS · STREET_POTS(future.py 가 새 소품 자리를 고를 때 피한다)
+    for i, (x, y, rz) in enumerate(AFRAME_SIGNS):
         aframe_sign(x, y, gz.z(x, y), rz, ('커피', '영업중', '수선', '식사', '세탁', '분식', '주차금지')[i], i + 2)
-    for i, (x, y) in enumerate(((20.6, 129.4), (23.2, 129.5), (32.6, 129.4), (18.0, 125.0), (18.0, 121.5), (73.6, 33.8))):
+    for i, (x, y) in enumerate(STREET_POTS):
         z = gz.z(x, y)
         place(f'PR_pot.{i:03d}', protos['pot'], c, (x, y, z), 0.0, surface='wall')
         place(f'PR_ph_shrub.p{i}', P['shrub'], c, (x, y, z + 0.5), rnd.uniform(0, 6.3), (0.24, 0.24, 0.3), surface='foliage')

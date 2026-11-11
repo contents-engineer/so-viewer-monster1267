@@ -15,7 +15,9 @@
 #     (3) FU_crossing_*         뚝섬로 횡단보도(x −14) 가장자리 발광선 + 바닥형 보행신호 + 연석 LED #43ABA7
 #     (4) FU_busstop_*          북측 보도 스마트 정류장(유리 쉘터, 도착 안내) + 독립 키오스크
 #     (5) FU_taxi.*             창이 상태 스크린인 둥근 자율 택시 3대(링크 복제)
-#     (6) FU_drone_*            보안 드론 1(서치라이트 원뿔 = holo) + 배송 드론 3(링크 복제), PATH_drone_<id>_<n> 경로 빈 객체
+#     (6) FU_drone_*            보안 드론 FU_drone_sec(서치라이트 원뿔 = holo) + 배송 드론 FU_drone_d1 … d5(소포를 매단 단일 사용자 메시)
+#     이동체(Task 11): 포드 · 열차 · 배송로봇 · 드론은 한 재질 NWF_mover(paint_mover 아틀라스). 경로 표는 mover_table() → 장면 속성
+#                      nw_movers(JSON) → export.py 가 layout.movers 로 낸다(웹 movers.js 가 움직인다)
 #     보조: FU_smart_head.*(옛 가로등 기둥에 덧단 LED 헤드·센서 포드 3), FU_ev_post.*(EV 충전 기둥 2, LED 링),
 #           FU_shop_display(카페 진열창의 투명 디스플레이), FU_holo_ad(홀로그램 광고 한 곳, holo)
 #     (7) FU_tower_T1 … T4      성수 2041 신축 유리 타워 4동(TOWERS, 장면 밖 원경 대지). 커튼월 NWF_curtain(밤 창 35 %) + 셋백 테라스 ·
@@ -31,7 +33,8 @@
 #   - 모든 메시: 정점색 nw_mask(R 이끼 0, G 젖음, B AO, A 1) 활성·렌더 색, 객체 nw_surface·nw_vmask=1.
 #   - 발광 재질: 세기 = day + night·nw_night(장면 속성, lib.emit_strength), 재질 nw_emit(JSON) 기록, 객체 nw_night=1.
 #   - holo: 웹 전용 셰이더(스캔선·깜빡임)로 바뀐다. Blender 에서는 가산(투명 + 발광)으로 보이게만 한다.
-#   - 반복 소품(택시·배송 드론·스마트 헤드·EV 기둥)은 링크 복제 → GPU 인스턴싱.
+#   - 반복 소품(스마트 헤드·EV 기둥 등)은 링크 복제 → GPU 인스턴싱. 이동체(포드·열차·배송로봇·드론·풍력 회전자)는 각자 단일 사용자 메시
+#     (같은 모양 사본은 정점 AO 를 조금씩 달리 써서 gltf-transform dedup · instance 가 노드 이름을 지우지 않게 한다).
 import bpy, bmesh, os, sys, math, random, importlib, json
 from mathutils import Vector, Matrix, Euler
 
@@ -62,7 +65,6 @@ TT = (-48.5, -35.5)                      # 뚝섬로 남·북 경계석 선
 SCREEN = dict(x0=-15.0, x1=-1.0, y=126.6, z0=15.2, w=12.0, h=6.75)   # B5 지붕 위(용마루 13.54 m, 북쪽 처마 y 130)
 SHELTER = dict(x=-46.0, y0=-33.35, y1=-34.85)                          # 북측 보도(경계석 y −35.5)
 KIOSK = (-41.6, -34.55)
-TAXIS = [((-54.0, -36.95, 0.0), math.pi), ((52.0, -44.4, 0.0), 0.0), ((118.0, -47.05, 0.0), 0.0)]   # (위치, 진행 방향)
 SMART_POLES = ('PR_light.001', 'PR_light.010', 'PR_light.017')       # 뚝섬로 북측 x −65, 남측 x −45, 골목 y 125
 EV_POSTS = [(31.0, 150.55), (35.6, 150.55)]                            # 고가 아래 아치 주차(승강장 구간) 남쪽 끝
 DISPLAY = dict(x=40.5, y=127.66, w=4.6, z0=0.55, h=2.3)                # B6 카페 북면 진열창(유리 y 127.7)
@@ -73,10 +75,16 @@ DRONE_PATHS = {
     'sec': [(5.0, 122.0, 19.0), (-30.0, 140.0, 18.0), (-70.0, 120.0, 22.0), (-50.0, 75.0, 24.0), (0.0, 62.0, 25.0),
             (50.0, 70.0, 24.0), (66.0, 110.0, 21.0), (40.0, 138.0, 18.0)],
     'd1': [(52.0, 8.0, 34.0), (90.0, -10.0, 40.0), (140.0, 30.0, 44.0), (110.0, 75.0, 40.0), (60.0, 60.0, 36.0)],
-    'd2': [(-60.0, -42.0, 30.0), (20.0, -42.0, 32.0), (100.0, -42.0, 30.0), (100.0, -90.0, 46.0), (-60.0, -95.0, 46.0)],
+    'd2': [(-60.0, -42.0, 30.0), (20.0, -42.0, 32.0), (100.0, -42.0, 36.0), (100.0, -90.0, 46.0), (-60.0, -95.0, 46.0)],   # Task 11: 셋째 점 z 30 → 36(남쪽으로 꺾을 때 MX 지붕 36.2 m 에서 3 m)
     'd3': [(30.0, 110.0, 28.0), (-10.0, 112.0, 30.0), (-40.0, 85.0, 32.0), (10.0, 80.0, 30.0)],
+    # Task 11(§4.4): d4 = 뚝섬로 위 낮은 왕복 고리(거리 시점), d5 = 동쪽 골목 위(2041 골목 시점)
+    'd4': [(-80.0, -42.0, 18.0), (0.0, -40.0, 20.0), (80.0, -44.0, 18.0), (150.0, -42.0, 22.0), (80.0, -38.0, 24.0), (0.0, -46.0, 22.0),
+           (-80.0, -40.0, 20.0)],
+    'd5': [(70.0, -20.0, 16.0), (70.0, 60.0, 18.0), (70.0, 130.0, 17.0), (66.0, 170.0, 24.0), (40.0, 120.0, 22.0), (64.0, 40.0, 20.0)],
 }
-DRONE_SPEED = {'sec': 4.0, 'd1': 9.0, 'd2': 11.0, 'd3': 7.0}   # m/s(웹 애니메이션 기본값)
+DRONE_SPEED = {'sec': 4.0, 'd1': 9.0, 'd2': 11.0, 'd3': 7.0, 'd4': 9.0, 'd5': 7.0}   # m/s(웹 애니메이션 기본값)
+PARCEL = (0.5, 0.4, 0.35)                # 배송 드론 소포(x · y · z m, 골판지 #B98C5A)
+PARCEL_DROP = 0.6                        # 몸체 아래면 → 소포 윗면(가는 줄 4 개)
 
 CAM_NIGHT = ((56.0, 145.6, 1.5), (-4.0, 102.0, 14.8), 19.0)    # 고가 하부 가로에서 서남서: 오른쪽 위에서 이어지는 고가 파란 LED 선, 젖은 노면 반사, 카페·간판, 비계 스크린, 드론, HAUS
 CAM_FUTURE = ((70.0, 8.0, 1.7), (70.0, 150.0, 14.0), 22.0)   # 동쪽 골목에서 북쪽: 양쪽 벽돌, 스카이브리지, 고가 튜브, 뒤편 타워(레퍼런스 구도)
@@ -84,7 +92,9 @@ BEAM_AIM = (12.0, 139.0, 0.0)                                   # 보안 드론 
 
 # 신축 타워(§4.2): 장면 사각형 밖, 원경 BD_mid 를 비운 대지(backdrop.py 가 이 표로 비운다)
 TOWERS = [
-    dict(id='T1', c=(-40.0, 205.0), size=(32.0, 26.0), h=128.0, form='setback', setbacks=(40.0, 80.0), inset=2.0, turbines=3),
+    dict(id='T1', c=(92.0, 234.0), size=(32.0, 26.0), h=128.0, form='setback', setbacks=(40.0, 80.0), inset=2.0, turbines=3),
+    # ↑ Task 8b: (−40, 205) 는 CAM_future 에서 왼쪽 공원 느티나무에 가렸다 → 골목 북쪽 연장 도로(x 67…73) 바로 동쪽, T3 뒤(북)에 세워
+    #   골목 끝 고가 너머에서 T2(왼쪽) · T1(가운데 오른쪽) · T3(오른쪽 앞)이 겹쳐 선다. 서쪽 블록(x ≤ 67)에 두면 T2 를 앞에서 가린다
     dict(id='T2', c=(30.0, 228.0), size=(28.0, 28.0), h=104.0, form='rounded', r=6.0, green_every=3, turbines=0),
     dict(id='T3', c=(110.0, 196.0), size=(36.0, 22.0), h=84.0, form='stepped',
          steps=((0.0, 40.0, 1.0), (40.0, 64.0, 2.0 / 3.0), (64.0, 84.0, 1.0 / 3.0)), turbines=0),
@@ -108,8 +118,8 @@ NACELLE = (1.2, 0.6, 0.6)              # 나셀 길이 · 폭 · 높이
 BLADE_L = 2.8                          # 날개 길이(허브 반지름 0.15 m 바깥)
 HUB = (0.85, 0.3)                      # 마스트 원점 → 허브 중심(앞 +x, 마스트 꼭대기 위 높이)
 # 타워 둘레 광장(Task 7 이 비운 필지 = backdrop.build_mid 의 void, CAM_aerial 로 정함): (x0, y0, x1, y1), 윗면 PLAZA_Z
-PLAZAS = [(-102.0, 176.0, 67.0, 250.0),                               # T1 · T2 블록 전체(필지 9개가 모두 비었다)
-          (73.0, 176.0, 143.9, 250.0),                                # T3: 블록 서쪽 필지 4
+PLAZAS = [(2.5, 176.0, 67.0, 250.0), (-1.96, 221.72, 2.5, 250.0),      # T2: 서쪽 블록 동쪽 필지 4(Task 8b: T1 이 떠나 x < 2.5 필지 5개는 다시 건물)
+          (73.0, 176.0, 143.9, 250.0),                                # T3 · T1(Task 8b): 동쪽 블록 서쪽 필지 4
           (166.0, -31.5, 230.0, 66.0)]                                # T4 (205, 0): 블록 전체(필지 5개가 모두 대지 + 12 m 와 겹친다)
 PLAZA_Z = 0.15                         # 보도블록 윗면(원경 지면 z 0 위 연석 높이 — 멀리서 깊이 다툼이 없다)
 
@@ -308,6 +318,14 @@ def _digits(a, x, y, s, text, col):
 
 def paint_ui():
     """UI 아틀라스 1024² (4×4 칸, 아래 행부터). 알베도와 발광 두 장. 칸 배치는 UI 사전 참조."""
+    alb, emi = _ui_arrays()
+    a = lib.save_image('NWF_gen_ui', alb, os.path.join(GEN, 'NWF_gen_ui.png'), TAG)
+    e = lib.save_image('NWF_gen_ui_emit', emi, os.path.join(GEN, 'NWF_gen_ui_emit.png'), TAG)
+    return a, e
+
+
+def _ui_arrays():
+    """paint_ui 의 알베도 · 발광 배열(h × w × 4, 아래 행부터). paint_mover 가 칸을 베껴 쓴다."""
     W = 1024; C = 256
     alb = _canvas(W, W, _hexs('#0B0E12')); emi = _canvas(W, W, np.zeros(3, np.float32))
     teal = _hexs('#43ABA7'); white = _hexs('#EEF3F5'); blue = _hexs('#3E8AD0'); amber = _hexs('#F2B84B'); red = _hexs('#E33739')
@@ -387,9 +405,7 @@ def paint_ui():
         arr[..., :3] *= (0.75 + 0.25 * (np.sin(yy * 0.9) > 0))[..., None]     # 스캔선
     np.clip(alb, 0, 1, out=alb); np.clip(emi, 0, 1, out=emi)
     emi[..., 3] = 1.0
-    a = lib.save_image('NWF_gen_ui', alb, os.path.join(GEN, 'NWF_gen_ui.png'), TAG)
-    e = lib.save_image('NWF_gen_ui_emit', emi, os.path.join(GEN, 'NWF_gen_ui_emit.png'), TAG)
-    return a, e
+    return alb, emi
 
 
 C4 = 0.25
@@ -398,6 +414,67 @@ UI = {   # UV 사각형(u0, v0, u1, v1) — paint_ui 의 칸
     'card': (0.02, 0.27, 0.23, 0.48), 'glass': (0.27, 0.27, 0.48, 0.48), 'ev': (0.5, 0.25, 0.75, 0.5), 'bis': (0.75, 0.25, 1.0, 0.5),
     'taxi': (0.0, 0.5, 0.5, 0.75), 'kiosk': (0.5, 0.5, 0.75, 1.0), 'display': (0.0, 0.75, 0.5, 1.0), 'holo': (0.75, 0.5, 1.0, 1.0),
 }
+
+# 이동체 아틀라스(Task 11): 웹에서 이동체는 정적 병합에서 빠져 재질마다 그리기 1 이 든다 → 포드 · 열차 · 배송로봇 · 드론의 재질을
+# NWF_mover 한 장으로 합친다(이동체 하나 = 그리기 하나). 이동체가 쓰던 UI 칸(행 0 단색 발광, 택시 화면, 골판지)은 paint_ui 와
+# 같은 자리라 UI 사각형을 그대로 쓰고, 나머지 재질은 단색 칸 가운데 한 점으로 UV 를 모은다(mover_atlas).
+MOVER_CELL = {   # 재질 이름 → paint_mover 단색 칸 가운데(u, v)
+    'NWF_glass_dark': (0.375, 0.375), 'NWF_pearl': (0.625, 0.375), 'NWF_train_white': (0.875, 0.375),
+    'NWF_black': (0.625, 0.625), 'NWF_led_cyan': (0.875, 0.625), 'NWF_train_stripe': (0.875, 0.625),
+    'NWF_led_blue': (0.125, 0.8125), 'NWF_led_white': (0.375, 0.8125), 'NWF_led_teal': (0.625, 0.125),
+}
+MOVER_BAND = (0.882, 0.993)   # 열차 창 띠(v): 아틀라스 맨 위 128 px 를 가로 전체로 쓴다(창 모듈 4 개 = u 1 → 가로 반복)
+MOVER_PBR = (0.3, 0.1)        # NWF_mover (거칠기, 금속성): 진주색 · 흰 차체(0.28 … 0.32 · 0.1 … 0.15)에 맞춤. export 가 nw_pbr 을 읽는다
+
+
+def paint_mover():
+    """이동체 아틀라스 1024²(아래 행부터, 칸 256). 알베도 · 발광 두 장.
+    행 0 = paint_ui 행 0(흰 · 빨강 · 청록 #43ABA7 · 호박, 발광) · 행 1 = 골판지 #B98C5A(테이프 띠) · 어두운 유리 · 진주색 차체 · 흰 열차 차체 ·
+    행 2 = paint_ui 택시 상태 화면(두 칸) · 검정 · 스마트 청록 #39C6E0(발광) · 행 3 아래 절반 = 파랑 LED · 흰 LED(발광), 위 절반(128 px) =
+    열차 창 띠(paint_train_window 를 가로로 4 번, 밤에만 켜지는 따뜻한 흰빛)."""
+    W = 1024; C = 256
+    ua, ue = _ui_arrays()
+    alb = _canvas(W, W, _hexs('#0B0E12')); emi = _canvas(W, W, np.zeros(3, np.float32))
+    alb[0:C] = ua[0:C]; emi[0:C] = ue[0:C]                                     # 행 0: 단색 발광 4
+    alb[2 * C:3 * C, 0:2 * C] = ua[2 * C:3 * C, 0:2 * C]; emi[2 * C:3 * C, 0:2 * C] = ue[2 * C:3 * C, 0:2 * C]   # 택시 화면
+    for (x0, y0, w, h), col, lit in (((0, C, C, C), '#B98C5A', False), ((C, C, C, C), '#0C1013', False), ((2 * C, C, C, C), '#C9CDD0', False),
+                                     ((3 * C, C, C, C), '#EEF1F2', False), ((2 * C, 2 * C, C, C), '#121416', False),
+                                     ((3 * C, 2 * C, C, C), SMART_CYAN, True), ((0, 3 * C, C, C // 2), '#3E8AD0', True)):
+        _rect(alb, x0, y0, x0 + w, y0 + h, _hexs(col))
+        if lit:
+            _rect(emi, x0, y0, x0 + w, y0 + h, _hexs(col))
+    _rect(alb, C, 3 * C, 2 * C, 3 * C + C // 2, _hexs('#C8CDD0')); _rect(emi, C, 3 * C, 2 * C, 3 * C + C // 2, _hexs('#E4EEF5'))
+    _rect(alb, C // 2 - 14, C, C // 2 + 14, 2 * C, _hexs('#A27846'))         # 골판지 칸 가운데 세로 테이프
+    ta, te = _train_window_arrays()
+    for k in range(4):
+        alb[W - C // 2:W, k * C:(k + 1) * C] = ta; emi[W - C // 2:W, k * C:(k + 1) * C] = te
+    np.clip(alb, 0, 1, out=alb); np.clip(emi, 0, 1, out=emi)
+    emi[..., 3] = 1.0
+    a = lib.save_image('NWF_gen_mover', alb, os.path.join(GEN, 'NWF_gen_mover.png'), TAG)
+    e = lib.save_image('NWF_gen_mover_emit', emi, os.path.join(GEN, 'NWF_gen_mover_emit.png'), TAG)
+    return a, e
+
+
+def mover_atlas(me, M):
+    """여러 재질로 만든 이동체 메시 → NWF_mover 한 재질. NWF_ui 면은 UV 그대로(같은 칸), 열차 창 면은 창 띠로, 나머지는 MOVER_CELL 한 점."""
+    names = [m.name for m in me.materials]
+    uv = me.uv_layers['UVMap'].data
+    b0, b1 = MOVER_BAND
+    for p in me.polygons:
+        nm = names[p.material_index]
+        if nm == 'NWF_ui':
+            continue
+        for li in p.loop_indices:
+            if nm == 'NWF_train_window':
+                u, v = uv[li].uv
+                uv[li].uv = (u / 4.0, b0 + v * (b1 - b0))
+            else:
+                uv[li].uv = MOVER_CELL[nm]
+    me.materials.clear()
+    me.materials.append(M['mover'])
+    me.polygons.foreach_set('material_index', [0] * len(me.polygons))
+    me.update()
+    return me
 
 
 def paint_screen():
@@ -613,11 +690,43 @@ def materials():
         'bark': mat_basic('NWF_bark_flat', '#5E544A', 0.85, 0.0, surface='foliage'),    # 광장 느티나무 줄기(원경: 텍스처 없이)
     }
     M['glass']['nw_surface'] = 'glass'
+    # 2호선 튜브 · 열차 · 스카이브리지(Task 9, §4.2)
+    tr_a, tr_e = paint_train_window()
+    M.update({
+        'tube_steel': mat_basic('NWF_tube_steel', '#E6E9EA', 0.35, 0.3),
+        'tube_glass': mat_glass('NWF_tube_glass', '#BFD8E6', 0.22),
+        'tube_led': mat_emit('NWF_tube_led', '#DDF4FA', 0.0, 2.0),
+        'white_conc': mat_basic('NWF_white_concrete', '#E3E1DB', 0.75, 0.0, surface='wall'),
+        'train_white': mat_basic('NWF_train_white', '#EEF1F2', 0.28, 0.1),
+        'train_window': mat_ui('NWF_train_window', tr_a, tr_e, 0.0, 1.2, rough=0.1, surface='glass'),
+        'train_stripe': mat_emit('NWF_train_stripe', '#39C6E0', 0.4, 1.5),
+        'bridge_led': mat_emit('NWF_led_bridge', '#39C6E0', 0.3, 1.6),
+    })
+    # 스마트 거리(Task 10, §4.2 · §4.3): 태양광 노면, 청록 발광선, 청록 LED(횡단보도 · 배송로봇 띠), 투명 키오스크 유리, 파라솔 천, 티크 좌판
+    M.update({
+        'road_pv': mat_tex('NWF_road_pv', paint_pv_road(), 0.2, 0.25, surface='metal'),
+        'road_led': mat_emit('NWF_road_led', SMART_CYAN, 0.5, 2.2),
+        'led_cyan': mat_emit('NWF_led_cyan', SMART_CYAN, 3.0, 16.0),
+        'kiosk_glass': mat_ui('NWF_kiosk_glass', ui_a, ui_e, 1.4, 6.0, rough=0.08, surface='glass'),
+        'parasol': mat_basic('NWF_parasol', '#F2EFE6', 0.85, 0.0, surface='wall'),
+        'teak': mat_basic('NWF_teak', '#9A7452', 0.6, 0.0, surface='wall'),
+    })
+    # 이동체 한 장 재질(Task 11, paint_mover): 웹에서는 발광 맵이 있는 비 NWF_ui 재질이라 밤에만 켜진다(LED · 열차 창)
+    mv_a, mv_e = paint_mover()
+    M['mover'] = mat_ui('NWF_mover', mv_a, mv_e, 0.4, 3.0, rough=MOVER_PBR[0], surface='metal')
+    next(n for n in M['mover'].node_tree.nodes if n.type == 'BSDF_PRINCIPLED').inputs['Metallic'].default_value = MOVER_PBR[1]
+    M['mover']['nw_pbr'] = MOVER_PBR
+    kg = M['kiosk_glass']                     # 알파 0.55(웹은 world.js GLASS_OPACITY 가 같은 값으로 투명 · 깊이 쓰기 끔)
+    next(n for n in kg.node_tree.nodes if n.type == 'BSDF_PRINCIPLED').inputs['Alpha'].default_value = 0.55
+    kg.surface_render_method = 'BLENDED'; kg.use_backface_culling = False
+    kg['nw_tex'] = json.dumps({**json.loads(kg['nw_tex']), 'alpha': 0.55}, ensure_ascii=False)
+    next(n for n in M['tube_glass'].node_tree.nodes if n.type == 'BSDF_PRINCIPLED').inputs['Roughness'].default_value = 0.05
+    M['tube_glass']['nw_tex'] = json.dumps({'kind': 'flat', 'color': '#BFD8E6', 'alpha': 0.22, 'rough': 0.05}, ensure_ascii=False)
     # 커튼월(CP1): 반금속 · 매끈 → 하늘을 비추는 푸른 유리(알베도 아틀라스가 반사를 물들인다). export 가 nw_pbr 을 읽는다
     next(n for n in M['curtain'].node_tree.nodes if n.type == 'BSDF_PRINCIPLED').inputs['Metallic'].default_value = CURTAIN_PBR[1]
     M['curtain']['nw_pbr'] = CURTAIN_PBR
     # 현재 층(present.py · ground.py)이 만든 재질을 이름으로 다시 쓴다: 화단 윗면, 태양광, 보도블록(광장), 잎 덩이(관목 · 늘어진 잎 카드)
-    for k, nm in (('meadow', 'NW_meadow'), ('pv', 'NW_pv'), ('deck', 'NW_pavers'), ('leaves', 'NW_zelkova_leaves')):
+    for k, nm in (('meadow', 'NW_meadow'), ('pv', 'NW_pv'), ('deck', 'NW_pavers'), ('leaves', 'NW_zelkova_leaves'), ('ivy', 'NW_ivy')):
         M[k] = bpy.data.materials[nm]
     return M
 
@@ -736,7 +845,7 @@ def build_crossing(C, M, gz):
                 yf = yc + face_dir * 0.006
                 p = [(a, yf, zg + 0.035), (b2, yf, zg + 0.035), (b2, yf, zg + 0.065), (a, yf, zg + 0.065)]
                 mb.face(p if face_dir < 0 else p[::-1], 0)
-    me = mb.to_mesh('FU_crossing_led', [M['led_teal']], mask=lambda co: (0.0, 0.6, 1.0))
+    me = mb.to_mesh('FU_crossing_led', [M['road_led']], mask=lambda co: (0.0, 0.6, 1.0))   # Task 10: #43ABA7 → 스마트 청록 #39C6E0(노면 발광선과 같은 재질 = 웹 병합 1 그리기)
     return obj('FU_crossing_led', me, C, surface='emissive', night=True, nw_motif='smart_crossing')
 
 
@@ -793,7 +902,7 @@ def taxi_mesh(M):
     로컬 +x 가 진행 방향. 재질: 0 진주색 차체, 1 UI(창 화면·등), 2 검정(타이어·하부), 3 어두운 유리(앞뒤 창)."""
     mb = MB()
     L2, W2, Ht = 2.15, 0.925, 1.55
-    nu, nv = 28, 10
+    nu, nv = 20, 8                                   # Task 10: 28 × 10 → 20 × 8(포드 5 대가 각자 메시라 모바일 삼각형 예산)
     def se(t, e):                                    # 초타원 단면
         c, s = math.cos(t), math.sin(t)
         return (math.copysign(abs(c) ** e, c), math.copysign(abs(s) ** e, s))
@@ -811,7 +920,7 @@ def taxi_mesh(M):
     def zone(i, j):
         px = math.cos(2 * math.pi * (i + 0.5) / nu)
         side = abs(px) < 0.72
-        if 4 <= j <= 7:
+        if 3 <= j <= 5:
             return 1 if side else 3                    # 옆 = 상태 화면, 앞뒤 = 어두운 유리
         return 0
     for j in range(nv):
@@ -828,7 +937,7 @@ def taxi_mesh(M):
                 for p, jc in zip(P, jj):
                     t = (p[0] / (L2 * 0.9) + 1) / 2
                     t = 1 - t if plus else t
-                    uv.append((u0 + (u1 - u0) * min(1.0, max(0.0, t)), v0 + (v1 - v0) * (jc - 4) / 4))
+                    uv.append((u0 + (u1 - u0) * min(1.0, max(0.0, t)), v0 + (v1 - v0) * (jc - 3) / 3))
             else:
                 uv = [(0.5, 0.5)] * 4
             mb.face(P, m, uv)
@@ -849,20 +958,467 @@ def taxi_mesh(M):
     # 바퀴 4(반쯤 차체에 묻힘)
     for wx in (-1.38, 1.38):
         for wy in (-0.86, 0.86):
-            mb.cyl((wx, wy - 0.12, 0.34), (wx, wy + 0.12, 0.34), 0.34, 0.34, 14, 2, phase=0.1)
+            mb.cyl((wx, wy - 0.12, 0.34), (wx, wy + 0.12, 0.34), 0.34, 0.34, 10, 2, phase=0.1)
     # 지붕 센서 돔
-    mb.cyl((0.2, 0, Ht - 0.02), (0.2, 0, Ht + 0.07), 0.2, 0.17, 14, 2)
-    mb.cyl((0.2, 0, Ht + 0.07), (0.2, 0, Ht + 0.1), 0.17, 0.12, 14, 1, rect=UI['teal'])
-    return mb.to_mesh('FU_taxi', [M['pearl'], M['ui'], M['black'], M['glass_dark']], smooth=True, sharp=50,
-                      mask=lambda co: (0.0, 0.35, 0.55 + 0.45 * smoothstep(0.1, 0.9, co[2])))
+    mb.cyl((0.2, 0, Ht - 0.02), (0.2, 0, Ht + 0.07), 0.2, 0.17, 10, 2, caps=(False, False))
+    mb.cyl((0.2, 0, Ht + 0.07), (0.2, 0, Ht + 0.1), 0.17, 0.12, 10, 1, rect=UI['teal'], caps=(False, True))
+    return mover_atlas(mb.to_mesh('FU_taxi', [M['pearl'], M['ui'], M['black'], M['glass_dark']], smooth=True, sharp=50,
+                                  mask=lambda co: (0.0, 0.35, 0.55 + 0.45 * smoothstep(0.1, 0.9, co[2]))), M)
 
 
 def build_taxis(C, M, gz):
+    """자율주행 포드 5 대(§4.4): 각 경로의 시작점(위상 0.5 는 경로 길이의 절반 지점)에 진행 방향(앞 = 로컬 +x)으로 세운다.
+    이동체라 각자 단일 사용자 메시(me.copy())이고, 사본마다 정점 AO(nw_mask B)를 조금씩 달리 써서 gltf-transform dedup · instance 가
+    FU_taxi.<n> 노드 이름을 지우지 않게 한다(build_trains 와 같은 방법)."""
     me = taxi_mesh(M)
     out = []
-    for i, ((x, y, _), rz) in enumerate(TAXIS):
-        z = gz.z(x, y, -0.1, only='GR_road')
-        out.append(obj(f'FU_taxi.{i}', me, C, (x, y, z), rz, surface='metal', night=True, nw_motif='robotaxi'))
+    for i, (nm, rid, mode, speed, phase, pts) in enumerate(POD_ROUTES):
+        (x, y), rz = _route_at(pts, phase, closed=(mode == 'loop'))
+        z = _road_base(gz, x, y)
+        m2 = me.copy(); m2.name = f'FU_taxi_{i}'
+        k = 1.0 - 0.025 * i
+        lib.write_mask_values(m2, [(0.0, 0.35, k * (0.55 + 0.45 * smoothstep(0.1, 0.9, v.co.z))) for v in m2.vertices])
+        out.append(obj(nm, m2, C, (x, y, z), rz, surface='metal', night=True, nw_motif='robotaxi', nw_route=rid, nw_mode=mode,
+                       nw_speed=speed, nw_phase=phase))
+    bpy.data.meshes.remove(me)
+    _assert_unique(out, '포드')
+    print('pods', [(o.name, o['nw_route'], tuple(round(c, 2) for c in o.location), round(math.degrees(o.rotation_euler.z), 1)) for o in out])
+    return out
+
+
+def _assert_unique(objs, label):
+    sig = [tuple(round(c, 4) for c in lib_mask_b(o.data)) for o in objs]
+    if len(set(sig)) != len(sig):
+        raise RuntimeError(f'{label}: 사본 메시가 같다 — dedup · instance 가 노드 이름을 지운다')
+
+
+# ═════════════════════════════ (8) 스마트 거리(Task 10: §4.2 노면 · §4.3 소품 · §4.4 이동체 시작점) ═════════════════════════════
+SMART_CYAN = '#39C6E0'
+TT_FAR_Z = -0.12                          # backdrop.build_ground: 장면 밖 도로 BD_roads 노면 z(차선 BD_marks 는 그 위 +0.01)
+PV_Y, PV_X = (-43.0, -41.0), (-260.0, 420.0)
+PV_DZ, PV_DZ_FAR = 0.012, 0.014           # §4.2 는 +0.008 — 장면 안 노면이 2.5 m 안에서도 ±3 mm 출렁이고 황색 중앙선(GR_mark_yellow +0.005)이
+                                          # 띠 위로 비쳐(look r1) 0.012 로 올렸다. 장면 밖은 BD_marks(+0.01) 위로
+PV_TILE = (4.0, 2.0)                      # paint_pv_road 한 장 = 4 × 2 m(0.5 m 타일 8 × 4)
+ROAD_GAPS_X = [(-108.0, -102.0), (XW - CW, XW + CW), (67.0, 73.0)]   # 서쪽 이면도로 교차로 · 횡단보도 · 동쪽 골목 교차로
+RLED_W, RLED_DZ = 0.10, 0.018                # §4.2 는 +0.010 — 5 m 마디 사이 노면 출렁임(연석 쪽 측구 포함)에 묻히지 않게 0.018
+RLED_TT_Y = (-35.75, -48.25, -43.05, -40.95)                        # 연석 안쪽 2 · 태양광 띠 가장자리 2
+RLED_AL = ((67.25, 72.75), [(-31.5, 67.0), (73.0, 135.0)])          # 동쪽 골목(x) — 북쪽 이면도로 교차로(y 67…73)에서 끊는다
+RLED_NR = ((67.25, 72.75), [(-102.0, 67.0)])                        # 북쪽 이면도로(y)
+STEP_IN, STEP_FAR = 5.0, 20.0             # 리본 마디: 장면 안은 GroundZ 를 5 m 마다(태양광 띠는 PV_STEP), 장면 밖(평평)은 20 m(UV 양자화 범위를 좁게)
+PV_STEP = 2.5
+CURB_STEP = 2.0                           # 연석 안쪽 발광선 마디(측구 패임을 따라간다, build_road_led)
+KIOSK_GLASS = [(-96.0, -34.2), (40.0, -34.2), (-30.0, -50.9), (90.0, -50.9), (74.6, 20.0), (74.6, 60.0)]
+KIOSK_HALF = (0.14, 0.56)                 # 발판 반폭(x · y, rz 0): 화면은 ±x 를 본다(보도를 따라 걷는 사람 · 골목 쪽)
+TERRACES = [(28.0, 131.0), (36.0, 131.0), (44.0, 131.0), (52.0, 131.0), (38.0, 33.0), (44.0, 31.0)]
+TERRACE_HALF = (1.4, 1.4)                 # 파라솔 반지름(의자는 그 안)
+STREET_BENCHES = [(70.0, -34.2), (130.0, -34.2)]
+BENCH_HALF = (1.25, 0.3)                  # 벤치 1.6 m + 화분 0.6 m(x) × 0.6 m(y)
+AVOID_PREFIX = ('PR_light', 'PR_signal', 'PR_bollard', 'PR_planter', 'PR_pot', 'PR_ph_ubox', 'PR_ph_trash', 'PR_ph_extinguisher',
+                'PR_ph_shrub', 'PR_scooter', 'PR_bench', 'PR_park_bench', 'PR_park_stone', 'PR_basalt', 'PR_zelkova', 'PR_ginkgo',
+                'FU_busstop', 'FU_kiosk', 'FU_ev_post', 'FU_holo_base', 'FU_bridge_SB1_col', 'FU_bridge_SB2_col')
+TRUNKS = ('PR_zelkova', 'PR_ginkgo')      # 나무는 수관 상자 대신 줄기(반경 0.5 m)만 피한다
+# 배송로봇 · 포드 경로(§4.4). 이동은 Task 11(movers.js) — 여기서는 이름 · 시작점 · 진행 방향만 정한다
+BOT_STARTS = [('FU_bot.0', 'bot0', (-95.0, -32.2), (60.0, -32.2)), ('FU_bot.1', 'bot1', (73.9, -28.0), (73.9, 132.0)),
+              ('FU_bot.2', 'bot2', None, None)]                    # None = PARK_PATH 첫 점 → 둘째 점
+BOT_LANE_GAP = 0.35                       # bot1 길(BOT1_LANE, 반폭 0.375) 둘레 여유: 경로 중심 → solid(키오스크) 0.7 m(tests/nowhere-clearance (d))
+BOT = dict(L=0.7, W=0.55, H=0.6, r=0.1, clear=0.1, wheel=0.1)       # 흰 몸통(윗모서리 0.1 둥글게), 바닥 틈 0.1, 바퀴 반지름 0.1 × 6
+POD_LOOP = [(-106.5, 144.5), (-106.5, -43.625), (70.0, -43.625), (70.0, 144.5)]   # 반시계: 서쪽 이면도로 남행 → 뚝섬로 안쪽 동행 → 골목 북행 → 고가 하부 서행
+POD_ROUTES = [   # (객체, id, 모드, 속도, 위상, 꺾은선)
+    ('FU_taxi.0', 'pod_e1', 'wrap', 10.0, 0.0, [(-260.0, -46.875), (420.0, -46.875)]),
+    ('FU_taxi.1', 'pod_e2', 'wrap', 8.5, 0.5, [(-260.0, -46.875), (420.0, -46.875)]),
+    ('FU_taxi.2', 'pod_w1', 'wrap', 9.5, 0.0, [(420.0, -40.375), (-260.0, -40.375)]),
+    ('FU_taxi.3', 'pod_l1', 'loop', 8.0, 0.0, 'POD_LOOP'),
+    ('FU_taxi.4', 'pod_l2', 'loop', 8.0, 0.5, 'POD_LOOP'),
+]
+TAXIS = POD_ROUTES                        # 옛 이름(Task 4 의 택시 3 대 표) — 지금은 포드 5 대 경로 표
+
+
+def rounded_loop(corners, r=6.0, step=1.5):
+    """닫힌 직각 꺾은선(모서리점) → 모서리를 반지름 r 원호로 편 점열(step m 마다). 첫 점 = 첫 모서리 원호가 끝나는 곳."""
+    n = len(corners); P = [Vector((x, y, 0.0)) for x, y in corners]
+    out = []
+    for i in range(n):
+        c, nx_, nn = P[i], P[(i + 1) % n], P[(i + 2) % n]
+        a = c + (nx_ - c).normalized() * r                       # 이 모서리 원호 끝(직선 시작)
+        b = nx_ + (c - nx_).normalized() * r                     # 다음 모서리 원호 시작
+        L = (b - a).length; k = max(1, int(math.ceil(L / step)))
+        out += [a.lerp(b, j / k) for j in range(k)]
+        u_in = (c - nx_).normalized(); u_out = (nn - nx_).normalized()
+        ctr = nx_ + (u_in + u_out) * r
+        a0 = math.atan2(b.y - ctr.y, b.x - ctr.x); e = nx_ + u_out * r
+        a1 = math.atan2(e.y - ctr.y, e.x - ctr.x)
+        da = (a1 - a0 + math.pi) % (2 * math.pi) - math.pi
+        m = max(2, int(math.ceil(abs(da) * r / step)))
+        out += [ctr + Vector((math.cos(a0 + da * j / m), math.sin(a0 + da * j / m), 0.0)) * r for j in range(m)]
+    return [(round(p.x, 4), round(p.y, 4)) for p in out]
+
+
+def _route_at(pts, phase, closed=False):
+    """꺾은선 위 위상(0…1, 길이 비율) 자리와 진행 방향(rz) → ((x, y), rz)."""
+    if pts == 'POD_LOOP':
+        pts = rounded_loop(POD_LOOP)
+    seq = list(pts) + ([pts[0]] if closed else [])
+    seg = [(Vector(seq[i]), Vector(seq[i + 1])) for i in range(len(seq) - 1)]
+    total = sum((b - a).length for a, b in seg); s = phase * total
+    for a, b in seg:
+        L = (b - a).length
+        if s <= L or (a, b) == seg[-1]:
+            p = a.lerp(b, min(1.0, s / max(L, 1e-9))); d = b - a
+            return (p.x, p.y), math.atan2(d.y, d.x)
+        s -= L
+
+
+def _inside_x(x):
+    return lib.MASK_RECT[0] <= x <= lib.MASK_RECT[2]
+
+
+def _road_base(gz, x, y):
+    """노면 높이: 장면 안은 GR_road(GroundZ), 밖은 원경 'tt' 노면 TT_FAR_Z."""
+    return gz.z(x, y, TT_FAR_Z, only='GR_road') if _inside_x(x) else TT_FAR_Z
+
+
+def _road_top(gz, x, y, dx, dy):
+    """리본 꼭짓점 높이의 바탕: (x, y) 둘레 5 × 5 점(±dx, ±dx/2, ±dy, ±dy/2)의 노면 높이 가운데 가장 높은 값. 꼭짓점 한 점만 읽으면
+    맨홀 둘레 침하(ground.py, 반경 1.1 m · 1.4 cm) 같은 국소 패임에 꼭짓점이 끌려 내려가거나 마디 사이의 좁은 턱(x −39.25, +1.5 cm)을
+    놓쳐 노면이 띠 위로 비쳤다(수정 1회차, 웹 수직 광선 검사)."""
+    if not _inside_x(x):
+        return TT_FAR_Z
+    K = (-1.0, -0.5, 0.0, 0.5, 1.0)
+    return max(gz.z(x + i * dx, y + j * dy, TT_FAR_Z, only='GR_road') for i in K for j in K)
+
+
+def _stations(a, b, step_in=STEP_IN):
+    """a…b 마디점: 장면 안은 step_in m 격자, 밖은 STEP_FAR m 격자 + 장면 경계."""
+    pts = {a, b}
+    for e in (lib.MASK_RECT[0], lib.MASK_RECT[2]):
+        if a < e < b:
+            pts.add(e)
+    for st, inside in ((step_in, True), (STEP_FAR, False)):
+        k = math.ceil(a / st) * st
+        while k < b:
+            if _inside_x(k) == inside and a < k:
+                pts.add(float(k))
+            k += st
+    return sorted(pts)
+
+
+def _spans(a, b, gaps):
+    out = [(a, b)]
+    for g0, g1 in gaps:
+        nxt = []
+        for s0, s1 in out:
+            if g1 <= s0 or g0 >= s1:
+                nxt.append((s0, s1)); continue
+            if s0 < g0:
+                nxt.append((s0, g0))
+            if g1 < s1:
+                nxt.append((g1, s1))
+        out = nxt
+    return out
+
+
+def paint_pv_road():
+    """태양광 노면 타일(512 × 256 = 4 × 2 m, 128 px/m). 0.5 m 강화유리 타일(테두리 #C9CED3) 안에 셀 4 × 4(#1E2C44, 격자 #9AA7B5),
+    유리 윗면의 옅은 하늘 반사, 띠 양 가장자리(v 0 · 1)의 어두운 테두리 띠와 0.25 m 마다 LED 점(밝은 청록, 그린 점 — 발광 아님)."""
+    W, H = 512, 256
+    rng = np.random.default_rng(1041)
+    cell, grid, frame = _hexs('#1E2C44'), _hexs('#9AA7B5'), _hexs('#C9CED3')
+    A = _canvas(W, H, grid)
+    T = 64
+    for ty in range(H // T):
+        for tx in range(W // T):
+            x0, y0 = tx * T, ty * T
+            _rect(A, x0, y0, x0 + T, y0 + T, frame)
+            k = rng.uniform(0.9, 1.1)
+            for cy in range(4):
+                for cx in range(4):
+                    _rect(A, x0 + 3 + cx * 14.5, y0 + 3 + cy * 14.5, x0 + 3 + cx * 14.5 + 13, y0 + 3 + cy * 14.5 + 13,
+                          np.clip(cell * k * rng.uniform(0.92, 1.08), 0, 1))
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    sheen = (0.06 * np.exp(-(((xx % T) - (yy % T)) / 22.0) ** 2))[..., None]     # 타일마다 사선 반사(유리)
+    A[..., :3] = A[..., :3] * (1 - sheen) + 1.0 * sheen
+    for yb in ((0, 7), (H - 7, H)):                                                  # 띠 가장자리 테두리 + LED 점
+        _rect(A, 0, yb[0], W, yb[1], _hexs('#39434D'))
+        for x in range(16, W, 32):
+            _rect(A, x - 2, yb[0] + 2, x + 2, yb[1] - 2, _hexs('#BFF1F8'))
+    np.clip(A, 0, 1, out=A)
+    return lib.save_image('NWF_gen_road_pv', A, os.path.join(GEN, 'NWF_gen_road_pv.png'), TAG)
+
+
+def mat_tex(name, img, rough, metal, surface='metal'):
+    """그린 이미지 한 장(반복 UV) + 고정 거칠기 · 금속(export 5 번 경로: nw_tex.tex[0].image, nw_pbr)."""
+    m = _new_mat(name); b = lib.NB(m.node_tree)
+    out = b.node('ShaderNodeOutputMaterial'); bs = b.node('ShaderNodeBsdfPrincipled')
+    b.L.new(bs.outputs[0], out.inputs['Surface'])
+    uv = b.node('ShaderNodeUVMap', uv_map='UVMap')
+    t = b.node('ShaderNodeTexImage'); t.image = img; t.interpolation = 'Linear'; b.L.new(uv.outputs['UV'], t.inputs['Vector'])
+    b.L.new(t.outputs['Color'], bs.inputs['Base Color'])
+    bs.inputs['Roughness'].default_value = rough; bs.inputs['Metallic'].default_value = metal
+    m['nw_surface'] = surface; m['nw_pbr'] = (rough, metal); m['nw_alpha_clip'] = 0.0
+    m['nw_tex'] = json.dumps({'kind': 'gen', 'tex': [{'image': img.name, 'interp': 'Linear'}]}, ensure_ascii=False)
+    return m
+
+
+RIBBON_CHUNK = 32.0                      # 노면 리본 조각 길이(m): optimize 의 위치 양자화(메시 상자 기준 14 bit)가 680 m 한 메시면 3.3 cm
+                                          # 간격이라 띠가 노면 아래로 묻혔다(웹 r1) → 조각마다 따로 객체(≤ 2 mm). 웹 정적 병합이 재질별로 다시 1 그리기로 묶는다
+
+
+def _chunk_key(x):
+    if x < lib.MASK_RECT[0]:
+        return 'w'
+    if x > lib.MASK_RECT[2]:
+        return 'e'
+    return int(math.floor(x / RIBBON_CHUNK))
+
+
+def _chunk_objs(name, chunks, mats, C, mask, **kw):
+    out = []
+    for k, key in enumerate(sorted(chunks, key=str)):
+        nm = f'{name}.{k:03d}'
+        out.append(obj(nm, chunks[key].to_mesh(nm, mats, mask=mask), C, **kw))
+    return out
+
+
+def build_road_pv(C, M, gz):
+    """FU_road_pv: 뚝섬로 가운데 태양광 띠(y −43…−41, x −260…420, 횡단보도 · 교차로에서 끊김). 노면 + PV_DZ, 가로 3 줄(가운데 볼록
+    노면을 따른다) × 세로 마디(_stations). 면마다 UV 를 그 면 시작 타일로 당겨 둔다(양자화 범위 ≤ 6 장)."""
+    chunks = {}
+    ys = (PV_Y[0], (PV_Y[0] + PV_Y[1]) / 2, PV_Y[1])
+    zf = lambda x, y: _road_top(gz, x, y, PV_STEP / 2, 0.5) + (PV_DZ if _inside_x(x) else PV_DZ_FAR)
+    for a, b in _spans(*PV_X, ROAD_GAPS_X):
+        xs = _stations(a, b, PV_STEP)
+        for x0, x1 in zip(xs, xs[1:]):
+            u0 = math.floor(x0 / PV_TILE[0])
+            mb = chunks.setdefault(_chunk_key((x0 + x1) / 2), MB())
+            for y0, y1 in zip(ys, ys[1:]):
+                P = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+                mb.face([(x, y, zf(x, y)) for x, y in P], 0, [(x / PV_TILE[0] - u0, (y - PV_Y[0]) / PV_TILE[1]) for x, y in P])
+    return _chunk_objs('FU_road_pv', chunks, [M['road_pv']], C, lambda co: (0.0, 0.35, 0.95), surface='metal', nw_motif='smart_road')
+
+
+def build_road_led(C, M, gz):
+    """FU_road_led: 청록 발광선(폭 0.10, 노면 + RLED_DZ) — 뚝섬로 4 줄 · 동쪽 골목 2 줄 · 북쪽 이면도로 2 줄. emissive(보행은 통과).
+    연석 안쪽 0.25 m 선(뚝섬로 양쪽 · 골목 · 이면도로)은 측구가 빗물받이마다 패여 5 m 마디면 마디 사이 높은 곳을 따라 최대 10 cm 떴다
+    (수정 1회차, 웹 수직 광선 검사) → CURB_STEP 마디 · ±CURB_STEP/2 둘레만 본다. 띠 가장자리 두 줄은 5 m 그대로."""
+    chunks = {}; h = RLED_W / 2
+
+    def zf(x, y, st):                                             # x 를 따라가는 선
+        return _road_top(gz, x, y, st / 2, 0.05) + RLED_DZ
+
+    def zfy(x, y, st):                                            # y 를 따라가는 선(골목)
+        return _road_top(gz, x, y, 0.05, st / 2) + RLED_DZ
+
+    def along_x(key, y, a, b, st):
+        xs = _stations(a, b, st)
+        for x0, x1 in zip(xs, xs[1:]):
+            mb = chunks.setdefault(key((x0 + x1) / 2), MB())
+            mb.face([(x0, y - h, zf(x0, y - h, st)), (x1, y - h, zf(x1, y - h, st)), (x1, y + h, zf(x1, y + h, st)),
+                     (x0, y + h, zf(x0, y + h, st))], 0)
+    for y in RLED_TT_Y:
+        st = CURB_STEP if y in (RLED_TT_Y[0], RLED_TT_Y[1]) else STEP_IN
+        for a, b in _spans(*PV_X, ROAD_GAPS_X):
+            along_x(_chunk_key, y, a, b, st)
+    for x in RLED_AL[0]:                                          # 골목: y 를 따라
+        for a, b in RLED_AL[1]:
+            k = max(1, int(math.ceil((b - a) / CURB_STEP)))
+            for j in range(k):
+                y0, y1 = a + (b - a) * j / k, a + (b - a) * (j + 1) / k
+                mb = chunks.setdefault(('al', int(math.floor((y0 + y1) / 2 / RIBBON_CHUNK))), MB())
+                mb.face([(x + h, y0, zfy(x + h, y0, CURB_STEP)), (x + h, y1, zfy(x + h, y1, CURB_STEP)),
+                         (x - h, y1, zfy(x - h, y1, CURB_STEP)), (x - h, y0, zfy(x - h, y0, CURB_STEP))], 0)
+    for y in RLED_NR[0]:                                          # 북쪽 이면도로: x 를 따라
+        for a, b in RLED_NR[1]:
+            along_x(lambda xm: ('nr', int(math.floor(xm / RIBBON_CHUNK))), y, a, b, CURB_STEP)
+    return _chunk_objs('FU_road_led', chunks, [M['road_led']], C, lambda co: (0.0, 0.5, 1.0), surface='emissive', night=True,
+                       nw_motif='smart_road')
+
+
+def kiosk_glass_mesh(M):
+    """투명 키오스크(로컬, 원점 = 발판 가운데 바닥): 기존 FU_kiosk 형태(화면 0.9 × 1.8, 바닥에서 0.3 m)에서 가운데 몸통을 걷어
+    양쪽 기둥 · 위 LED 덮개 · 아래 띠만 남기고, 화면 자리에 유리 판 한 장(NWF_kiosk_glass: UI 키오스크 칸 발광 + 알파 0.55, 양면)."""
+    mb = MB()
+    AL, LED, GL = 0, 1, 2
+    mb.box((-0.14, -0.56, -0.05), (0.14, 0.56, 0.06), AL, faces='xXyYZ')                    # 발판
+    for s in (-1, 1):                                                                       # 양쪽 기둥
+        ya, yb = sorted((s * 0.45, s * 0.52))
+        mb.box((-0.06, ya, 0.06), (0.06, yb, 2.2), AL, faces='xXyY')
+    mb.box((-0.06, -0.45, 0.06), (0.06, 0.45, 0.28), AL, faces='xXZ')                        # 아래 띠(화면 밑)
+    mb.box((-0.1, -0.53, 2.2), (0.1, 0.53, 2.27), LED, faces='xXyYzZ')                       # 위 덮개(흰 LED)
+    u0, v0, u1, v1 = UI['kiosk']
+    mb.face([(0.0, 0.45, 0.3), (0.0, -0.45, 0.3), (0.0, -0.45, 2.1), (0.0, 0.45, 2.1)], GL, [(u0, v0), (u1, v0), (u1, v1), (u0, v1)])
+    return mb.to_mesh('FU_kiosk_glass', [M['alu'], M['led_white'], M['kiosk_glass']],
+                      mask=lambda co: (0.0, 0.3, 0.55 + 0.45 * smoothstep(0, 1.0, co[2])))
+
+
+def umbrella_set_mesh(M):
+    """카페 테라스 한 벌(로컬, 원점 = 파라솔 기둥 바닥): 8 각 파라솔(반지름 1.4, 꼭대기 2.4, 천 #F2EFE6, 아래면 · 늘어진 단 포함),
+    둥근 탁자(r 0.4, 높이 0.74, 받침 원판), 의자 3(좌판 · 등판 + 썰매 다리, 탁자를 본다). 재질은 알루 · 파라솔 천 둘뿐(탁자 상판 · 의자도
+    같은 크림색 천 재질) — 모바일 그리기 예산(≤ 180)에서 테라스가 더하는 그리기를 1 로 줄인다(티크는 벤치만 쓰고 벤치는 모바일에서 숨긴다)."""
+    mb = MB()
+    AL, CLOTH = 0, 1
+    TOP = CLOTH
+    n, R, zr, zt = 8, 1.4, 2.08, 2.4
+    mb.cyl((0, 0, 0.0), (0, 0, zt + 0.08), 0.025, 0.025, 6, AL, caps=(False, True))           # 기둥
+    rim = [(R * math.cos(2 * math.pi * i / n + math.pi / 8), R * math.sin(2 * math.pi * i / n + math.pi / 8), zr) for i in range(n)]
+    for i in range(n):
+        a, b = rim[i], rim[(i + 1) % n]
+        mb.face([a, b, (0, 0, zt)], CLOTH, [(0.5, 0.5)] * 3)                                   # 윗면
+        mb.face([b, a, (0, 0, zt - 0.04)], CLOTH, [(0.5, 0.5)] * 3)                            # 아랫면
+        mb.face([(a[0], a[1], zr - 0.14), (b[0], b[1], zr - 0.14), b, a], CLOTH, [(0.5, 0.5)] * 4)   # 늘어진 단(바깥)
+        mb.face([b, a, (a[0], a[1], zr - 0.14), (b[0], b[1], zr - 0.14)], CLOTH, [(0.5, 0.5)] * 4)   # 늘어진 단(안)
+    mb.cyl((0, 0, 0.71), (0, 0, 0.75), 0.4, 0.4, 10, TOP)                                     # 탁자 상판
+    mb.cyl((0, 0, 0.0), (0, 0, 0.03), 0.26, 0.24, 8, AL, caps=(False, True))                  # 받침
+    for k in range(3):
+        a = math.radians(90 + 120 * k)
+        mb.T = Matrix.Translation((0.78 * math.cos(a), 0.78 * math.sin(a), 0.0)) @ Matrix.Rotation(a, 4, 'Z')
+        mb.box((-0.21, -0.21, 0.43), (0.21, 0.21, 0.47), CLOTH, faces='xXyYzZ')               # 좌판(로컬 −x = 탁자 쪽)
+        mb.box((0.19, -0.21, 0.47), (0.22, 0.21, 0.86), CLOTH, faces='xXyYZ')                 # 등판(바깥)
+        for s in (-1, 1):
+            mb.box((-0.2, s * 0.2 - 0.012, 0.0), (0.2, s * 0.2 + 0.012, 0.43), AL, faces='xXyY')   # 썰매 다리
+        mb.T = Matrix.Identity(4)
+    return mb.to_mesh('FU_terrace', [M['alu'], M['parasol']],
+                      mask=lambda co: (0.0, 0.3, 0.6 + 0.4 * smoothstep(0.0, 1.0, co[2])))
+
+
+def bench_set_mesh(M):
+    """거리 벤치 + 화분(로컬, 원점 = 벤치 가운데 바닥, 길이 = x): 흰 콘크리트 받침 2 위 나무 좌판 1.6 × 0.5(높이 0.45), +x 끝에
+    0.6 × 0.6 × 0.5 화분(윗면 NW_meadow)."""
+    mb = MB()
+    CONC, WOOD, MEAD = 0, 1, 2
+    for x in (-0.6, 0.45):
+        mb.box((x - 0.08, -0.22, 0.0), (x + 0.08, 0.22, 0.4), CONC, faces='xXyY')
+    mb.box((-0.8, -0.25, 0.4), (0.65, 0.25, 0.46), WOOD, faces='xXyYzZ')
+    mb.box((0.65, -0.3, 0.0), (1.25, 0.3, 0.5), CONC, faces='xXyYZ', fmat={'Z': MEAD})
+    return mb.to_mesh('FU_bench', [M['white_conc'], M['teak'], M['meadow']], mask=lambda co: (0.0, 0.3, 0.6 + 0.4 * smoothstep(0.0, 0.5, co[2])))
+
+
+def bot_mesh(M):
+    """배송로봇(로컬, 앞 = +x, 원점 = 바닥 가운데): 흰 몸통 0.7 × 0.55 × 0.6(바닥 틈 0.1, 윗모서리 0.1 를 두 마디로 둥글게),
+    몸통 둘레 청록 띠(발광), 앞면 작은 상태 화면, 바퀴 6(반지름 0.1)."""
+    b = BOT; mb = MB()
+    WH, CY, BK, UIm = 0, 1, 2, 3
+    hx, hy, z0, z1, r = b['L'] / 2, b['W'] / 2, b['clear'], b['clear'] + b['H'], b['r']
+    def ring(z, d):
+        return [(hx - d, -hy + d, z), (hx - d, hy - d, z), (-hx + d, hy - d, z), (-hx + d, -hy + d, z)]
+    lv = [ring(z0, 0.0), ring(z1 - r, 0.0)] + [ring(z1 - r + r * math.sin(t), r * (1 - math.cos(t))) for t in (math.pi / 4, math.pi / 2)]
+    for A, B in zip(lv, lv[1:]):
+        for i in range(4):
+            j = (i + 1) % 4
+            mb.face([A[i], A[j], B[j], B[i]], WH, [(0.5, 0.5)] * 4)
+    mb.face(lv[-1], WH, [(0.5, 0.5)] * 4)
+    mb.face(list(reversed(lv[0])), BK, [(0.5, 0.5)] * 4)
+    zb0, zb1 = z0 + 0.3, z0 + 0.35                                 # 청록 띠(몸통보다 4 mm 밖)
+    band = [ring(zb0, -0.004), ring(zb1, -0.004)]
+    for i in range(4):
+        j = (i + 1) % 4
+        mb.face([band[0][i], band[0][j], band[1][j], band[1][i]], CY, [(0.5, 0.5)] * 4)
+    u0, v0, u1, v1 = UI['taxi']
+    mb.face([(hx + 0.005, -0.18, z0 + 0.4), (hx + 0.005, 0.18, z0 + 0.4), (hx + 0.005, 0.18, z0 + 0.52), (hx + 0.005, -0.18, z0 + 0.52)], UIm,
+            [(u0, v0), (u0 + (u1 - u0) * 0.4, v0), (u0 + (u1 - u0) * 0.4, v1), (u0, v1)])
+    for wx in (-0.25, 0.0, 0.25):
+        for s in (-1, 1):
+            mb.cyl((wx, s * (hy - 0.02), b['wheel']), (wx, s * (hy + 0.04), b['wheel']), b['wheel'], b['wheel'], 8, BK, caps=(False, True))
+    return mover_atlas(mb.to_mesh('FU_bot', [M['train_white'], M['led_cyan'], M['black'], M['ui']], smooth=True, sharp=40,
+                                  mask=lambda co: (0.0, 0.3, 0.6 + 0.4 * smoothstep(0.0, 0.6, co[2]))), M)
+
+
+def _obstacles():
+    """free_spot 이 모르는 기존 거리 소품의 바닥 사각형(x0, y0, x1, y1): 가로등 · 신호 · 볼라드 · 화분 · 휴지통 · 오토바이 · 벤치 ·
+    조경석 · 정류장 · 키오스크 · EV · 홀로그램 · 스카이브리지 기둥 · 나무 줄기 · 입간판."""
+    out = []
+    for o in bpy.data.objects:
+        if o.type != 'MESH' or not o.name.startswith(AVOID_PREFIX):
+            continue
+        if o.name.startswith(TRUNKS):
+            x, y = o.matrix_world.translation.xy
+            out.append((x - 0.5, y - 0.5, x + 0.5, y + 0.5)); continue
+        P = [o.matrix_world @ Vector(c) for c in o.bound_box]
+        xs = [p.x for p in P]; ys = [p.y for p in P]
+        if max(xs) - min(xs) > 8.0 or max(ys) - min(ys) > 8.0:
+            continue
+        out.append((min(xs), min(ys), max(xs), max(ys)))
+    import present
+    out += [(x - 0.4, y - 0.4, x + 0.4, y + 0.4) for x, y, _ in present.AFRAME_SIGNS]     # 입간판은 한 객체로 합쳐져 이름으로 못 찾는다
+    return out
+
+
+def _overlap(a, b, gap):
+    return a[0] - gap < b[2] and b[0] - gap < a[2] and a[1] - gap < b[3] and b[1] - gap < a[3]
+
+
+def place_spots(label, cands, r, tall, half, taken):
+    """§4.3 배치: present.free_spot(x, y, r, tall) + 뚝섬로 북측 보도는 북쪽 끝 y ≤ ROBOT_PROP_Y + 배송로봇 길 · 기존 소품 · 이미 놓은
+    새 소품과 겹치지 않음(0.3 m) + 공원 안은 산책로 · 물길 · 웅덩이에서 떨어짐. 못 지나면 ±3 m(0.25 m 격자) 안 가장 가까운 점, 없으면 뺀다."""
+    import present
+    G = present.G
+    obst = _obstacles()
+    out = []
+    for (x, y) in cands:
+        def ok(a, b):
+            if not present.free_spot(a, b, r, tall=tall):
+                return False
+            fp = (a - half[0], b - half[1], a + half[0], b + half[1])
+            if TT[1] < b < TT[1] + 6.0 and fp[3] > present.ROBOT_PROP_Y + 1e-9:
+                return False
+            if _overlap(fp, present.BOT1_LANE, BOT_LANE_GAP) or any(_overlap(fp, q, 0.3) for q in obst + taken):   # 뚝섬로 북측 길은 ROBOT_PROP_Y
+                return False
+            lx0, ly0, lx1, ly1 = G.LOT
+            if lx0 < a < lx1 and ly0 < b < ly1:
+                dp, dc, dw, de = present._park_d(a, b)
+                if dp < G.PARK_PATH_W / 2 + max(half) + 0.3 or dc < 0.8 + max(half) or dw < max(half) + 0.4:
+                    return False
+            return True
+        res = present._nearest_ok(x, y, ok)
+        p = None if res is None else (round(res[1], 2), round(res[2], 2))
+        out.append(((x, y), p))
+        if p is not None:
+            taken.append((p[0] - half[0], p[1] - half[1], p[0] + half[0], p[1] + half[1]))
+    print(label, out)
+    return out
+
+
+def build_smart_street(C, M, gz):
+    """태양광 띠 · 발광선 · 투명 키오스크 · 카페 테라스 · 벤치 · 배송로봇(Task 10)."""
+    out = build_road_pv(C, M, gz) + build_road_led(C, M, gz)
+    taken = []
+    rows = {}
+    km = kiosk_glass_mesh(M)
+    rows['kiosk'] = place_spots('kiosk_glass', KIOSK_GLASS, 0.6, True, KIOSK_HALF, taken)
+    for i, p in enumerate(p for _, p in rows['kiosk'] if p is not None):
+        out.append(obj(f'FU_kiosk_glass.{i}', km, C, (p[0], p[1], gz.z(*p, 0.0)), 0.0, surface='metal', night=True, nw_motif='smart_kiosk',
+                       nw_solid=1))
+    tm = umbrella_set_mesh(M)
+    rows['terrace'] = place_spots('terrace', TERRACES, 1.6, True, TERRACE_HALF, taken)
+    for i, p in enumerate(p for _, p in rows['terrace'] if p is not None):
+        out.append(obj(f'FU_terrace.{i}', tm, C, (p[0], p[1], gz.z(*p, 0.0)), math.radians(22.5 * (i % 3)), surface='metal',   # 'metal': 알루가 기존 버킷에 합쳐진다
+                       nw_motif='cafe_terrace'))
+    bm = bench_set_mesh(M)
+    rows['bench'] = place_spots('bench', STREET_BENCHES, 1.0, False, BENCH_HALF, taken)
+    for i, p in enumerate(p for _, p in rows['bench'] if p is not None):
+        out.append(obj(f'FU_bench.{i}', bm, C, (p[0], p[1], gz.z(*p, 0.0)), 0.0, surface='wall', nw_motif='street_bench'))
+    # 배송로봇 3: 각자 단일 사용자 메시(이동체). 사본마다 AO 를 조금씩 달리 써서 dedup · instance 가 이름을 지우지 않게 한다
+    me = bot_mesh(M)
+    bots = []
+    import present
+    for i, (nm, rid, p0, p1) in enumerate(BOT_STARTS):
+        if p0 is None:
+            p0, p1 = present.PARK_PATH[0], present.PARK_PATH[1]
+        rz = math.atan2(p1[1] - p0[1], p1[0] - p0[0])
+        m2 = me.copy(); m2.name = f'FU_bot_{i}'
+        k = 1.0 - 0.03 * i
+        lib.write_mask_values(m2, [(0.0, 0.3, k * (0.6 + 0.4 * smoothstep(0.0, 0.6, v.co.z))) for v in m2.vertices])
+        bots.append(obj(nm, m2, C, (p0[0], p0[1], gz.z(p0[0], p0[1], 0.0)), rz, surface='metal', night=True, nw_motif='delivery_bot',
+                        nw_route=rid))
+    bpy.data.meshes.remove(me)
+    _assert_unique(bots, '배송로봇')
+    out += bots
+    tris = lambda me: sum(len(p.vertices) - 2 for p in me.polygons)
+    agg = {}
+    for o in out:
+        key = o.name.split('.')[0] if o.name.startswith('FU_road_') else o.data.name
+        agg[key] = agg.get(key, 0) + (tris(o.data) if (o.name.startswith('FU_road_') or key not in agg) else 0)
+    print('smart street tris', agg, 'objects', len(out), 'ribbon chunks', sum(o.name.startswith('FU_road_') for o in out))
+    print('smart street spots', rows)
     return out
 
 
@@ -885,12 +1441,12 @@ def sec_drone_mesh(M):
     mb.cyl((0.12, 0, -0.16), (0.2, 0, -0.24), 0.08, 0.09, 12, 1, caps=(True, False))
     mb.cyl((0.2, 0, -0.24), (0.205, 0, -0.245), 0.09, 0.09, 12, 2)       # 렌즈(흰 LED)
     mb.cyl((0, 0, -0.065), (0, 0, -0.075), 0.25, 0.25, 20, 3, caps=(False, True))   # 아래 상태 고리(파랑)
-    return mb.to_mesh('FU_drone_sec', [M['pearl'], M['black'], M['led_white'], M['led_blue']], smooth=True, sharp=40,
-                      mask=lambda co: (0.0, 0.15, 1.0))
+    return mover_atlas(mb.to_mesh('FU_drone_sec', [M['pearl'], M['black'], M['led_white'], M['led_blue']], smooth=True, sharp=40,
+                                  mask=lambda co: (0.0, 0.15, 1.0)), M)
 
 
 def del_drone_mesh(M):
-    """배송 드론: X 프레임 4로터 + 몸체 + 집게에 든 상자(골판지)."""
+    """배송 드론: X 프레임 4로터 + 몸체 + 0.6 m 아래 가는 줄 4 개에 매단 골판지 소포 0.5 × 0.4 × 0.35(드론과 한 메시, 골판지 칸)."""
     mb = MB()
     mb.box((-0.16, -0.11, -0.05), (0.16, 0.11, 0.07), 0)
     for k in range(4):
@@ -899,12 +1455,14 @@ def del_drone_mesh(M):
         mb.cyl((0, 0, 0.03), (cx, cy, 0.03), 0.018, 0.018, 6, 1, caps=(False, False))
         mb.cyl((cx, cy, 0.0), (cx, cy, 0.07), 0.03, 0.03, 8, 1)
         mb.cyl((cx, cy, 0.075), (cx, cy, 0.08), 0.15, 0.15, 12, 1)
-    for sx in (-1, 1):                                              # 집게
-        mb.box((sx * 0.13 - 0.01, -0.02, -0.25), (sx * 0.13 + 0.01, 0.02, -0.05), 1)
-    mb.box((-0.14, -0.12, -0.36), (0.14, 0.12, -0.12), 3, rect=UI['card'])         # 상자
+    zt = -0.05 - PARCEL_DROP; hx, hy, hz = PARCEL[0] / 2, PARCEL[1] / 2, PARCEL[2]
+    mb.box((-hx, -hy, zt - hz), (hx, hy, zt), 3, rect=UI['card'])                  # 소포
+    for sx in (-1, 1):                                                              # 줄 4(몸체 아래 모서리 → 소포 윗면 모서리)
+        for sy in (-1, 1):
+            mb.cyl((sx * 0.12, sy * 0.08, -0.05), (sx * (hx - 0.02), sy * (hy - 0.02), zt), 0.008, 0.008, 3, 1, caps=(False, False))
     mb.cyl((0, 0, -0.05), (0, 0, -0.06), 0.06, 0.06, 10, 2, caps=(False, True))   # 청록 상태등
-    return mb.to_mesh('FU_drone_del', [M['pearl'], M['black'], M['led_teal'], M['ui']], smooth=True, sharp=40,
-                      mask=lambda co: (0.0, 0.15, 1.0))
+    return mover_atlas(mb.to_mesh('FU_drone_del', [M['pearl'], M['black'], M['led_teal'], M['ui']], smooth=True, sharp=40,
+                                  mask=lambda co: (0.0, 0.15, 1.0)), M)
 
 
 def beam_mesh(length=15.0, r=2.6, n=20):
@@ -922,38 +1480,37 @@ def build_drones(C, M):
     sm = sec_drone_mesh(M)
     p0 = DRONE_PATHS['sec'][0]; p1 = DRONE_PATHS['sec'][1]
     yaw = math.atan2(p1[1] - p0[1], p1[0] - p0[0])
-    d = obj('FU_drone_sec', sm, C, p0, yaw, surface='metal', night=True, nw_motif='drone', nw_path='PATH_drone_sec',
+    d = obj('FU_drone_sec', sm, C, p0, yaw, surface='metal', night=True, nw_motif='drone', nw_route='sec',
             nw_speed=DRONE_SPEED['sec'], nw_kind='security')
     out.append(d)
     # 서치라이트 원뿔: 드론 렌즈에서 앞아래로(지면까지 ~17 m), 원뿔 끝 반지름 2.6 m
     ln = (Vector(BEAM_AIM) - Vector(p0)).length
     bm = beam_mesh(ln, ln * math.tan(math.radians(8.5))).to_mesh('FU_drone_sec_beam', [M['beam']], mask=lambda co: (0.0, 0.0, 1.0))
     beam = obj('FU_drone_sec_beam', bm, C, surface='holo', night=True, nw_motif='drone')
-    lens = d.matrix_world @ Vector((0.2, 0.0, -0.245))
+    # 드론의 월드 행렬은 위치 · 방위로 직접 만든다: 새 객체의 d.matrix_world 는 depsgraph 갱신 전이라 단위 행렬이다(Task 11 전에는
+    # 그래서 원뿔이 드론 둘레에서 거의 수평으로 옆을 비췄다). 웹은 원뿔의 수평 방위만 진행 방향에 맞추고 숙임(앞아래)은 이대로 쓴다
+    dmw = Matrix.LocRotScale(Vector(p0), Euler((0.0, 0.0, yaw)), None)
+    lens = dmw @ Vector((0.2, 0.0, -0.245))
     aim = Vector(BEAM_AIM) - lens
     world = Matrix.LocRotScale(lens, aim.to_track_quat('-Z', 'Y'), None)
     beam.parent = d
     beam.matrix_parent_inverse = Matrix.Identity(4)
-    beam.matrix_basis = d.matrix_world.inverted() @ world        # 원뿔 축(−z)이 BEAM_AIM 을 향한다(드론을 따라 움직인다)
+    beam.matrix_basis = dmw.inverted() @ world                   # 원뿔 축(−z)이 BEAM_AIM 을 향한다(드론을 따라 움직인다)
     beam['nw_length'] = aim.length
     out.append(beam)
+    # 배송 드론 d1 … d5: 각자 단일 사용자 메시(이동체). 사본마다 AO 를 조금씩 달리 써서 dedup · instance 가 이름을 지우지 않게 한다
     dm = del_drone_mesh(M)
-    for i, key in enumerate(('d1', 'd2', 'd3')):
+    dels = []
+    for i, key in enumerate(k for k in DRONE_PATHS if k != 'sec'):
         p0 = DRONE_PATHS[key][0]; p1 = DRONE_PATHS[key][1]
         yaw = math.atan2(p1[1] - p0[1], p1[0] - p0[0])
-        out.append(obj(f'FU_drone_del.{i}', dm, C, p0, yaw, surface='metal', night=True, nw_motif='drone',
-                       nw_path=f'PATH_drone_{key}', nw_speed=DRONE_SPEED[key], nw_kind='delivery'))
-    # 경로 빈 객체: PATH_drone_<id>_<n>
-    P = []
-    for key, pts in DRONE_PATHS.items():
-        for n, p in enumerate(pts):
-            e = bpy.data.objects.new(f'PATH_drone_{key}_{n}', None)
-            e.empty_display_type = 'PLAIN_AXES'; e.empty_display_size = 1.0
-            e.location = p
-            e['nw_path'] = f'PATH_drone_{key}'; e['nw_index'] = n; e['nw_loop'] = 1
-            e['nw_speed'] = DRONE_SPEED[key]
-            C.objects.link(e); P.append(e)
-    return out, P
+        m2 = dm.copy(); m2.name = f'FU_drone_{key}'
+        lib.write_mask_values(m2, [(0.0, 0.15, 1.0 - 0.03 * i)] * len(m2.vertices))
+        dels.append(obj(f'FU_drone_{key}', m2, C, p0, yaw, surface='metal', night=True, nw_motif='drone', nw_route=key,
+                        nw_speed=DRONE_SPEED[key], nw_kind='delivery'))
+    bpy.data.meshes.remove(dm)
+    _assert_unique(dels, '배송 드론')
+    return out + dels
 
 
 # ═════════════════════════════ 보조: 스마트 헤드·EV 기둥·진열창 디스플레이·홀로그램 ═════════════════════════════
@@ -1415,12 +1972,12 @@ def build_turbines(C, M, sc, spots):
     return [m for m, _ in masts] + out
 
 
-PLAZA_LAWNS = [(-96.0, 222.0, -62.0, 244.0), (-16.0, 182.0, 8.0, 206.0), (50.0, 186.0, 62.0, 236.0),     # T1 · T2 블록
-               (78.0, 214.0, 100.0, 244.0), (132.0, 184.0, 141.0, 244.0),                             # T3
+PLAZA_LAWNS = [(4.0, 180.0, 14.0, 210.0), (0.0, 226.0, 10.0, 246.0), (50.0, 186.0, 62.0, 236.0),        # T2 블록(T2 x 16…44, y 214…242)
+               (78.0, 209.5, 104.0, 218.5), (132.0, 184.0, 141.0, 244.0),                             # T3 · T1 사이 띠, 동쪽 띠
                (170.0, -26.0, 184.0, 14.0), (194.0, 26.0, 226.0, 44.0)]                               # T4 서쪽 · 북쪽
-PLAZA_TREES = [(-90.0, 183.0), (-70.0, 183.0), (-4.0, 214.0), (24.0, 184.0), (56.0, 244.0), (-88.0, 234.0), (-70.0, 236.0),
-               (84.0, 184.0), (88.0, 208.0), (136.5, 214.0), (89.0, 236.0), (118.0, 232.0),
-               (178.0, 34.0)]                                  # 느티나무 711 tris × 13 + 판 ≈ 9.4k(광장 ≤ 10k)
+PLAZA_TREES = [(24.0, 184.0), (56.0, 244.0), (9.0, 214.0), (9.0, 238.0), (40.0, 186.0),            # T2 블록
+               (84.0, 184.0), (88.0, 214.0), (114.0, 214.0), (136.5, 214.0), (118.0, 232.0),       # T3 · T1(T1 x 76…108, y 221…247)
+               (178.0, 34.0)]                                  # 느티나무 711 tris × 11 + 판(광장 ≤ 10k)
 
 
 def build_plaza(C, M):
@@ -1460,6 +2017,328 @@ def build_plaza(C, M):
         out.append(o)
     tris = sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in out)
     print('plaza', len(PLAZAS), 'lawns', len(PLAZA_LAWNS), 'trees', len(out) - 1, 'tris', tris)
+    return out
+
+
+# ═════════════════════════════ (8) 2호선 유리 튜브 · 열차 · 스카이브리지(§4.2, Task 9) ═════════════════════════════
+TUBE_RIB_PITCH = 5.5                    # 리브 간격(m): 구간마다 이 값 이하의 같은 간격으로 나눠 양 끝(원경 외피 이음 · 승강장 끝)에도 리브
+TUBE_RIB = (0.2, 0.3)                   # 리브 단면: x 폭 · 꺾은선 법선 깊이(꺾은선이 가운데 — 유리가 리브 한가운데를 지난다)
+TUBE_STRINGER = 0.1                     # 꺾임점 6 곳을 잇는 세로 띠(정사각 단면 변)
+TUBE_LED = (14.95, 0.08, 0.03)          # 등줄기 LED: 아래면 z, 폭, 두께
+TUBE_PLANTERS = ((149.2, 150.3), (159.7, 160.8))   # 상판 바깥 화단 y(남 · 북). 상판 테두리(149.3 · 160.7, 턱 9.3)를 덮는다
+TUBE_PLANTER_Z = (8.9, 9.6)             # 화단 상자 아래 · 윗면(NW_meadow)
+VINE_DROP, VINE_W, VINE_COVER = 0.8, 1.0, 0.85  # 늘어진 덩굴 카드: 길이(윗면 아래), 폭, 덮는 비율(덩이마다 끊긴다). 모바일은 world.js 가 숨긴다
+VINE_CELL = (0.5, 0.0)                  # NW_ivy 아틀라스 칸 (½, 0) = Task 5 의 '밀도 0.6' 칸(Task 8b 가 IVY_DENS 를 0.5 로 낮췄다)
+TRAIN = dict(cars=4, L=17.0, W=2.9, H=3.4, gap=0.6, nose=2.2, ch=0.35, win=(1.2, 2.4), stripe=(0.98, 1.10), module=17.0 / 8)
+TRAINS = [('FU_train_a', (-200.0, 152.6, 9.3)), ('FU_train_b', (240.0, 157.4, 9.3))]   # 원점 = 열차 가운데 바닥, 앞 = 로컬 +x
+BRIDGES = [   # 상판 (x0, x1), (y0, y1), 윗면, 두께, 기둥 자리, 기둥 지름, 화단(6 m 마다)
+    dict(id='SB1', x=(64.0, 76.0), y=(112.0, 115.2), top=9.0, th=0.45, cols=((65.0, 113.6), (75.4, 113.6)), d=0.45, beds=False),
+    dict(id='SB2', x=(128.0, 131.2), y=(-60.0, -29.0), top=10.0, th=0.5, cols=((129.6, -33.6), (129.6, -54.2)), d=0.6, beds=True),
+]
+BRIDGE_BED = (1.2, 0.5, 0.45)           # SB2 화단: 길이(상판 방향) · 폭 · 높이
+BRIDGE_BED_STEP = 6.0
+
+
+def _offset_profile(P, d):
+    """꺾은선 P[(y, z)] 를 바깥(진행 방향 오른쪽 = 남쪽 아래 → 꼭대기 → 북쪽 아래에서 바깥) 쪽으로 d 만큼 민 꺾은선(꺾임점은 이등분 마이터)."""
+    out = []
+    n = len(P)
+    nrm = []
+    for i in range(n - 1):
+        (ya, za), (yb, zb) = P[i], P[i + 1]
+        L = math.hypot(yb - ya, zb - za)
+        nrm.append(((zb - za) / L * -1.0, (yb - ya) / L))      # 바깥 법선 = 진행 방향을 반시계 90° → (−dz, dy)
+    for i in range(n):
+        if i == 0:
+            ny, nz = nrm[0]; k = 1.0
+        elif i == n - 1:
+            ny, nz = nrm[-1]; k = 1.0
+        else:
+            ay, az = nrm[i - 1]; by, bz = nrm[i]
+            ny, nz = ay + by, az + bz; L = math.hypot(ny, nz); ny, nz = ny / L, nz / L
+            k = 1.0 / max(0.5, ny * by + nz * bz)
+        out.append((P[i][0] + ny * d * k, P[i][1] + nz * d * k))
+    return out
+
+
+def build_tube(C, M):
+    """2호선 유리 튜브(§4.2): TUBE_SPANS 두 구간마다 리브 · 유리 · 화단(+ 늘어진 덩굴), 두 구간을 잇는 등줄기 LED 한 줄.
+    - FU_tube_ribs_<w|e>(nw_solid=1): 리브 짝수 번째 + 꺾임점 세로 띠, FU_tube_ribs_fine_<w|e>: 리브 홀수 번째(모바일은 world.js 가 숨긴다 → 11 m 간격)
+    - FU_tube_glass_<w|e>: TUBE_PROFILE 7 변을 x 로 민 판(NWF_tube_glass, 양면 · 알파 0.22). 그림자 · 정적 병합 제외는 world.js
+    - FU_tube_planter_<w|e>: 상판 바깥 화단 상자(옆 NWF_white_concrete, 윗면 NW_meadow), FU_tube_planter_vines_<w|e>: 늘어진 덩굴 카드(NW_ivy)
+    승강장 구간(TUBE_SPANS 사이 22.8 … 91.2)에는 만들지 않는다."""
+    import present
+    P = [(y + TUBE_Y, z) for y, z in TUBE_PROFILE]
+    pin, pout = _offset_profile(P, -TUBE_RIB[1] / 2), _offset_profile(P, TUBE_RIB[1] / 2)
+    hw = TUBE_RIB[0] / 2
+    out, tris = [], {}
+    led = MB()
+    rnd = random.Random(2041)
+    mt = present.MEADOW_TILE
+    for key, (xa, xb) in zip(('w', 'e'), TUBE_SPANS):
+        n = max(1, math.ceil((xb - xa) / TUBE_RIB_PITCH - 1e-6))
+        ribs, fine = MB(), MB()
+        for k in range(n + 1):
+            x = xa + (xb - xa) * k / n
+            x0, x1 = max(xa, x - hw), min(xb, x + hw)
+            mb = ribs if k % 2 == 0 else fine
+            for i in range(len(P) - 1):
+                a, b, c, d = pin[i], pin[i + 1], pout[i + 1], pout[i]
+                mb.quad((x1, a[0], a[1]), (x0, a[0], a[1]), (x0, b[0], b[1]), (x1, b[0], b[1]), 0)     # 안쪽 면(튜브 안을 본다)
+                mb.quad((x0, d[0], d[1]), (x1, d[0], d[1]), (x1, c[0], c[1]), (x0, c[0], c[1]), 0)     # 바깥 면
+                mb.quad((x0, a[0], a[1]), (x0, d[0], d[1]), (x0, c[0], c[1]), (x0, b[0], b[1]), 0)     # −x 옆
+                mb.quad((x1, d[0], d[1]), (x1, a[0], a[1]), (x1, b[0], b[1]), (x1, c[0], c[1]), 0)     # +x 옆
+        s = TUBE_STRINGER / 2
+        for y, z in P[1:-1]:                                   # 꺾임점 세로 띠(바깥 면 · 안쪽 면 · 위 · 아래)
+            ribs.box((xa, y - s, z - s), (xb, y + s, z + s), 0, faces='yYzZ')
+        me = ribs.to_mesh(f'FU_tube_ribs_{key}', [M['tube_steel']], mask=lambda co: (0.0, 0.15, 1.0))
+        out.append(obj(f'FU_tube_ribs_{key}', me, C, surface='metal', nw_solid=1, nw_motif='tube'))
+        me = fine.to_mesh(f'FU_tube_ribs_fine_{key}', [M['tube_steel']], mask=lambda co: (0.0, 0.15, 1.0))
+        out.append(obj(f'FU_tube_ribs_fine_{key}', me, C, surface='metal', nw_motif='tube'))
+        # 유리: 7 변 × 한 장(리브가 판을 나눠 보이게 한다). 남쪽 아래 → 꼭대기 → 북쪽 아래 순서 = 바깥 법선.
+        # 아래 끝은 화단 윗면(9.6)부터: 그 아래는 화단 안쪽 면(y 150.3 · 159.7)과 같은 면이라 깊이 다툼이 난다
+        PG = [(P[0][0], TUBE_PLANTER_Z[1])] + P[1:-1] + [(P[-1][0], TUBE_PLANTER_Z[1])]
+        g = MB(); sv = 0.0
+        for (ya, za), (yb, zb) in zip(PG, PG[1:]):
+            sl = math.hypot(yb - ya, zb - za)
+            g.quad((xa, ya, za), (xb, ya, za), (xb, yb, zb), (xa, yb, zb), 0, (xa / 20.0, sv, xb / 20.0, sv + sl))
+            sv += sl
+        me = g.to_mesh(f'FU_tube_glass_{key}', [M['tube_glass']], mask=lambda co: (0.0, 0.0, 1.0))
+        out.append(obj(f'FU_tube_glass_{key}', me, C, surface='glass', nw_motif='tube'))
+        # 등줄기 LED(꼭대기 안쪽): 아래 · 옆 · 위 면
+        z0, w, t = TUBE_LED
+        led.box((xa, TUBE_Y - w / 2, z0), (xb, TUBE_Y + w / 2, z0 + t), 0, faces='yYzZ')
+        # 상판 바깥 화단 + 늘어진 덩굴 카드
+        pl, vn = MB(), MB()
+        za, zt = TUBE_PLANTER_Z
+        for (y0, y1), out_y in zip(TUBE_PLANTERS, (TUBE_PLANTERS[0][0], TUBE_PLANTERS[1][1])):
+            pl.box((xa, y0, za), (xb, y1, zt), 0, faces='xXyYzZ', fmat={'Z': 1},
+                   rect={f: ((xa / mt, y0 / mt, xb / mt, y1 / mt) if f == 'Z' else (0, 0, (xb - xa) / 4.0, 1)) for f in 'xXyYzZ'})
+            sg = -1.0 if out_y == y0 else 1.0                  # 바깥 방향(남 −y, 북 +y)
+            x = xa + rnd.uniform(0.0, 1.0)
+            while x < xb - 0.3:
+                run = rnd.uniform(3.0, 9.0)                    # 덩이 길이 · 빈틈(덮는 비율 VINE_COVER)
+                xe = min(xb, x + run)
+                while x < xe - 0.3:
+                    wv = min(VINE_W * rnd.uniform(0.8, 1.0), xe - x)
+                    drop = VINE_DROP * rnd.uniform(0.75, 1.15)
+                    yt = out_y + sg * 0.03; yb_ = out_y + sg * (0.03 + 0.12 * drop)   # 아래 끝이 조금 바깥으로 들린다
+                    cu, cv = VINE_CELL; fl = rnd.random() < 0.5
+                    us = 0.5 * wv / present.IVY_CELL                  # 아틀라스 칸 하나(½) = 1 m
+                    u0, u1 = (cu + us - 0.003, cu + 0.003) if fl else (cu + 0.003, cu + us - 0.003)
+                    vh = min(0.494, 0.5 * (drop + 0.12) / present.IVY_CELL)
+                    q = [(x, yb_, zt - drop), (x + wv, yb_, zt - drop), (x + wv, yt, zt + 0.12), (x, yt, zt + 0.12)]
+                    if sg > 0:
+                        q = [q[1], q[0], q[3], q[2]]; u0, u1 = u1, u0
+                    vn.quad(*q, 0, (u0, cv + 0.003, u1, cv + vh))
+                    x += wv * rnd.uniform(0.85, 1.0)
+                x = xe + run * (1.0 - VINE_COVER) / VINE_COVER * rnd.uniform(0.6, 1.4)
+        me = pl.to_mesh(f'FU_tube_planter_{key}', [M['white_conc'], M['meadow']], mask=lambda co: (0.0, 0.3, 0.9))
+        out.append(obj(f'FU_tube_planter_{key}', me, C, surface='wall', nw_motif='tube'))
+        me = vn.to_mesh(f'FU_tube_planter_vines_{key}', [M['ivy']], mask=lambda co: (0.0, 0.2, 0.85))
+        out.append(obj(f'FU_tube_planter_vines_{key}', me, C, surface='foliage', nw_motif='tube'))
+    me = led.to_mesh('FU_tube_led', [M['tube_led']], mask=lambda co: (0.0, 0.0, 1.0))
+    out.append(obj('FU_tube_led', me, C, surface='emissive', night=True, nw_motif='tube'))
+    for o in out:
+        tris[o.name] = sum(len(p.vertices) - 2 for p in o.data.polygons)
+    print('tube tris', tris)
+    return out
+
+
+def paint_train_window():
+    """열차 창 띠(256 × 128, 가로 반복 = 창 모듈 TRAIN['module'] m, 세로 = 창 띠 1.2 m). 낮 알베도: 어두운 유리(위로 옅은 하늘 반사) +
+    어두운 창 기둥 · 위아래 틀. 밤 발광: 유리 칸만 따뜻한 흰빛(기둥 · 틀 0)."""
+    alb, emi = _train_window_arrays()
+    a = lib.save_image('NWF_gen_train', alb, os.path.join(GEN, 'NWF_gen_train.png'), TAG)
+    e = lib.save_image('NWF_gen_train_emit', emi, os.path.join(GEN, 'NWF_gen_train_emit.png'), TAG)
+    return a, e
+
+
+def _train_window_arrays():
+    """paint_train_window 의 알베도 · 발광 배열(128 × 256 × 4). paint_mover 가 열차 창 띠로 베껴 쓴다."""
+    W, H = 256, 128
+    alb = _canvas(W, H, _hexs('#20262A')); emi = _canvas(W, H, np.zeros(3, np.float32))
+    p0, p1 = int(W * 0.08), int(W * 0.92)                        # 창 기둥 = 양 끝 8 %
+    q0, q1 = int(H * 0.1), int(H * 0.9)
+    v = (np.arange(q1 - q0, dtype=np.float32) / (q1 - q0))[:, None, None]
+    alb[q0:q1, p0:p1, :3] = _hexs('#0E151A') * (1 - v * 0.6) + _hexs('#2E4352') * (v * 0.6)
+    emi[q0:q1, p0:p1, :3] = _hexs('#FFE4BE') * (0.82 + 0.18 * v)
+    _rect(alb, p0, int(H * 0.62), p1, int(H * 0.64), _hexs('#1A2126'))           # 창 가로대(낮에만)
+    np.clip(alb, 0, 1, out=alb); np.clip(emi, 0, 1, out=emi)
+    return alb, emi
+
+
+TRAIN_MATS = ('train_white', 'train_window', 'train_stripe', 'black', 'glass_dark', 'ui')
+TW, TWIN, TSTR, TBLK, TGLS, TUI = range(len(TRAIN_MATS))
+
+
+def _train_section():
+    """차체 단면(y, z) 16 점(아래 왼쪽 → 아래 오른쪽 → 오른쪽 옆 위로 → 지붕 → 왼쪽 옆 아래로)과 변마다 재질. 8 각(모서리 ch 깎음)이고
+    옆면을 청록 띠 · 창 띠 높이에서 나눴다."""
+    t = TRAIN; hw, H, c = t['W'] / 2, t['H'], t['ch']
+    s0, s1 = t['stripe']; w0, w1 = t['win']
+    side = [c, s0, s1, w0, w1, H - c]
+    pts = [(-hw + c, 0.0), (hw - c, 0.0)] + [(hw, z) for z in side] + [(hw - c, H), (-hw + c, H)] + [(-hw, z) for z in reversed(side)]
+    mats = [TBLK, TBLK, TW, TSTR, TW, TWIN, TW, TW, TW, TW, TW, TWIN, TW, TSTR, TW, TBLK]
+    return pts, mats
+
+
+def train_mesh(M):
+    """흰 4 량 튜브 열차(§4.2): 1 량 17.0 × 2.9 × 3.4, 차량 사이 0.6 m(검은 연결막), 양 끝 둥근 코 2.2 m(1 · 4 량 안), 전장 69.8 m.
+    원점 = 열차 가운데 바닥, 앞 = 로컬 +x(양 끝이 같은 모양이라 뒤로 달려도 돌지 않는다). 창 띠 1.2 … 2.4 m(NWF_train_window: 낮 어두운 유리,
+    밤 따뜻한 흰빛), 청록 띠 0.12 m(NWF_train_stripe), 코: 어두운 앞유리 · 전조등(흰) · 미등(빨강)."""
+    t = TRAIN
+    L_all = t['cars'] * t['L'] + (t['cars'] - 1) * t['gap']
+    S, SM = _train_section()
+    n = len(S)
+    mb = MB()
+    corner = [S[0], S[1], S[2], S[7], S[8], S[9], S[10], S[15]]            # 8 각 꼭짓점(끝면용)
+
+    def ring(x, k_y=1.0, k_z=1.0, zb=0.25):
+        return [(x, y * k_y, zb + (z - zb) * k_z) for y, z in S]
+
+    def loft(A, B, nose=False, k=0):
+        for i in range(n):
+            j = (i + 1) % n
+            m = SM[i]
+            if nose and m in (TWIN, TW) and S[i][1] >= t['win'][0] - 1e-6 and S[j][1] >= t['win'][0] - 1e-6:
+                m = TGLS if (k >= 2 or m == TWIN) else m                 # 코: 창 띠는 앞유리, 코 앞쪽 절반은 창 띠 위 전체가 앞유리
+            if m == TWIN:
+                x0, x1 = A[i][0], B[i][0]
+                u0, u1 = x0 / t['module'], x1 / t['module']
+                va, vb = (0.0, 1.0) if S[i][0] > 0 else (1.0, 0.0)      # 아래 = v 0(+y 옆은 위로, −y 옆은 아래로 돈다)
+                mb.face([A[i], A[j], B[j], B[i]], m, [(u0, va), (u0, vb), (u1, vb), (u1, va)])
+                continue
+            mb.face([A[i], A[j], B[j], B[i]], m, [(0.5, 0.5)] * 4)      # 단면 반시계(+x 에서 볼 때) → 바깥 법선
+
+    def cap(x, sgn, k_y=1.0, k_z=1.0, zb=0.25):
+        pts = [(x, y * k_y, zb + (z - zb) * k_z) for y, z in corner]
+        mb.face(pts if sgn > 0 else pts[::-1], TBLK if abs(k_y - 1.0) < 1e-6 else TW, [(0.5, 0.5)] * len(pts))
+
+    x = -L_all / 2
+    for car in range(t['cars']):
+        xa, xb = x, x + t['L']
+        ba = xa + (t['nose'] if car == 0 else 0.0); bb = xb - (t['nose'] if car == t['cars'] - 1 else 0.0)
+        loft(ring(ba), ring(bb))
+        for xe, sgn, is_nose in ((ba, -1, car == 0), (bb, 1, car == t['cars'] - 1)):
+            if not is_nose:
+                cap(xe, sgn)
+                continue
+            N = 4; prev = ring(xe)
+            for k in range(1, N + 1):
+                f = k / N
+                ky, kz = 1.0 - 0.55 * f ** 2, 1.0 - 0.6 * f ** 1.5
+                cur = ring(xe + sgn * t['nose'] * (1.0 - (1.0 - f) ** 1.6), ky, kz)
+                (loft(prev, cur, True, k) if sgn > 0 else loft(cur, prev, True, k))
+                prev = cur
+            xt = prev[0][0]
+            cap(xt, sgn, ky, kz)
+            for yy, zz, cell in ((-0.36, 0.62, 'white'), (0.36, 0.62, 'white'), (-0.5, 0.42, 'red'), (0.5, 0.42, 'red')):
+                yw, hh = 0.12, 0.05
+                xq = xt + sgn * 0.01
+                q = [(xq, yy - yw, zz - hh), (xq, yy + yw, zz - hh), (xq, yy + yw, zz + hh), (xq, yy - yw, zz + hh)]
+                mb.face(q if sgn > 0 else q[::-1], TUI, [(UI[cell][0], UI[cell][1]), (UI[cell][2], UI[cell][1]),
+                                                         (UI[cell][2], UI[cell][3]), (UI[cell][0], UI[cell][3])])
+        if car < t['cars'] - 1:                                            # 연결막(검정)
+            hy = t['W'] / 2 - t['ch']
+            mb.box((xb, -hy, 0.4), (xb + t['gap'], hy, t['H'] - 0.3), TBLK, faces='yYZ')
+        x = xb + t['gap']
+    return mover_atlas(mb.to_mesh('FU_train', [M[k] for k in TRAIN_MATS], mask=lambda co: (0.0, 0.2, 1.0)), M)
+
+
+def build_trains(C, M):
+    """열차 2 편성: 각자 단일 사용자 메시(me.copy()). 두 사본은 모양이 같아 gltf-transform dedup · instance 가 합쳐 노드 이름을 지운다 →
+    차량마다 정점 AO(nw_mask B)를 열차별로 조금 다르게 써서 바이트가 다르게 한다(Task 11 이 FU_train_a/b 이름으로 움직인다)."""
+    me = train_mesh(M)
+    out = []
+    t = TRAIN
+    L_all = t['cars'] * t['L'] + (t['cars'] - 1) * t['gap']
+    for i, (nm, loc) in enumerate(TRAINS):
+        m2 = me.copy(); m2.name = nm
+        shade = [0.97, 0.93, 0.95, 0.91] if i == 0 else [0.92, 0.96, 0.9, 0.94]
+        vals = []
+        for v in m2.vertices:
+            car = min(t['cars'] - 1, max(0, int((v.co.x + L_all / 2) / (t['L'] + t['gap']))))
+            vals.append((0.0, 0.2, shade[car] * (0.8 + 0.2 * smoothstep(0.0, 0.6, v.co.z))))
+        lib.write_mask_values(m2, vals)
+        out.append(obj(nm, m2, C, loc, 0.0, surface='metal', night=True, nw_motif='tube_train', nw_train=i))
+    bpy.data.meshes.remove(me)
+    sig = [tuple(round(c, 4) for c in lib_mask_b(o.data)) for o in out]
+    if len(set(sig)) != len(sig):
+        raise RuntimeError('열차: 두 편성 메시가 같다 — dedup · instance 가 FU_train_a/b 이름을 지운다')
+    print('trains', [(o.name, tuple(round(c, 1) for c in o.location), sum(len(p.vertices) - 2 for p in o.data.polygons)) for o in out],
+          'length', L_all)
+    return out
+
+
+def lib_mask_b(me):
+    """nw_mask 정점색 B 값 목록(열차 사본 구분 확인)."""
+    a = me.color_attributes.get('nw_mask')
+    if a is None:
+        return []
+    return [d.color[2] for d in a.data][:64]
+
+
+def build_bridges(C, M, gz):
+    """보행 스카이브리지 2 개(BRIDGES): 상판 FU_bridge_<id>_deck(흰 콘크리트 상자 · 윗면 보도블록 · 양쪽 유리 난간 1.1 m + 위 흰 레일 ·
+    소핏 양 가장자리 청록 LED · SB2 는 6 m 마다 화단)과 기둥 FU_bridge_<id>_col.<k>(원통 12 면, 지면 → 상판 밑). 모두 nw_solid=1 —
+    상판과 기둥을 따로 두어 상판 아래 차도가 '막힘' 상자에 들지 않는다."""
+    import present
+    mt = present.MEADOW_TILE
+    out = []
+    # 상부 레일은 흰 콘크리트와 같은 흰 재질(STEEL = WC): 상판 객체 표면이 'wall' 이라 강재(리브 'metal')와 묶이지 않고 그리기가 는다
+    WC, PAV, RAILG, LED, MEAD = range(5)
+    STEEL = WC
+    mats = [M['white_conc'], M['deck'], M['rail'], M['bridge_led'], M['meadow']]
+    for b in BRIDGES:
+        (x0, x1), (y0, y1) = b['x'], b['y']
+        zt, zb = b['top'], b['top'] - b['th']
+        along_x = (x1 - x0) >= (y1 - y0)
+        mb = MB()
+        mb.box((x0, y0, zb), (x1, y1, zt), WC, faces='xXyYz', rect={f: (0, 0, 1, 1) for f in 'xXyYz'})
+        mb.face([(x0, y0, zt), (x1, y0, zt), (x1, y1, zt), (x0, y1, zt)], PAV, [(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
+        e, rh, rr = 0.06, RAIL_H, 0.03
+        if along_x:
+            edges = [((x0, y0 + e), (x1, y0 + e), -1), ((x0, y1 - e), (x1, y1 - e), 1)]
+        else:
+            edges = [((x0 + e, y0), (x0 + e, y1), -1), ((x1 - e, y0), (x1 - e, y1), 1)]
+        for (pa, pb, sg) in edges:
+            mb.quad((pa[0], pa[1], zt), (pb[0], pb[1], zt), (pb[0], pb[1], zt + rh - 0.04), (pa[0], pa[1], zt + rh - 0.04), RAILG)
+            if along_x:
+                mb.box((pa[0], pa[1] - rr, zt + rh - 0.04), (pb[0], pa[1] + rr, zt + rh + 0.02), STEEL, faces='yYzZ')
+                yl = (y0 + 0.12) if sg < 0 else (y1 - 0.12)
+                mb.box((x0, yl - 0.03, zb - 0.04), (x1, yl + 0.03, zb), LED, faces='yYz')
+            else:
+                mb.box((pa[0] - rr, pa[1], zt + rh - 0.04), (pa[0] + rr, pb[1], zt + rh + 0.02), STEEL, faces='xXzZ')
+                xl = (x0 + 0.12) if sg < 0 else (x1 - 0.12)
+                mb.box((xl - 0.03, y0, zb - 0.04), (xl + 0.03, y1, zb), LED, faces='xXz')
+        if b['beds']:
+            L, Wd, Hb = BRIDGE_BED
+            n = int(((y1 - y0) if not along_x else (x1 - x0)) // BRIDGE_BED_STEP)
+            s0 = ((y1 - y0) if not along_x else (x1 - x0)) / 2 - (n - 1) * BRIDGE_BED_STEP / 2
+            for k in range(n):
+                c = (y0 if not along_x else x0) + s0 + k * BRIDGE_BED_STEP
+                for sg in (-1, 1):
+                    if along_x:
+                        yy = (y0 + 0.15) if sg < 0 else (y1 - 0.15 - Wd)
+                        c0, c1 = (c - L / 2, yy, zt), (c + L / 2, yy + Wd, zt + Hb)
+                    else:
+                        xx = (x0 + 0.15) if sg < 0 else (x1 - 0.15 - Wd)
+                        c0, c1 = (xx, c - L / 2, zt), (xx + Wd, c + L / 2, zt + Hb)
+                    mb.box(c0, c1, WC, faces='xXyYZ', fmat={'Z': MEAD},
+                           rect={f: ((c0[0] / mt, c0[1] / mt, c1[0] / mt, c1[1] / mt) if f == 'Z' else (0, 0, 1, 1)) for f in 'xXyYZ'})
+        nm = f'FU_bridge_{b["id"]}_deck'
+        me = mb.to_mesh(nm, mats, mask=lambda co: (0.0, 0.25, 0.95))
+        out.append(obj(nm, me, C, surface='wall', night=True, nw_solid=1, nw_motif='skybridge', nw_bridge=b['id']))
+        for k, (cx, cy) in enumerate(b['cols']):
+            z0 = gz.z(cx, cy, 0.0)
+            cb = MB()
+            cb.cyl((cx, cy, z0 - 0.05), (cx, cy, zb), b['d'] / 2, b['d'] / 2, 12, 0, caps=(False, False))
+            nm = f'FU_bridge_{b["id"]}_col.{k}'
+            me = cb.to_mesh(nm, [M['tube_steel']], smooth=True, sharp=40,
+                            mask=lambda co, z0=z0: (0.0, 0.3, 0.6 + 0.4 * smoothstep(z0, z0 + 1.5, co[2])))
+            out.append(obj(nm, me, C, surface='metal', nw_solid=1, nw_motif='skybridge', nw_bridge=b['id']))
+    print('bridges', [(o.name, sum(len(p.vertices) - 2 for p in o.data.polygons)) for o in out])
     return out
 
 
@@ -1606,6 +2485,73 @@ def build_night_rig(sc):
     return NC
 
 
+# ═════════════════════════════ 이동체 표(Task 11, §4.4) ═════════════════════════════
+BOT_RUN = {'bot0': ('pingpong', 1.4), 'bot1': ('pingpong', 1.5), 'bot2': ('loop', 1.2)}   # BOT_STARTS id → (모드, m/s)
+TRAIN_RUNS = [('train_a', 16.0, 0.0, -700.0, 700.0), ('train_b', 14.0, 0.5, 700.0, -700.0)]  # TRAINS 순서: (id, m/s, 위상, x 시작, x 끝)
+TURBINE_RPM = 18.0
+
+
+def _densify(pts, step=2.0):
+    out = []
+    for a, b in zip(pts, pts[1:]):
+        a, b = Vector(a), Vector(b)
+        n = max(1, int((b - a).length / step))
+        out.extend(tuple(a.lerp(b, k / n)) for k in range(n))
+    out.append(tuple(pts[-1]))
+    return out
+
+
+def _catmull_closed(pts, step=2.0):
+    """닫힌 균일 Catmull-Rom(장력 0.5 — three 'catmullrom' 0.5 와 같은 식)을 step m 꺾은선으로 편다."""
+    P = [Vector(p) for p in pts]; n = len(P); out = []
+    for i in range(n):
+        p0, p1, p2, p3 = P[(i - 1) % n], P[i], P[(i + 1) % n], P[(i + 2) % n]
+        seg = max(1, int((p2 - p1).length / step))
+        for k in range(seg):
+            t = k / seg; t2 = t * t; t3 = t2 * t
+            v = 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3)
+            out.append(tuple(v))
+    return out
+
+
+def _closed_dense(pts, step=2.0):
+    """닫힌 꺾은선을 촘촘하게(마지막 → 처음 구간 포함). 끝에 처음 점을 다시 넣지 않는다(web buildTrack 이 닫는다)."""
+    return _densify(list(pts) + [pts[0]], step)[:-1]
+
+
+def mover_table(gz):
+    """이동체 표(§4.4, Blender 좌표). export.py 가 three 좌표로 바꿔 layout.movers 로 낸다. gz = GroundZ(포드는 _road_base, 로봇은 지면).
+    포드 · 배송로봇 경로는 Task 10 의 POD_ROUTES · rounded_loop(POD_LOOP, 반시계) · BOT_STARTS, 열차는 TRAINS 의 y · z 를 쓴다.
+    origin · yaw0 = 객체의 Blender 원점 · 방위(rotation_euler.z). optimize 의 위치 양자화가 노드 원점을 메시 상자 가운데로 옮기므로
+    웹은 이 자리에 피벗을 두고 객체를 붙여 움직인다(풍력 회전자는 허브가 상자 가운데가 아니다)."""
+    import present
+    road = lambda pts: [(x, y, _road_base(gz, x, y)) for x, y, *_ in pts]
+    walk = lambda pts: [(x, y, gz.z(x, y, 0.0)) for x, y, *_ in pts]
+
+    def row(name, **kw):
+        o = bpy.data.objects[name]
+        return dict(object=name, origin=tuple(o.location), yaw0=round(o.rotation_euler.z, 6), **kw)   # 이동체는 부모가 없다(matrix_world 는 아직 갱신 전일 수 있다)
+
+    rows = []
+    for i, did in enumerate(DRONE_PATHS):     # 드론 앞 = 로컬 +X(렌즈 · 몸통 긴 축, build_drones 가 진행 방향으로 세운다) → yawOffset 0
+        rows.append(row(f'FU_drone_{did}', id=did, kind='drone', mode='loop', speed=DRONE_SPEED[did], phase=round(0.27 * i, 3), bob=0.28,
+                        beam='FU_drone_sec_beam' if did == 'sec' else None, path=_catmull_closed(DRONE_PATHS[did])))
+    for nm, rid, mode, speed, phase, pts in POD_ROUTES:
+        line = rounded_loop(POD_LOOP) if pts == 'POD_LOOP' else pts
+        rows.append(row(nm, id=rid, kind='pod', mode=mode, speed=speed, phase=phase,
+                        path=road(_closed_dense(line) if mode == 'loop' else _densify(line))))
+    for (nm, (_, y, z)), (rid, speed, phase, x0, x1) in zip(TRAINS, TRAIN_RUNS):
+        rows.append(row(nm, id=rid, kind='train', mode='pingpong', speed=speed, phase=phase, path=_densify([(x0, y, z), (x1, y, z)], 10.0)))
+    for nm, rid, p0, p1 in BOT_STARTS:
+        mode, speed = BOT_RUN[rid]
+        line = _closed_dense(present.PARK_PATH) if p0 is None else _densify([p0, p1])
+        rows.append(row(nm, id=rid, kind='bot', mode=mode, speed=speed, path=walk(line), **({'flipYaw': True} if mode == 'pingpong' else {})))
+    for o in sorted((o for o in bpy.data.objects if o.name.startswith('FU_turbine_rotor.')), key=lambda o: o['nw_turbine']):
+        rows.append(row(o.name, id=f"turbine_{o['nw_turbine']}", kind='spin', rpm=TURBINE_RPM))
+    print('movers', [(r['id'], r['object'], len(r.get('path', ()))) for r in rows])
+    return rows
+
+
 # ═════════════════════════════ 조립 ═════════════════════════════
 class _Roof(GroundZ):
     """지붕 높이: 위에서 아래로 광선(현재 층 정적 메시에 맞는다)."""
@@ -1697,6 +2643,11 @@ def build():
     _, spots = build_towers(C, M)
     build_turbines(C, M, sc, spots)
     build_plaza(C, M)
+    build_tube(C, M)
+    build_trains(C, M)
+    build_bridges(C, M, gz)
+    build_smart_street(C, M, gz)          # 스카이브리지 기둥 · 정류장 · 기존 소품을 피해 놓으므로 그 뒤에
+    sc['nw_movers'] = json.dumps(mover_table(gz))   # 이동체 표(Task 11) → export.py layout.movers
     build_anchors(sc)
     build_camera(sc)
     # 현재 층 간판 글자(nw_night): 밤에만 켜지는 발광(낮 렌더는 그대로)

@@ -1,11 +1,11 @@
-// HAUS NOWHERE — 성수 2041: 엔트리포인트 (웹 코어 + 기상·시간·카메라·드론 비행 연결)
+// HAUS NOWHERE — 성수 2041: 엔트리포인트 (웹 코어 + 기상·시간·카메라·이동체 연결)
 import * as THREE from 'three';
 import { detectQualityTier, getQualityConfig } from './quality.js';
-import { createWorld } from './world.js';
+import { createWorld, updateMoverActors, updateLegacyDrones } from './world.js';
 import { createPostPipeline } from './post.js';
 import { createWeatherController, getPresets, parseTimeParam, TIME_QUICK, weatherNamesFor, defaultWeather } from './weather.js';
 import { createRainSystem } from './rain.js';
-import { createCameraController, updateDroneActors } from './camera.js';
+import { createCameraController } from './camera.js';
 import { createHelpOverlay, createWalkHud } from './help.js';
 import { createModal } from './modal.js';
 import { createScenarioRunner, CANCEL } from './scenario.js';
@@ -398,7 +398,8 @@ async function boot() {
 
     weather.update(dt);
     rain.update();
-    updateDroneActors(world.droneActors, elapsed);
+    updateMoverActors(world.moverActors, elapsed);
+    updateLegacyDrones(world.legacyDrones, elapsed);   // DS2(옛 layout.drones)
     camCtrl.update(dt);
     interior.update(dt);
 

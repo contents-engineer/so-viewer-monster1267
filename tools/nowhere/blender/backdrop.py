@@ -699,8 +699,13 @@ def blocked_far(x, y):
     return False
 
 
+FAR_LOW_KEEP = 0.25     # 성수 2041(Task 8b 0.35 → Task 10 0.25): 모바일 삼각형 예산(0.9 M) — 먼 저층 상자 · 판상 아파트를 이 비율만 남긴다(전역 제약의
+FAR_SLAB_KEEP = 0.45    # (Task 10: 0.55 → 0.45) 줄이기 순서 1: 원경 크림색 상자). 고르는 난수는 따로 써서 남는 동의 자리 · 크기는 예전과 같다
+
+
 def build_far(C, M):
     rnd = random.Random(707)
+    keep = random.Random(708)
     acc = Acc()
     n_low = n_slab = 0
     # 저층 지붕 바다(0.7 ~ 1.6 km): 50 m 격자, 한 칸에 낮은 상자 하나(벽 한 줄 = 묶음 띠, 지붕)
@@ -717,8 +722,11 @@ def build_far(C, M):
             st = rnd.choice(('villa3', 'brick2', 'mixed3', 'villa3'))
             fp = rect_fp(x, y, w, d)
             h = fl * 3.0
-            walls(acc, fp, 0.0, h, st, 3.6, rnd.random())
-            roof_flat(acc, fp, h, rnd.choice(('roof_grey', 'roof_green', 'roof_dark')))
+            uo = rnd.random(); rm = rnd.choice(('roof_grey', 'roof_green', 'roof_dark'))
+            if keep.random() >= FAR_LOW_KEEP:
+                continue
+            walls(acc, fp, 0.0, h, st, 3.6, uo)
+            roof_flat(acc, fp, h, rm)
             n_low += 1
     # 판상 아파트·타워(0.7 ~ 3 km): 단지 단위로 3 ~ 6동씩
     nclus = 70
@@ -747,8 +755,11 @@ def build_far(C, M):
                 st = kind
             rows = max(1, int(round(h / 11.2)))
             hh = h / rows
+            uos = [rnd.random() for _ in range(rows)]
+            if keep.random() >= FAR_SLAB_KEEP:
+                continue
             for q in range(rows):
-                walls(acc, fp, q * hh, (q + 1) * hh, st, 2.9, rnd.random(),
+                walls(acc, fp, q * hh, (q + 1) * hh, st, 2.9, uos[q],
                       (lambda i, L, st=st: st if L > 20 else 'apt_end') if not tower else None)
             roof_flat(acc, fp, h, 'roof_grey')
             if h > 110:
@@ -1043,9 +1054,13 @@ def build_ground(C, M):
         z = -0.12
         ra.poly([(x0, y0, z), (x1, y0, z), (x1, y1, z), (x0, y1, z)], [(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
         if kind == 'tt':                                       # 황색 이중 중앙선 + 백색 점선(3 m 칠 / 5 m 빈칸)
-            for yc, cell in ((-41.8, 0.75), (-42.2, 0.75)):
-                ma.poly([(x0, yc - 0.075, z + 0.01), (x1, yc - 0.075, z + 0.01), (x1, yc + 0.075, z + 0.01), (x0, yc + 0.075, z + 0.01)],
-                        [(cell, 0.5)] * 4)
+            import future                                      # 성수 2041(Task 10): 태양광 띠(future.PV_X)가 덮는 구간은 중앙선을 빼고 띠 밖만
+            for xa, xb in ((x0, min(x1, future.PV_X[0])), (max(x0, future.PV_X[1]), x1)):
+                if xb - xa < 1.0:
+                    continue
+                for yc, cell in ((-41.8, 0.75), (-42.2, 0.75)):
+                    ma.poly([(xa, yc - 0.075, z + 0.01), (xb, yc - 0.075, z + 0.01), (xb, yc + 0.075, z + 0.01), (xa, yc + 0.075, z + 0.01)],
+                            [(cell, 0.5)] * 4)
             for yc in (-38.75, -45.25):
                 x = x0 + 1.0
                 while x + 3.0 < x1:
@@ -1069,6 +1084,7 @@ def build_ground(C, M):
 
 def build_infra(C, M):
     """2호선 고가 연장(present 의 끝 −131.2 / 176.8 에서 VIA_EXT 까지)과 강변북로 고가. 실루엣 수준."""
+    import future
     acc = Acc()
     y0, y1 = 149.3, 160.7
     for xa, xb in ((VIA_EXT[0], -131.2), (176.8, VIA_EXT[1])):
@@ -1077,8 +1093,10 @@ def build_infra(C, M):
         lo, hi = vr('concrete')
         acc.poly([(xa, y0, 7.9), (xa, y1, 7.9), (xb, y1, 7.9), (xb, y0, 7.9)], [(0, lo), (0.2, lo), (0.2, hi), (0, hi)])
         roof_flat(acc, fp, 9.3, 'roof_dark')
-        for yy in (y0, y1 - 0.3):                                 # 방음벽 패널
-            walls(acc, [(xa, yy), (xb, yy), (xb, yy + 0.3), (xa, yy + 0.3)], 9.3, 11.2, 'corrugated', 2.0, 0.3)
+        # 방음벽 패널: 장면 층 튜브 구간(future.TUBE_SPANS, Task 9)에서는 그 자리에 튜브 바깥 화단(y 149.2 … 150.3 · 159.7 … 160.8)이 놓여 뺀다
+        ba, bb = (xa, future.TUBE_SPANS[0][0]) if xb < 0 else (future.TUBE_SPANS[-1][1], xb)
+        for yy in (y0, y1 - 0.3):
+            walls(acc, [(ba, yy), (bb, yy), (bb, yy + 0.3), (ba, yy + 0.3)], 9.3, 11.2, 'corrugated', 2.0, 0.3)
         k0 = math.ceil((xa + 130.0) / 22.0); k1 = math.floor((xb + 130.0) / 22.0)
         for k in range(k0, k1 + 1):
             px = -130.0 + 22.0 * k
@@ -1103,7 +1121,6 @@ def build_infra(C, M):
     o = acc.to_obj('BD_infra', C, [M['city']], 'wall')
     print('infra', acc.tris())
     # 2호선 유리 튜브 외피(Task 7): 장면 층 튜브(future.TUBE_SPANS) 바깥을 같은 단면으로 VIA_EXT 끝까지. 리브 · 끝 마개 없음
-    import future
     out = [o]
     for nm, xa, xb in (('BD_tube_w', VIA_EXT[0], future.TUBE_SPANS[0][0]), ('BD_tube_e', future.TUBE_SPANS[-1][1], VIA_EXT[1])):
         ta = Acc(); P = future.TUBE_PROFILE; sv = 0.0

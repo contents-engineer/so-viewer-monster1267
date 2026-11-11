@@ -22,11 +22,16 @@
   - 실존 브랜드·로고·상표 문구는 쓰지 않는다. 게임 고유 형태(삼각 드론, 하트형 신호, 안드로이드 표식)도 쓰지 않는다. 간판 글자는 우리가 지은 문구만 쓴다.
   - 레퍼런스 이미지는 `build/nowhere/ref/`(git 무시)에만 둔다. 저장소 문서나 출하물에 넣지 않는다.
 - **두 건물:** HAUS NOWHERE(`public/assets/gm_building.glb`)와 FaceArch(`public/assets/facearch.glb`) 원본은 수정하지 않는다. 두 건물이 화면의 주인공이다. 새 타워는 거리 시점(`street`)에서 투영 높이가 HAUS의 0.6배 이하로 보여야 한다.
-- **예산(기존 유지):**
+- **예산(CP1 결정 반영, 2026-11-11):**
   - 전송량: 데스크톱 ≤ 40 MB, 모바일 ≤ 22 MB. 두 건물을 포함하며 `tests/nowhere-assets.test.mjs`가 검사한다.
-  - 화면 기준 draw call: 데스크톱 ≤ 300, 모바일 ≤ 180.
-  - 삼각형: 데스크톱 ≤ 2.0 M, 모바일 ≤ 0.9 M.
-  - FPS: 데스크톱 ≥ 55(Apple M 계열, 1440p, 탭이 앞에 있을 때 `?stats=1`로 잰다).
+  - 화면 기준 draw call: 데스크톱 ≤ 300, 모바일 ≤ 180. **그림자 패스를 뺀 화면(main pass) 기준이다.**
+  - 삼각형: 데스크톱 ≤ 2.0 M, 모바일 ≤ 0.9 M. 역시 화면 기준이다.
+  - **FPS: ≥ 60이 실제 게이트다.** Apple M 계열, 1440p, 탭이 앞에 있을 때 `?stats=1`로 잰다. 데스크톱과 `&tier=mobile` 모두 `street`·`future`·`aerial`에서 잰다.
+  - **모자라면 건물 수를 줄여도 된다(사용자 승인).** 줄이는 순서:
+    1. 원경 크림색 상자(`BD_*` 아파트·저층)
+    2. 장면 안이지만 주요 시점(`street`·`future`·`aerial`)에서 거의 안 보이는 채움 건물
+    - HAUS, FaceArch, 골목 양쪽의 복원 벽돌 건물(담쟁이·수직정원이 붙은 면)은 줄이지 않는다.
+    - 줄인 건물은 이름과 줄어든 그리기·삼각형을 보고서에 적는다.
 - **텍스처:** 그린 텍스처는 한 장 ≤ 1024 px다. 타워 커튼월 아틀라스만 1024 × 2048을 쓴다. WebP 변환은 `nowhere:optimize`가 한다.
 - **DS2 월드(`?ver=ds2`)는 바꾸지 않는다.** 기본 기상, 프리셋, 자산 모두 그대로다. 맑음 버튼은 DS2에서 숨긴다.
 - **UI 문구는 한국어다.**
@@ -192,9 +197,9 @@
 | pod_l1, pod_l2 | pod | `FU_taxi.3`, `FU_taxi.4` | loop | 8.0 | 반시계 고리. 아래 설명 참고(위상 0, 0.5) |
 | train_a, train_b | train | `FU_train_a`, `FU_train_b` | pingpong | 16.0, 14.0 | x −700 ↔ 700, y 152.6 / 157.4, z 9.3 (위상 0, 0.5) |
 | bot0 | bot | `FU_bot.0` | pingpong, flipYaw | 1.4 | 뚝섬로 북측 보도 y −32.2: x −95 ↔ 60 |
-| bot1 | bot | `FU_bot.1` | pingpong, flipYaw | 1.5 | 동쪽 골목 동측 보도 x 74.2: y −28 ↔ 132 |
+| bot1 | bot | `FU_bot.1` | pingpong, flipYaw | 1.5 | 동쪽 골목 동측 보도 x 73.9: y −28 ↔ 132(Task 11: 74.2 → 73.9, 키오스크에서 0.7 m) |
 | bot2 | bot | `FU_bot.2` | loop | 1.2 | 공원 산책로 `PARK_PATH` |
-| sec, d1, d2, d3 | drone | `FU_drone_sec`, `FU_drone_d1…d3` | loop | 기존 `DRONE_SPEED` | 기존 `DRONE_PATHS` |
+| sec, d1, d2, d3 | drone | `FU_drone_sec`, `FU_drone_d1…d3` | loop | 기존 `DRONE_SPEED` | 기존 `DRONE_PATHS`(Task 11: d2 셋째 점 (100, −42, 30) → z 36, MX 지붕에서 3 m) |
 | d4 | drone | `FU_drone_d4` | loop | 9.0 | (−80,−42,18) (0,−40,20) (80,−44,18) (150,−42,22) (80,−38,24) (0,−46,22) (−80,−40,20) |
 | d5 | drone | `FU_drone_d5` | loop | 7.0 | (70,−20,16) (70,60,18) (70,130,17) (66,170,24) (40,120,22) (64,40,20) |
 | turbine_0…4 | spin | `FU_turbine_rotor.0…4` | — | rpm 18 | — |
@@ -206,7 +211,7 @@
 - **높이:**
   - 포드와 로봇 경로의 z는 `GroundZ`로 읽는다. 장면 밖은 'tt' 노면 높이다.
   - 드론 경로는 Catmull-Rom(장력 0.5, 닫힘)으로 펴서 2 m 간격 꺾은선으로 내보낸다. 나머지는 2 m 간격으로 촘촘하게 만든다.
-- **앞쪽 약속:** 메시의 앞은 로컬 +X다. 드론만 지금처럼 +Z가 앞이므로 `yawOffset = π/2`다.
+- **앞쪽 약속:** 메시의 앞은 로컬 +X다. 성수 배송 드론(`FU_drone_d1…d5`, `FU_drone_sec`)도 몸통 긴 축이 +X라 `yawOffset = 0`이다(Task 11 확인). `yawOffset = π/2`는 +Z가 앞인 DS2 옛 드론(`layout.drones`)에만 쓴다.
 
 ## 5. 팔레트와 그린 텍스처
 
@@ -309,6 +314,11 @@ cp /var/folders/n3/vy61y2sx62v6vd5w_f8w_htw0000gn/T/orca-paste-1794285451826-82f
   - playwriter로 `street`, `future`, `aerial`을 맑음 14:00에 캡처한다.
   - `before` · 2041 · 레퍼런스를 나란히 놓은 비교 페이지(Artifact, 지난 시안 페이지와 같은 형식)와 성능 표(`?stats=1`, 데스크톱 · `?tier=mobile`)를 사용자에게 보여 준다.
   - 방향 승인을 받은 뒤 Task 9로 넘어간다.
+  - **결과(2026-11-11):** 사용자가 비교 페이지의 제안대로 진행하라고 했다.
+    - 방향 승인: Task 9 이후를 진행한다.
+    - 예산: 그림자를 뺀 화면 기준, 게이트는 FPS ≥ 60, 모자라면 건물 수를 줄여도 된다(Global Constraints).
+    - "옛 성수" 정리를 Task 8b로 Task 9 앞에 넣는다. 벽돌, 노면 보수 자국, 담쟁이 두께를 다룬다.
+    - T1은 2041 골목 시점에서 보이게 옮긴다(Task 8b).
 - **CP2 (Task 11 뒤):**
   - 같은 방식에 `night`(21:30)와 움직임을 더한다. 움직임은 10초 간격 2장으로 보여 준다.
   - D4(보행자) 여부를 묻는다.
@@ -1213,6 +1223,87 @@ test('(b) 주인공 유지: 거리 시점에서 각 타워의 투영 높이는 H
 
 - [ ] **Step 7: 커밋(또는 스테이징 + 메시지 제시)** — `feat(nowhere): 성수 신축 유리 타워 4동(테라스 녹화 · 옥상 태양광 · 풍력)`
 
+### Task 8b: "옛 성수" 정리 — 벽돌, 노면 보수 자국, 담쟁이 두께, T1 이동 (CP1 결정)
+
+CP1 비교에서 지금 화면이 "옛 성수"로 읽히는 가장 큰 요인이 벽돌이었다. 레퍼런스(`build/nowhere/ref/seongsu-2041-ref.png`)와 CP1 사진(`build/nowhere/compare/cp1-street.png`, `cp1-future.png`)을 나란히 보고 맞춘다.
+
+**Files:**
+- Modify: `tools/nowhere/blender/present.py`(벽돌 재질 `BRICK_TINT`·`BRICK_GAIN`·`BRICK_SAT`·타일 크기, 빗물 얼룩 `wall_mask`/`streak`, 창 둘레, `ivy_shell`)
+- Modify: `tools/nowhere/blender/ground.py`(차도·골목 보수 자국 `patch`, 균열 `crack`)
+- Modify: `tools/nowhere/blender/bake.py`(창 아래 띠의 원인이 정점 AO일 때만)
+- Modify: `tools/nowhere/blender/future.py`(`TOWERS`의 T1 `c`, 필요하면 `PLAZAS`·`PLAZA_LAWNS`)
+- Test: `tests/nowhere-future-layout.test.mjs`에 (d)를 더한다
+
+**Interfaces:**
+- Consumes: Task 4 `AGE_SCALE`, Task 5 `IVY_FACES`·`ivy_shell`, Task 7 타워 대지 비우기(`TOWERS` + `TOWER_SITE_MARGIN`), Task 8 `PLAZAS`·`build_towers`
+- Produces: 객체·재질 이름은 바꾸지 않는다(`NW_brick_red`, `NW_brick_old`, `NW_brick_painted`, `PR_ivy`, `FU_tower_T1`). Task 9 이후가 이 이름을 쓴다.
+
+- [ ] **Step 1: 원인을 먼저 확인한다.** 고치기 전에 아래 세 가지가 어디서 오는지 하나씩 끄고 `look`으로 확인해 보고서에 적는다.
+  - **벽돌 주황빛:** `BRICK_TINT`·`BRICK_GAIN`·`BRICK_SAT`과 텍스처 자체 색 중 어느 쪽인가.
+  - **줄눈 얼룩:** 텍스처(`church_bricks_02`, `brick_wall_001`)의 줄눈 색인가, `_streaks`(nw_streak)인가.
+  - **창 아래 어두운 띠:** `wall_mask`의 창 아래 빗물 얼룩(`o['streak']`)인가, `bake_vertex_ao`의 정점 AO인가.
+
+- [ ] **Step 2: 벽돌을 레퍼런스 쪽으로 바꾼다.**
+  - 색: 주황·연어색 → 깊은 적갈색(burgundy-brown)으로 바꾼다. 해가 드는 면 기준으로 색상(hue)은 지금보다 붉은 쪽(약 8–16°)이고, 명도는 지금(`cp1-future.png` 오른쪽 벽 중앙값 약 `#BA8A6D`)보다 15–25 % 어둡다.
+  - 벽돌 크기: 레퍼런스는 벽돌 한 단이 지금보다 작게 보인다. 타일 크기(`3.6` m / `1.35` m)를 레퍼런스 사진의 단 높이에 맞게 줄이고, 반복 무늬가 거리 시점에서 눈에 띄지 않게 한다(필요하면 `tint_var`·`var`로 벽돌 단위 색 흔들림을 준다).
+  - 줄눈: 밝은 회백색으로 깨끗하게 보이게 한다. 얼룩은 줄눈에 남기지 않는다.
+  - 창 아래 어두운 띠와 세로 빗물 얼룩: 복원된 2041 벽돌에서는 거의 보이지 않게 한다. 창턱 그늘처럼 창 바로 아래 10–20 cm만 남긴다.
+  - 창 둘레: 레퍼런스처럼 밝은 돌 창턱·인방을 둔다. 이미 있는 `lintel`·`trim`을 밝은 돌색(`#D8D2C6` 근처)으로 쓰는 것으로 충분하면 새 형상을 만들지 않는다.
+  - DS2(`ds2_*.py`)가 `present.py` 재질을 가져다 쓰면, DS2 재질 값은 그대로 둔다(성수 쪽만 바뀌게 분기한다). DS2 GLB는 다시 만들지 않는다.
+
+- [ ] **Step 3: 노면 보수 자국을 지운다.**
+  - 차도·골목의 밝은 아스팔트 덧칠 자국(`ground.py`의 `patch`)을 성수 2041에서는 없앤다.
+  - 균열(`crack`)도 거의 보이지 않게 줄인다(새로 포장한 길).
+  - 맨홀, 차선, 정지선, 보도블록은 그대로 둔다.
+  - 지면 마스크 굽기(`bake_ground_mask`)가 이 값을 쓰면 전체 재구축으로 마스크를 다시 굽는다.
+
+- [ ] **Step 4: 담쟁이에 두께를 준다.**
+  - 지금은 벽에 붙인 한 겹 카드라 칠한 무늬처럼 보인다. 레퍼런스처럼 잎 덩어리가 벽에서 튀어나와 보이게 한다.
+  - 방법(권장): 기존 셸 위에 바깥으로 0.08–0.25 m 떨어진 두 번째 겹을 듬성듬성(덮는 칸 40–60 %) 놓고, 위·옆 가장자리에서 아래로 늘어지는 잎 카드를 더한다. 창 칸은 지금처럼 비운다.
+  - 잎 텍스처(`paint_ivy`)는 잎 하나하나가 보이는 밀도로 다시 그린다. 밝은 잎·어두운 잎 두 톤과 잎 사이 그늘을 넣는다.
+  - 삼각형 증가: 담쟁이 전체 +12k 이하. 모바일 삼각형 예산(0.9 M)을 넘으면 Global Constraints의 건물 줄이기 순서를 쓴다.
+
+- [ ] **Step 5: T1을 2041 골목 시점에서 보이게 옮긴다.**
+  - 지금 T1(−40, 205)은 `CAM_future`에서 왼쪽 공원 느티나무에 가린다.
+  - 레퍼런스처럼 골목 끝 고가 너머에 타워들이 겹쳐 서도록 T1의 `c`를 옮긴다. 시점 중심(x = 70) 쪽으로 옮기되, T2·T3과 겹치지 않게 한다.
+  - 지켜야 할 것:
+    - 장면 사각형 밖, 거리 시점 투영 높이 ≤ HAUS 0.6배(test (a)(b)).
+    - 원경 대지 비우기는 `TOWERS`를 따라 자동으로 옮겨진다. `PLAZAS`·`PLAZA_LAWNS`가 새 자리와 맞지 않으면 고친다(타워 밑에 잔디가 들어가거나, 비운 대지가 맨 아스팔트로 남지 않게).
+    - clearance 테스트(인트로·비행 경로)가 통과한다.
+  - `look`과 웹 캡처(`?cam=future`)로 T1이 나무에 가리지 않는지 확인한다.
+
+- [ ] **Step 6: 테스트를 더한다** — `tests/nowhere-future-layout.test.mjs`
+
+```js
+test('(d) T1 은 2041 골목 시점 화면 안쪽에 보인다(가로 NDC |x| ≤ 0.6)', () => {
+  const cam = layout.cameras.find((c) => c.id === 'future');
+  const b = solid('FU_tower_T1');
+  const c = [(b.min[0] + b.max[0]) / 2, b.max[1] * 0.75, (b.min[2] + b.max[2]) / 2];
+  const f = cam.target.map((v, i) => v - cam.pos[i]);
+  const fl = Math.hypot(f[0], f[2]);
+  const fwd = [f[0] / fl, f[2] / fl];                      // 수평 앞
+  const right = [-fwd[1], fwd[0]];                        // three: x 오른쪽, z 아래쪽(남)
+  const d = [c[0] - cam.pos[0], c[2] - cam.pos[2]];
+  const z = d[0] * fwd[0] + d[1] * fwd[1];
+  const x = d[0] * right[0] + d[1] * right[1];
+  assert.ok(z > 0, 'T1 이 카메라 뒤에 있다');
+  const halfH = Math.atan(Math.tan((cam.fov * Math.PI) / 360) * (16 / 9));
+  const ndc = x / z / Math.tan(halfH);
+  assert.ok(Math.abs(ndc) <= 0.6, `T1 가로 NDC ${ndc.toFixed(2)}`);
+});
+```
+
+  - `layout.cameras` 항목의 실제 키 이름(`target`, `fov`, 오른쪽 방향 부호)을 먼저 확인하고 맞춘다. `fov`가 세로 시야각(도)이 아니면 변환한다.
+  - 이동 전 T1으로 FAIL을 확인하고, 이동 후 PASS를 확인한다.
+
+- [ ] **Step 7: 빌드하고 확인한다.**
+  - `--rebuild --no-bake`로 반복하고, 마지막에 전체 재구축(굽기 포함) → `npm run nowhere:optimize` → `npm test`를 실행한다.
+  - playwriter 1600 × 900, 맑음 14:00으로 `?cam=street`·`future`·`aerial`을 찍어 `build/nowhere/compare/cp1b-<id>.png`로 남긴다. CP1 사진과 레퍼런스와 나란히 놓고 벽돌·노면·담쟁이·T1을 확인한다.
+  - 회귀 확인: `?ver=ds2`(DS2 화면이 CP1 사진 `cp1-reg-ds2-after.png`와 같다), `&weather=rain`, `&time=21.5`.
+  - 성능: `?stats=1` 데스크톱과 `&tier=mobile`에서 `street`·`future`·`aerial`의 FPS·그리기·삼각형을 적는다. 게이트: FPS ≥ 60, 모바일 삼각형 ≤ 0.9 M.
+
+- [ ] **Step 8: 커밋(또는 스테이징 + 메시지 제시)** — `style(nowhere): 성수 벽돌 적갈색 복원 · 노면 보수 자국 제거 · 입체 담쟁이 · T1 골목 쪽으로`
+
 ### Task 9: 2호선 유리 튜브와 열차, 스카이브리지 2개
 
 **Files:**
@@ -1572,7 +1663,7 @@ def mover_table(gz):
     rows = []
     for i, did in enumerate(DRONE_PATHS):
         rows.append(dict(id=did, kind='drone', object='FU_drone_sec' if did == 'sec' else f'FU_drone_{did}', mode='loop',
-                         speed=DRONE_SPEED[did], phase=round(0.27 * i, 3), bob=0.28, yawOffset=round(math.pi / 2, 6),
+                         speed=DRONE_SPEED[did], phase=round(0.27 * i, 3), bob=0.28, yawOffset=0.0,   # Task 11: 드론 메시 앞 = +X
                          beam='FU_drone_sec_beam' if did == 'sec' else None, path=_catmull_closed(DRONE_PATHS[did])))
     east = gzp(_densify([(-260.0, -46.875), (420.0, -46.875)]))
     west = gzp(_densify([(420.0, -40.375), (-260.0, -40.375)]))
@@ -1589,7 +1680,7 @@ def mover_table(gz):
     rows += [dict(id='bot0', kind='bot', object='FU_bot.0', mode='pingpong', speed=1.4, flipYaw=True,
                   path=gzp(_densify([(-95.0, -32.2), (60.0, -32.2)]))),
              dict(id='bot1', kind='bot', object='FU_bot.1', mode='pingpong', speed=1.5, flipYaw=True,
-                  path=gzp(_densify([(74.2, -28.0), (74.2, 132.0)]))),
+                  path=gzp(_densify([(73.9, -28.0), (73.9, 132.0)]))),
              dict(id='bot2', kind='bot', object='FU_bot.2', mode='loop', speed=1.2,
                   path=gzp(_closed_dense(present.PARK_PATH)))]
     rows += [dict(id=f'turbine_{k}', kind='spin', object=f'FU_turbine_rotor.{k}', rpm=18.0) for k in range(5)]
@@ -1657,7 +1748,7 @@ export function updateMoverActors(actors, elapsed) {
     a.object.position.set(p.pos[0], p.pos[1], p.pos[2]);
     a.object.rotation.set(0, p.yaw, 0);
     if (a.beam) {
-      // 지난 코드의 object.rotation.y(lookAt, +Z 앞) = 드론 yawOffset π/2 로 계산한 p.yaw — 같은 흔들림을 더한다
+      // 성수 드론은 앞 = +X(yawOffset 0)라 p.yaw 가 진행 방위다 — 지난 코드와 같은 흔들림을 더한다. DS2 옛 드론은 지난 식을 그대로 쓴다(Task 11 리뷰)
       a.beam.position.copy(a.object.position);
       a.beam.rotation.y = p.yaw + Math.sin(elapsed * 1.1) * 0.22;
     }
@@ -1714,7 +1805,8 @@ export function updateMoverActors(actors, elapsed) {
     2. 태양광 줄 → 평면 한 장
     3. 화분형 가로수 수 줄이기
     4. 타워 세부(난간·화단)
-  - 줄인 뒤 다시 잰다.
+    5. 건물 수(Global Constraints의 순서: 원경 크림색 상자 → 주요 시점에서 안 보이는 채움 건물)
+  - 줄인 뒤 다시 잰다. 게이트는 FPS ≥ 60이다.
 
 - [ ] **Step 3: 문서를 고친다.**
   - README 성수 절: 2041 방향(복원 + 녹화 + 새 층), 기상 네 가지, 2041 골목 시점, 이동체.
@@ -1738,7 +1830,7 @@ export function updateMoverActors(actors, elapsed) {
 | 위험 | 대응 |
 |---|---|
 | 또 "마음에 안 드는" 방향 | CP1을 구조물 추가 전에 둔다. 빛·청소·녹화·스카이라인·타워만으로 레퍼런스 쪽인지 먼저 확인한다 |
-| 해 그림자 비용 | 데스크톱만. Task 2 게이트(55 FPS)에 단계별 후퇴안이 있다. 모바일은 영향이 없다 |
+| 해 그림자 비용 | 데스크톱만. 게이트는 FPS ≥ 60(CP1 결정). 모자라면 Task 2의 단계별 후퇴안과 건물 수 줄이기(Global Constraints)를 쓴다. 모바일은 영향이 없다 |
 | 셰이더 패치 재질이 그림자를 받지 않음 | Task 2 Step 5에서 확인하고 `surface.js` 청크 교체를 고친다 |
 | 큰 투명 튜브의 정렬 오류 | 유리를 별도 객체로, `depthWrite=false`, 정적 병합에서 제외, 그림자 제외 |
 | gltf-transform 인스턴싱이 이동체 이름을 지움 | 이동체는 단일 사용자 메시(`me.copy()`). movers 테스트 (e)가 데스크톱·모바일 GLB 노드 이름을 검사한다 |
