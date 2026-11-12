@@ -7,6 +7,7 @@ export const JUMP_SPEED = 7.0;    // m/s → 최고 높이 v²/2g ≈ 1.11 m, �
 export const GRAVITY = 22.0;      // m/s² (게임처럼 실제보다 강하게 — 경쾌한 점프)
 export const SNAP_DOWN = 0.5;     // 접지 중 이보다 큰 낙차(바위·낭떠러지에서 내려섬)는 떨어진다
 export const STEP_UP = 0.35;      // 이 높이까지의 턱은 걸어서 오른다
+export const MAX_CLIMB = 1.2;     // 보행으로 오를 수 있는 최대 경사(높이/수평 ≈ 50°) — 암벽은 걸어 오를 수 없다(길 찾기도 같은 값)
 
 export function walkSpeed(keys) {
   return keys.has('ShiftLeft') || keys.has('ShiftRight') ? RUN_SPEED : WALK_SPEED;

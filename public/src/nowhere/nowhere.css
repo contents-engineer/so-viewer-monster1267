@@ -429,6 +429,101 @@ body[data-world-ver="ds2"] .nw-loader {
   }
 }
 
+/* ── 보행 이동 스팟 마커(spot-markers.js): 멀리 작은 마름모 · 가까이 둥근 아이콘 + 이름 · 건물 대표 이름 · 거리 ── */
+.nw-spots {
+  position: fixed;
+  inset: 0;
+  z-index: 17;
+  overflow: hidden;
+  pointer-events: none;
+}
+.nw-spots[hidden],
+.nw-spot[hidden] {
+  display: none;
+}
+.nw-spot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 44px;               /* 터치 대상 44 × 44 px(보이는 아이콘보다 넓게) */
+  height: 44px;
+  margin: -22px 0 0 -22px;   /* transform translate 가 가리키는 점이 가운데 */
+  padding: 0;
+  border: 0;
+  background: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+  animation: nw-spot-in 0.2s ease;
+}
+@keyframes nw-spot-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.nw-spot-icon {
+  position: relative;
+  width: 10px;
+  height: 10px;
+  transform: rotate(45deg);
+  border: 1.5px solid rgba(236, 244, 255, 0.95);
+  background: rgba(200, 225, 255, 0.18);
+  box-shadow: 0 0 8px rgba(150, 205, 255, 0.6);
+  transition: width 0.2s ease, height 0.2s ease, border-radius 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+.nw-spot.is-far {
+  opacity: 0.6;
+}
+.nw-spot.is-near .nw-spot-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  transform: none;
+  background: rgba(200, 225, 255, 0.12);
+}
+.nw-spot.is-near .nw-spot-icon::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: rgba(236, 244, 255, 0.95);
+}
+.nw-spot.is-aimed .nw-spot-icon,
+.nw-spot:hover .nw-spot-icon {
+  box-shadow: 0 0 14px rgba(150, 205, 255, 0.95);
+}
+.nw-spot-label {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 20px);
+  /* 가운데 정렬하되 화면 가장자리 8px 안으로 밀어 넣는다(--sx = 마커 화면 x, % 는 이름 상자 폭) */
+  transform: translateX(clamp(calc(8px - var(--sx, 50vw)), -50%, calc(100vw - 8px - var(--sx, 50vw) - 100%)));
+  display: none;
+  padding: 3px 8px;
+  border-radius: 2px;
+  background: rgba(9, 15, 26, 0.62);
+  font-family: var(--nw-font-sans);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--nw-text);
+  white-space: nowrap;
+}
+.nw-spot.is-near .nw-spot-label,
+.nw-spot.is-beacon .nw-spot-label {
+  display: block;
+}
+.nw-spot.is-beacon .nw-spot-label {
+  top: calc(50% + 12px);
+  font-size: 11px;
+  color: var(--nw-text-dim);
+}
+
 /* ── 보행 시점 조준점 · 안내 문구(클릭 통과) ── */
 .nw-walk-hud {
   position: fixed;

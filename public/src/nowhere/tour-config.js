@@ -16,15 +16,22 @@ export const TOUR_BUILDINGS = {
   },
 };
 
-/** layout.buildings[id] 의 위치 · rotY(도)를 반영한 월드 접근 시점. 건물 · 레이아웃이 없으면 null. */
-export function approachFor(layout, id) {
-  const b = TOUR_BUILDINGS[id];
+/** 건물 기준 로컬 좌표(Three 축, rotY 회전 전) → 월드 좌표. layout.buildings[id] 의 위치 · rotY(도)를 반영. 건물이 없으면 null. */
+export function buildingToWorld(layout, id, [x, y, z]) {
   const cfg = layout?.buildings?.[id];
-  if (!b || !cfg || !Array.isArray(cfg.pos)) return null;
+  if (!cfg || !Array.isArray(cfg.pos)) return null;
   const th = ((cfg.rotY || 0) * Math.PI) / 180;
   const c = Math.cos(th);
   const s = Math.sin(th);
   // three 의 rotation.y 와 같은 회전: x' = x cosθ + z sinθ, z' = −x sinθ + z cosθ
-  const tf = ([x, y, z]) => [cfg.pos[0] + x * c + z * s, cfg.pos[1] + y, cfg.pos[2] - x * s + z * c];
-  return { pos: tf(b.approach.pos), target: tf(b.approach.target) };
+  return [cfg.pos[0] + x * c + z * s, cfg.pos[1] + y, cfg.pos[2] - x * s + z * c];
+}
+
+/** layout.buildings[id] 의 위치 · rotY(도)를 반영한 월드 접근 시점. 건물 · 레이아웃이 없으면 null. */
+export function approachFor(layout, id) {
+  const b = TOUR_BUILDINGS[id];
+  if (!b) return null;
+  const pos = buildingToWorld(layout, id, b.approach.pos);
+  const target = buildingToWorld(layout, id, b.approach.target);
+  return pos && target ? { pos, target } : null;
 }

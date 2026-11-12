@@ -14,9 +14,9 @@ import { createTourPlayer } from './inner-tour.js';
 import { createWindowView, hasWindowView, viewKey, interiorLighting, VIEW_SETTLE_MS } from './inner-view.js';
 import { createDisplayScreen, nowClockText } from './inner-display.js';
 import { clockText } from './weather.js';
+import { createFade, FADE_MS } from './fade.js';
 
 export const INNER_LAYOUT_URL = 'assets/nowhere-inner/inner-layout.json';
-const FADE_MS = 600;
 const FLOOR_FADE_MS = 400;
 const TOUR_CUT_MS = 300;   // 둘러보기 첫 지점으로 옮길 때 어둡게 · 밝게 각각
 const EXTERIOR_WALK_FALLBACK = [-72.0, 36.5];
@@ -37,7 +37,7 @@ function nameChain(n) {
   return s;
 }
 
-export function createInterior({ renderer, camera, camCtrl, post, world, quality, modal, weather = null, exteriorScene, isHelpOpen = () => false, onChange = null }) {
+export function createInterior({ renderer, camera, camCtrl, post, world, quality, modal, weather = null, exteriorScene, isHelpOpen = () => false, onChange = null, fade = null, onFloorChange = null }) {
   const mobile = quality.tier === 'mobile';
   const scene = new THREE.Scene();
   scene.name = 'NW_Interior';
@@ -71,11 +71,8 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
   const exitTrigger = createAreaTrigger();
   const elevatorTrigger = createAreaTrigger();
 
-  // 화면 전환(검게)
-  const fade = el('div', 'nw-fade');
-  const fadeText = el('div', 'nw-fade-text');
-  fade.append(fadeText);
-  document.body.append(fade);
+  // 화면 전환(검게) — main.js 가 넘긴 공용 레이어(보행 스팟 컷 이동과 같이 씀). 없으면 직접 만든다
+  const fader = fade || createFade();
 
   // 실내 HUD: 층 이름 · 층 버튼 · 이 층 둘러보기 · 밖으로 나가기 + 하단 둘러보기 자막
   const hud = el('div', 'nw-interior-hud');
@@ -96,15 +93,26 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
   caption.hidden = true;
   caption.setAttribute('aria-live', 'polite');
   document.body.append(hud, caption);
+  // 하단 자막: 둘러보기(tour) 자막과 보행 스팟 도착 자막(showCaption, 시간이 지나면 지움)이 같이 쓴다
+  let captionTimer = null;
+  function setCaption(text) {
+    clearTimeout(captionTimer);
+    captionTimer = null;
+    caption.textContent = text;
+    caption.hidden = !text;
+  }
+  /** 보행 스팟 도착 자막(실내에서만): ms 뒤 지운다. 둘러보기 · 층 이동 · 나가기가 덮어쓰거나 지운다 */
+  function showCaption(text, ms = 4000) {
+    if (!active) return;
+    setCaption(text);
+    if (text) captionTimer = setTimeout(() => setCaption(''), ms);
+  }
   const floorBtns = new Map();
 
   const tour = createTourPlayer({
     camCtrl,
     getView: () => ({ pos: camera.position.toArray(), target: camCtrl.controls.target.toArray() }),
-    showCaption: (text) => {
-      caption.textContent = text;
-      caption.hidden = !text;
-    },
+    showCaption: (text) => setCaption(text),
     // 첫 지점은 비행 대신 짧은 화면 전환 컷 — 사용자가 걸어간 어느 자리에서 시작해도 직선 비행이 전시물(1F 도시 모형 등)을 뚫지 않게
     cut: async ({ pos, target, isCurrent }) => {
       camCtrl.setWalkMode(false);   // 비행(flyTo)처럼 둘러보기 시작에 보행을 끈다 — 컷 도중 멈춰도 같은 상태
@@ -138,13 +146,7 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
   renderer.domElement.addEventListener('pointerdown', stopTourOnInput);
   renderer.domElement.addEventListener('wheel', stopTourOnInput, { passive: true });
 
-  const fadeTo = (on, text = '', ms = FADE_MS) =>
-    new Promise((res) => {
-      fadeText.textContent = text;
-      fade.style.transitionDuration = `${ms}ms`;
-      fade.classList.toggle('is-on', on);
-      setTimeout(res, ms);
-    });
+  const fadeTo = (on, text = '', ms = FADE_MS) => fader.fadeTo(on, text, ms);
 
   async function loadLayout() {
     if (!layout) {
@@ -294,6 +296,8 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     if (hasWindowView(def)) viewDirtyAt = performance.now();
     exitTrigger.reset();
     elevatorTrigger.reset();
+    setCaption('');
+    if (typeof onFloorChange === 'function') onFloorChange(def);   // 보행 이동 스팟을 이 층 것으로
   }
 
   function closePrompt() {
@@ -314,7 +318,7 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
       // 모바일은 외관처럼 HDRI 를 받지 않는다(진입 추가 다운로드 ≤ 4 MB — 1F 모바일 GLB 만). 반구광 · 채움광으로 비춘다
       if (quality.tier !== 'mobile') await loadEnv();
       const entry = await loadFloor(def, (r) => {
-        fadeText.textContent = `실내 불러오는 중… ${Math.round(r * 100)}%`;
+        fader.setText(`실내 불러오는 중… ${Math.round(r * 100)}%`);
       });
       camCtrl.stopFlight();
       camCtrl.setWalkMode(false);
@@ -359,7 +363,7 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     try {
       await fadeTo(true, '층 이동 중…', FLOOR_FADE_MS);
       const entry = await loadFloor(def, (r) => {
-        fadeText.textContent = `층 불러오는 중… ${Math.round(r * 100)}%`;
+        fader.setText(`층 불러오는 중… ${Math.round(r * 100)}%`);
       });
       camCtrl.setWalkMode(false);
       showFloor(def, entry);
@@ -412,6 +416,8 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
       active = false;
       document.body.classList.remove('is-interior');
       hud.hidden = true;
+      setCaption('');
+      if (typeof onFloorChange === 'function') onFloorChange(null);   // 보행 이동 스팟을 외관 것으로
       if (typeof onChange === 'function') onChange(false);
     } finally {
       // 중간에 예외가 나도 검은 화면 · busy 에 갇히지 않게
@@ -476,6 +482,10 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     isActive: () => active,
     currentFloor: () => (active ? floorDef?.id ?? null : null),
     isTouring: () => tour.isPlaying(),
+    isBusy: () => busy,
+    showCaption,
+    /** 엘리베이터 · 출구 영역 트리거를 다시 장전 — 영역 안에서 질문을 닫은 뒤 스팟으로 다시 도착했을 때 질문이 다시 뜨게 */
+    rearmPrompt: (kind) => (kind === 'elevator' ? elevatorTrigger : kind === 'exit' ? exitTrigger : null)?.reset(),
     scene,
   };
 }

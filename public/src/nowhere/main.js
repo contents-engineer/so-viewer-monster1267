@@ -14,6 +14,10 @@ import { buildFlightPath } from './flight.js';
 import { SEONGSU_INTRO } from './intro-path.js';
 import { createInterior } from './interior.js';
 import { createPerfHud } from './perf-hud.js';
+import { createFade } from './fade.js';
+import { createSpotMarkers } from './spot-markers.js';
+import { exteriorSpots, interiorSpots } from './walk-spots.js';
+import { planWalkPath } from './walk-path.js';
 
 async function boot() {
   const canvas = document.getElementById('nw-canvas');
@@ -205,8 +209,28 @@ async function boot() {
     },
   });
 
-  // 조작 안내(? 키 · 상단 버튼). 열 때 보행 마우스 고정을 풀어 안내를 클릭으로 닫을 수 있게 한다.
-  const help = createHelpOverlay({ onOpen: () => camCtrl.releasePointer() });
+  // 조작 안내(? 키 · 상단 버튼). 열 때 보행 마우스 고정을 풀고(안내를 클릭으로 닫게) 스팟 자동 걷기를 멈춘다.
+  const help = createHelpOverlay({
+    onOpen: () => {
+      camCtrl.releasePointer();
+      camCtrl.cancelWalkTo();
+    },
+  });
+
+  // 화면 전환(검게): 실내 진입 · 층 이동 · 나가기와 스팟 컷 이동이 같이 쓴다
+  const fade = createFade();
+
+  // 보행 이동 스팟: 외관은 두 건물 주변, 실내는 층마다(interior.onFloorChange 가 바꿔 끼운다)
+  const exteriorSpotList = exteriorSpots(world.layout);
+  let spotCutting = false;
+  const markers = createSpotMarkers({
+    camera,
+    canvas,
+    camCtrl,
+    onPick: (spot) => goToSpot(spot),
+    isSuspended: () => spotCutting || modal.isOpen() || help.isOpen() || interior.isBusy() || interior.isTouring(),
+  });
+  markers.setSpots(exteriorSpotList);
 
   // ── 시나리오 투어: 인트로 → 건물 선택 → 정면 비행 → 입장(성수 → 실내) / 준비중(몽골) ──
   // 모달이 뜨면 마우스 고정을 풀고, 누르던 이동 키를 비운다(질문 중에 계속 걷지 않게)
@@ -227,6 +251,8 @@ async function boot() {
     weather,
     exteriorScene: scene,
     isHelpOpen: () => help.isOpen(),
+    fade,
+    onFloorChange: (def) => markers.setSpots(def ? interiorSpots(def) : exteriorSpotList),
   });
   // 성능 표시: P 키로 켜고 끈다. 키보드 없는 기기(아이패드 등)는 주소에 ?stats=1
   // 텍스처 추정은 외관 · 실내 장면을 함께 센다(실내에 있어도 외관 텍스처는 GPU 에 남아 있음 — 메모리 한도 판단용)
@@ -250,6 +276,53 @@ async function boot() {
       enterInterior: async (step) => ((await interior.enter(step.building)) ? 'done' : CANCEL),
     },
   });
+
+  // ── 보행 이동 스팟: 고르기 → 길 찾기 → 걸어가기(길이 없거나 막히면 짧은 암전 컷) → 도착 동작 ──
+  function goToSpot(spot) {
+    if (spotCutting || !camCtrl.isWalkMode()) return;
+    if (interior.isActive() && !interior.isTouring()) interior.showCaption('');   // 다음 이동 시작 — 이전 도착 자막을 지운다
+    const t0 = performance.now();
+    const path = planWalkPath(camCtrl.getWalkContext(), camera.position, spot);
+    console.info(`[nowhere] 스팟 길 찾기 ${spot.id}: ${path ? `${path.length}점` : '실패'} ${Math.round(performance.now() - t0)} ms`);
+    const walking = path && camCtrl.walkTo(path, { look: spot.look, onArrive: () => arriveAt(spot), onStuck: () => cutToSpot(spot) });
+    if (!walking) cutToSpot(spot);
+  }
+
+  async function cutToSpot(spot) {
+    if (spotCutting || !camCtrl.isWalkMode()) return;
+    spotCutting = true;
+    camCtrl.cancelWalkTo();
+    try {
+      await fade.fadeTo(true, '', 300);
+      const placed = camCtrl.isWalkMode() && camCtrl.placeWalk(spot.x, spot.z, spot.look);
+      await fade.fadeTo(false, '', 300);
+      if (placed) arriveAt(spot);
+    } finally {
+      spotCutting = false;
+    }
+  }
+
+  function arriveAt(spot) {
+    if (spot.kind === 'entrance' && spot.building === 'haus' && !interior.isActive()) {
+      modal
+        .show({
+          title: '입장하시겠습니까?',
+          buttons: [
+            { id: 'yes', label: '예', primary: true },
+            { id: 'no', label: '아니오', cancel: true },
+          ],
+        })
+        .then((c) => {
+          if (c === 'yes' && !interior.isActive()) interior.enter('haus');
+        });
+    } else if ((spot.kind === 'elevator' || spot.kind === 'exit') && interior.isActive() && !modal.isOpen()) {
+      // 영역 안에서 질문을 닫고 다시 도착한 경우 — 다음 프레임 interior.update 가 질문을 다시 띄우도록 장전.
+      // 컷 이동 도착은 밝아지는 사이 트리거가 이미 질문을 띄웠으므로(모달 열림) 다시 장전하지 않는다(두 번 묻지 않게)
+      interior.rearmPrompt(spot.kind);
+    } else if (spot.caption && interior.isActive() && !interior.isTouring()) {
+      interior.showCaption(spot.caption, 4000);
+    }
+  }
 
   function startScenario(stepId) {
     if (interior.isActive()) return;
@@ -407,6 +480,7 @@ async function boot() {
     updateLegacyDrones(world.legacyDrones, elapsed);   // DS2(옛 layout.drones)
     camCtrl.update(dt);
     interior.update(dt);
+    markers.update(dt);
 
     renderer.info.reset();
     world.followSun(camera);
@@ -426,6 +500,7 @@ async function boot() {
     rain,
     help,
     modal,
+    markers,
     interior,
     scenario,
     startScenario,
@@ -444,6 +519,7 @@ async function boot() {
         hour: weather.getHour(),
         camera: camCtrl.getPresetId(),
         walkMode: camCtrl.isWalkMode(),
+        autoWalk: camCtrl.isAutoWalking(),
         introActive: camCtrl.isIntroActive(),
         interior: interior.isActive(),
         floor: interior.currentFloor(),

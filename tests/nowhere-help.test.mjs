@@ -90,3 +90,18 @@ test('(e) 보행 안내: 보행을 켜면 가운데에 보였다가 WALK_HINT_DO
     delete globalThis.document;
   }
 });
+
+test('(f) 보행 이동 스팟 안내: 보행 시점 행(클릭 · 탭) · 보행 안내 문구 · main.js 연결', () => {
+  const walk = CONTROL_SECTIONS.find((s) => s.id === 'walk');
+  const row = walk.rows.find((r) => /이동 스팟/.test(r.desc));
+  assert.ok(row, '보행 시점에 이동 스팟 행 없음');
+  assert.deepEqual(row.keys, ['클릭', '탭']);
+  assert.match(row.desc, /걸어가기/);
+  assert.match(row.desc, /입장/);
+  const help = readFileSync(new URL('../public/src/nowhere/help.js', import.meta.url), 'utf8');
+  assert.match(help, /◇ 스팟/);
+  const main = readFileSync(new URL('../public/src/nowhere/main.js', import.meta.url), 'utf8');
+  assert.match(main, /createSpotMarkers\(/);
+  assert.match(main, /planWalkPath\(/);
+  assert.match(main, /markers\.update\(dt\)/);
+});

@@ -2,12 +2,15 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { clampAboveGround, resolveWalkStep } from './terrain.js';
-import { stepLook, ORBIT_MAX_POLAR } from './look.js';
-import { walkSpeed, stepBody, STEP_UP } from './walk.js';
+import { stepLook, ORBIT_MAX_POLAR, LOOK_LIMIT } from './look.js';
+import { walkSpeed, stepBody, STEP_UP, MAX_CLIMB } from './walk.js';
+import { createPathFollower, turnToward, wrapAngle, FACE_DIST, TURN_RATE } from './walk-path.js';
 
 const EYE_HEIGHT = 1.7;        // 보행 시점 눈높이(지면 기준)
 const ORBIT_CLEARANCE = 1.2;   // 궤도·전환·인트로 카메라가 지면 위로 유지할 최소 여유고
-const MAX_CLIMB = 1.2;         // 보행으로 오를 수 있는 최대 경사(높이/수평 ≈ 50°) — 암벽은 걸어 오를 수 없다
+const FACE_TIME = 0.6;         // 스팟 도착 뒤 볼거리를 정면으로 돌리는 시간(s)
+// 스팟 자동 걷기를 끊는 키(이동 · 시선 · 점프)
+const AUTO_WALK_STOP_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space']);
 
 export function createCameraController({
   camera,
@@ -43,6 +46,8 @@ export function createCameraController({
   // 보행 몸 상태(발 높이·수직 속도·접지)와 이번 프레임 점프 입력(Space)
   const body = { feetY: 0, vy: 0, grounded: true };
   let jumpQueued = false;
+  // 스팟 자동 걷기: { follower, look, onArrive, onStuck, phase: 'walk' | 'face', t, from, to } — 입력 · 보행 해제 · 지형 교체로 끊긴다
+  let autoWalk = null;
 
   // 보행 마우스 시선 고정(포인터 잠금, 게임 방식): 보행 중 화면을 클릭하면 마우스만 움직여 둘러본다.
   // 첫 Esc 는 브라우저가 잠금만 풀고(보행 유지), 보행 해제는 그다음 Esc 나 V 로 한다.
@@ -139,6 +144,12 @@ export function createCameraController({
   };
   canvas.addEventListener('pointerdown', onFlightInterrupt, { passive: true });
   canvas.addEventListener('wheel', onFlightInterrupt, { passive: true });
+  // 스팟 자동 걷기는 화면 클릭 · 드래그 · 휠로 멈춘다(그 자리에서 자유 보행). 마커는 캔버스 위 DOM 이라 여기 오지 않는다
+  const onAutoWalkInterrupt = () => {
+    autoWalk = null;
+  };
+  canvas.addEventListener('pointerdown', onAutoWalkInterrupt, { passive: true });
+  canvas.addEventListener('wheel', onAutoWalkInterrupt, { passive: true });
   window.addEventListener('keydown', (e) => {
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
     if (flight) {
@@ -173,6 +184,7 @@ export function createCameraController({
       return;
     }
     if (walkMode) {
+      if (autoWalk && AUTO_WALK_STOP_KEYS.has(e.code)) autoWalk = null;   // 스팟으로 걷는 중 이동 · 시선 · 점프 키 → 그 자리에서 멈춤
       if (e.code.startsWith('Arrow')) e.preventDefault();   // 방향키 시선 회전 중 페이지 스크롤 방지
       if (e.code === 'Space') {
         e.preventDefault();                                   // 페이지 스크롤·포커스된 버튼 클릭 방지
@@ -190,6 +202,7 @@ export function createCameraController({
     cancelIntro();
     stopFlight();
     transition = null;
+    autoWalk = null;
     walkMode = Boolean(enabled);
     if (walkMode && !walkBlocker && typeof getWalkBlocker === 'function') {
       walkBlocker = getWalkBlocker();
@@ -254,10 +267,110 @@ export function createCameraController({
     finishFlight('cancelled');
   }
 
-  /** 누르고 있던 이동 · 시선 키와 점프 예약을 비운다(모달이 뜰 때 — 질문 중에 계속 걷지 않게). */
+  /** 누르고 있던 이동 · 시선 키와 점프 예약, 스팟 자동 걷기를 비운다(모달이 뜰 때 — 질문 중에 계속 걷지 않게). */
   function clearInput() {
     walkKeys.clear();
     jumpQueued = false;
+    autoWalk = null;
+  }
+
+  /**
+   * 스팟 자동 걷기: points(walk-path 점 목록)를 따라 걸어간다(보행 몸 물리 · 충돌 그대로). 보행 중이 아니면 false.
+   * 도착하면 FACE_TIME 동안 look 쪽을 정면으로 본 뒤 onArrive, 막히면 onStuck. 입력으로 끊기면 아무것도 부르지 않는다.
+   */
+  function walkTo(points, { look = null, onArrive = null, onStuck = null } = {}) {
+    if (!walkMode || !Array.isArray(points) || points.length < 2) return false;
+    autoWalk = { follower: createPathFollower(points), look, onArrive, onStuck, phase: 'walk', t: 0, from: null, to: null };
+    walkKeys.clear();
+    jumpQueued = false;
+    return true;
+  }
+
+  function cancelWalkTo() {
+    autoWalk = null;
+  }
+
+  /** 보행 중 (x, z) 지면 + 눈높이로 바로 옮기고 look(없으면 지금 방향)을 본다 — 스팟 컷 이동 */
+  function placeWalk(x, z, look = null) {
+    if (!walkMode) return false;
+    autoWalk = null;
+    const feet = groundHeightAt(x, z);
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    camera.position.set(x, feet + EYE_HEIGHT, z);
+    if (look) {
+      const to = new THREE.Vector3(look[0] - x, look[1] - camera.position.y, look[2] - z);
+      if (Math.hypot(to.x, to.z) > 0.5) dir.copy(to);
+    }
+    dir.normalize();
+    walkEye.copy(camera.position);
+    body.feetY = feet;
+    body.vy = 0;
+    body.grounded = true;
+    controls.target.copy(camera.position).addScaledVector(dir, 2.5);
+    controls.update();
+    return true;
+  }
+
+  /** 지금 보행 지형(길 찾기 · 마커가 보행과 같은 판정을 쓰게). blocker 는 보행 중에만 있다 */
+  function getWalkContext() {
+    return { groundHeightAt, blocker: walkBlocker };
+  }
+
+  // 스팟 자동 걷기 한 프레임: 경로 추종 이동량과 시선(진행 방향 → 남은 FACE_DIST 부터 볼거리 → 도착 뒤 FACE_TIME 동안 볼거리 정면)
+  function stepAutoWalk(dir, dt) {
+    const pos = camera.position;
+    let yaw = Math.atan2(dir.x, dir.z);
+    let pitch = Math.atan2(dir.y, Math.hypot(dir.x, dir.z));
+    const lookAngles = () => {
+      const L = autoWalk.look;
+      if (!L) return null;
+      const lx = L[0] - pos.x;
+      const lz = L[2] - pos.z;
+      const lh = Math.hypot(lx, lz);
+      if (lh < 0.5) return null;
+      return { yaw: Math.atan2(lx, lz), pitch: Math.max(-LOOK_LIMIT, Math.min(LOOK_LIMIT, Math.atan2(L[1] - pos.y, lh))) };
+    };
+    let mx = 0;
+    let mz = 0;
+    if (autoWalk.phase === 'walk') {
+      const r = autoWalk.follower.step(pos, dt);
+      if (r.stuck) {
+        const cb = autoWalk.onStuck;
+        autoWalk = null;
+        if (typeof cb === 'function') queueMicrotask(cb);
+        return { dir, mx: 0, mz: 0 };
+      }
+      if (r.done) {
+        autoWalk.phase = 'face';
+        autoWalk.t = 0;
+        autoWalk.from = { yaw, pitch };
+        autoWalk.to = lookAngles();
+      } else {
+        mx = r.dx;
+        mz = r.dz;
+        const la = r.remaining <= FACE_DIST ? lookAngles() : null;
+        yaw = turnToward(yaw, la ? la.yaw : Math.atan2(r.dx, r.dz), TURN_RATE * dt);
+        pitch += (0 - pitch) * Math.min(1, dt * 3);   // 걷는 동안 상하 시선은 수평으로 서서히
+      }
+    }
+    if (autoWalk && autoWalk.phase === 'face') {
+      autoWalk.t += dt;
+      const u = Math.min(1, autoWalk.t / FACE_TIME);
+      const { from, to } = autoWalk;
+      if (to) {
+        const s = u * u * (3 - 2 * u);
+        yaw = from.yaw + wrapAngle(to.yaw - from.yaw) * s;
+        pitch = from.pitch + (to.pitch - from.pitch) * s;
+      }
+      if (u >= 1 || !to) {
+        const cb = autoWalk.onArrive;
+        autoWalk = null;
+        if (typeof cb === 'function') queueMicrotask(cb);
+      }
+    }
+    const c = Math.cos(pitch);
+    return { dir: { x: c * Math.sin(yaw), y: Math.sin(pitch), z: c * Math.cos(yaw) }, mx, mz };
   }
 
   /**
@@ -299,6 +412,7 @@ export function createCameraController({
    * getWalkBlocker 를 빼면 장애물 없음으로 바뀐다(지면만 바꿀 때도 다시 넘긴다). 보행 중이면 새 장애물을 바로 받아 충돌을 유지한다.
    */
   function setTerrain({ groundHeightAt: g, getWalkBlocker: gb = null, walkFallback: wf = null }) {
+    autoWalk = null;   // 층 이동 · 실내 ↔ 외관: 앞 지형의 경로는 버린다
     if (typeof g === 'function') groundHeightAt = g;
     getWalkBlocker = gb;
     walkBlocker = walkMode && typeof getWalkBlocker === 'function' ? getWalkBlocker() : null;
@@ -456,42 +570,55 @@ export function createCameraController({
       if (look.lengthSq() < 1e-8) look.set(0, 0, -1);
       camera.position.copy(walkEye);
       // 2) 키 시선(게임 방식): ↑/↓ 올려다보기·내려다보기, ←/→ 좌우로 돌아보기 + 마우스 고정 중 마우스 이동량 (상하 ±80°)
-      const dir = stepLook(look, walkKeys, dt, {}, mouseLook);
+      let dir = stepLook(look, walkKeys, dt, {}, mouseLook);
       mouseLook.dx = 0;
       mouseLook.dy = 0;
-      // 3) 이동(WASD, Shift 달리기): 시선의 수평 성분 기준
-      const fwd = new THREE.Vector3(dir.x, 0, dir.z);
-      if (fwd.lengthSq() > 1e-8) {
-        fwd.normalize();
-        const right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0)).normalize();
-        const move = new THREE.Vector3();
-        if (walkKeys.has('KeyW')) move.add(fwd);
-        if (walkKeys.has('KeyS')) move.sub(fwd);
-        if (walkKeys.has('KeyD')) move.add(right);
-        if (walkKeys.has('KeyA')) move.sub(right);
-        if (move.lengthSq() > 0) {
-          move.normalize().multiplyScalar(walkSpeed(walkKeys) * dt);
-          // 장애물은 발 높이 + 턱(0.35 m)보다 높으면 막힌다 → 점프 중에는 낮은 바위·화단 벽을 넘을 수 있다.
-          // 접지 중 50° 넘는 오르막은 못 오르고, 공중에서는 발보다 높은 비탈로 파고들지 않는다. 막히면 벽을 따라 미끄러진다.
-          const here = camera.position;
-          const gHere = groundHeightAt(here.x, here.z);
-          const canStand = (x, z) => {
-            const g = groundHeightAt(x, z);
-            if (walkBlocker && walkBlocker.isBlocked(x, z, body.feetY - g + STEP_UP)) return false;
-            if (!body.grounded) return g <= body.feetY + STEP_UP;
-            const run = Math.hypot(x - here.x, z - here.z);
-            return run < 1e-6 || (g - gHere) / run <= MAX_CLIMB;
-          };
-          const next = resolveWalkStep(here, move.x, move.z, canStand);
-          camera.position.x = next.x;
-          camera.position.z = next.z;
-          // 실내(setBounds)에서는 보행도 층 영역(벽 안쪽, 몸 반경 0.35 m) 안으로 묶는다 —
-          // 막힌 자리(궤도 카메라가 벽 쪽에 붙은 채 보행 시작 등)에서 빠져나오는 이동이 벽 밖으로 새지 않게
-          if (bounds) {
-            const r = 0.35;
-            camera.position.x = Math.min(bounds.x1 - r, Math.max(bounds.x0 + r, camera.position.x));
-            camera.position.z = Math.min(bounds.z1 - r, Math.max(bounds.z0 + r, camera.position.z));
+      // 3) 이동: 스팟 자동 걷기 중이면 경로를 따라(시선도 자동), 아니면 WASD(Shift 달리기) — 시선의 수평 성분 기준
+      let mx = 0;
+      let mz = 0;
+      if (autoWalk) {
+        const r = stepAutoWalk(dir, dt);
+        dir = r.dir;
+        mx = r.mx;
+        mz = r.mz;
+      } else {
+        const fwd = new THREE.Vector3(dir.x, 0, dir.z);
+        if (fwd.lengthSq() > 1e-8) {
+          fwd.normalize();
+          const right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0)).normalize();
+          const move = new THREE.Vector3();
+          if (walkKeys.has('KeyW')) move.add(fwd);
+          if (walkKeys.has('KeyS')) move.sub(fwd);
+          if (walkKeys.has('KeyD')) move.add(right);
+          if (walkKeys.has('KeyA')) move.sub(right);
+          if (move.lengthSq() > 0) {
+            move.normalize().multiplyScalar(walkSpeed(walkKeys) * dt);
+            mx = move.x;
+            mz = move.z;
           }
+        }
+      }
+      if (mx !== 0 || mz !== 0) {
+        // 장애물은 발 높이 + 턱(0.35 m)보다 높으면 막힌다 → 점프 중에는 낮은 바위·화단 벽을 넘을 수 있다.
+        // 접지 중 50° 넘는 오르막은 못 오르고, 공중에서는 발보다 높은 비탈로 파고들지 않는다. 막히면 벽을 따라 미끄러진다.
+        const here = camera.position;
+        const gHere = groundHeightAt(here.x, here.z);
+        const canStand = (x, z) => {
+          const g = groundHeightAt(x, z);
+          if (walkBlocker && walkBlocker.isBlocked(x, z, body.feetY - g + STEP_UP)) return false;
+          if (!body.grounded) return g <= body.feetY + STEP_UP;
+          const run = Math.hypot(x - here.x, z - here.z);
+          return run < 1e-6 || (g - gHere) / run <= MAX_CLIMB;
+        };
+        const next = resolveWalkStep(here, mx, mz, canStand);
+        camera.position.x = next.x;
+        camera.position.z = next.z;
+        // 실내(setBounds)에서는 보행도 층 영역(벽 안쪽, 몸 반경 0.35 m) 안으로 묶는다 —
+        // 막힌 자리(궤도 카메라가 벽 쪽에 붙은 채 보행 시작 등)에서 빠져나오는 이동이 벽 밖으로 새지 않게
+        if (bounds) {
+          const r = 0.35;
+          camera.position.x = Math.min(bounds.x1 - r, Math.max(bounds.x0 + r, camera.position.x));
+          camera.position.z = Math.min(bounds.z1 - r, Math.max(bounds.z0 + r, camera.position.z));
         }
       }
       // 4) 수직: 발밑 표면(지면 또는 발이 닿는 장애물 윗면)에 붙거나, 점프·낙하 중이면 중력으로 진행
@@ -529,6 +656,11 @@ export function createCameraController({
     stopFlight,
     isFlying: () => Boolean(flight),
     clearInput,
+    walkTo,
+    cancelWalkTo,
+    isAutoWalking: () => Boolean(autoWalk),
+    placeWalk,
+    getWalkContext,
     placeAt,
     setTerrain,
     setBounds,
