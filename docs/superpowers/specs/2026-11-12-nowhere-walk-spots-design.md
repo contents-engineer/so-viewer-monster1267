@@ -26,11 +26,11 @@
   id: 'haus_entrance',
   label: '하우스노웨어 성수 정문',
   x: 0, z: 36,                 // 설 자리(지면 높이는 실행 중 groundHeightAt 로 구함)
-  look: [0, 10, 0],            // 도착하면 바라볼 점
+  look: [0, 10, 0],            // 도착하면 바라볼 점(null 이면 걸어온 방향 그대로)
   kind: 'view' | 'entrance' | 'elevator' | 'exit',
   beacon: false,               // true 면 거리 · 가림과 관계없이 표시(건물 대표 스팟)
   caption: null,               // 도착 자막(실내 둘러보기 스팟)
-  building: 'haus',            // entrance 의 대상 건물
+  building: 'haus',            // 외관 스팟의 건물(entrance 의 입장 대상), 실내 스팟은 null
 }
 ```
 
@@ -54,8 +54,8 @@
 ### 1.3 실내 스팟 (`interiorSpots(floorDef)`, `inner-layout.json` 에서 자동 생성 — 실내 빌드 변경 없음)
 
 - 둘러보기 지점 `tour[i]` → kind `view`, 자리 = `pos` 의 (x, z), look = `target`, 이름 = `caption` 의 ' — ' 앞부분, caption = 전체 자막.
-- `elevator` → kind `elevator`, 이름 '엘리베이터', 자리 = 영역 중심, look = 영역 중심(높이 1.5 m).
-- `exit`(1F) → kind `exit`, 이름 '밖으로 나가기', 자리 = 영역 중심, look = 영역 중심(높이 1.5 m).
+- `elevator` → kind `elevator`, 이름 '엘리베이터', 자리 = 영역 중심, look = `null`(걸어온 방향 그대로 — 도착 전에 영역 트리거가 질문을 띄운다).
+- `exit`(1F) → kind `exit`, 이름 '밖으로 나가기', 자리 = 영역 중심, look = `null`.
 
 ### 1.4 스팟 자리 보정
 
@@ -118,13 +118,13 @@
 
 | 모듈 | 바뀌는 점 |
 |---|---|
-| `walk-spots.js` (새) | `EXTERIOR_SPOTS`, `exteriorSpots(layout)`, `interiorSpots(floorDef)`, `spotStage()`, `buildingToWorld()`(공용 변환) |
+| `walk-spots.js` (새) | `EXTERIOR_SPOTS`, `exteriorSpots(layout)`, `interiorSpots(floorDef)`, `spotStage()`, `isSpotOccluded()` |
 | `walk-path.js` (새) | `findPath`, `smoothPath`, `createPathFollower` |
-| `spot-markers.js` (새) | `createSpotMarkers({ camera, canvas, camCtrl, onPick })` → `setSpots(list)`, `update(dt)`, `setSuspended(bool)` |
+| `spot-markers.js` (새) | `createSpotMarkers({ camera, canvas, camCtrl, onPick, isSuspended })` → `setSpots(list)`, `update(dt)` (스팟 자리 보정은 보행 지형이 준비된 뒤 여기서) |
 | `fade.js` (새) | 공용 암전 레이어 `createFade()` → `fadeTo(on, text, ms)` (`interior.js` 에서 옮김) |
-| `camera.js` | `walkTo()`, `cancelWalkTo()`, `isAutoWalking()`, `getWalkContext()`(지금 쓰는 `groundHeightAt` · 장애물 · 실내 영역) |
-| `tour-config.js` | `approachFor` 가 `buildingToWorld` 를 쓴다(동작 같음) |
-| `interior.js` | 층 표시 · 나가기 때 마커 스팟 집합을 바꾼다. 둘러보기 · 화면 전환 중 마커 숨김. 공용 `fade.js` 사용 |
+| `camera.js` | `walkTo()`, `cancelWalkTo()`, `isAutoWalking()`, `placeWalk()`(컷 이동 자리 옮기기), `getWalkContext()`(지금 쓰는 `groundHeightAt` · 장애물 — 실내 장애물은 층 영역 밖도 막힘) |
+| `tour-config.js` | 공용 변환 `buildingToWorld()` 를 내보내고 `approachFor` 가 쓴다(동작 같음) |
+| `interior.js` | 층 표시 · 나가기 때 `onFloorChange(def 또는 null)` 로 알린다(main 이 마커 스팟 집합을 바꿈). `isBusy()` · `showCaption()` 제공. 공용 `fade.js` 사용 |
 | `main.js` | 마커 생성, 외관 스팟 공급, 고르기 → 길 찾기 → `walkTo` / 컷, 도착 동작(정문 입장 모달), 렌더 루프에서 `markers.update` |
 | `help.js` | 조작 안내에 '스팟 클릭 · 탭: 그 자리로 걸어가기' 행, 보행 안내 문구에 '스팟 클릭 이동' |
 | `nowhere.css` | 마커 스타일(단계별), 모바일 크기 |
