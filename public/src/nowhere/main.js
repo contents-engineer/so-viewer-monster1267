@@ -18,6 +18,11 @@ import { createFade } from './fade.js';
 import { createSpotMarkers } from './spot-markers.js';
 import { exteriorSpots, interiorSpots } from './walk-spots.js';
 import { planWalkPath } from './walk-path.js';
+import { resolveEntry } from './entry.js';
+import { showWorldSelect, SELECT_FADE_MS } from './world-select.js';
+import { createCinema, INTRO_TITLES } from './cinema.js';
+import { showModeMenu } from './mode-menu.js';
+import { createModeController } from './modes.js';
 
 async function boot() {
   const canvas = document.getElementById('nw-canvas');
@@ -26,8 +31,9 @@ async function boot() {
   const fillEl = document.getElementById('nw-loader-fill');
 
   const params = new URLSearchParams(window.location.search);
-  const rawVer = params.get('ver') || window.__NW_DEFAULT_WORLD || 'seongsu';
-  const worldVer = rawVer === 'ds2' ? 'ds2' : 'seongsu';
+  // 시작 결정: 일반 주소(/)는 월드 선택 화면부터 — 고르기 전에는 렌더러 · 월드를 만들지 않는다(이미지 두 장만 받음)
+  const entry = resolveEntry(params, window.__NW_DEFAULT_WORLD);
+  const worldVer = entry.select ? await showWorldSelect() : entry.world;
   document.body.dataset.worldVer = worldVer;
 
   const forcedTier = params.get('tier');
@@ -79,23 +85,9 @@ async function boot() {
     document.title = 'HAUS NOWHERE — 성수 2041';
   }
 
-  document.querySelectorAll('[data-world-ver]').forEach((btn) => {
-    const isCurrent = btn.dataset.worldVer === worldVer;
-    btn.classList.toggle('is-active', isCurrent);
-    btn.setAttribute('aria-pressed', String(isCurrent));
-    btn.addEventListener('click', () => {
-      const targetVer = btn.dataset.worldVer;
-      if (targetVer === worldVer) return;
-      const nextParams = new URLSearchParams(window.location.search);
-      nextParams.set('ver', targetVer);
-      nextParams.set('noIntro', '1');   // 월드만 바꿀 때는 투어(인트로 · 건물 선택)를 처음부터 다시 돌리지 않는다
-      const basePath = window.location.pathname.includes('nowhere-mountain') && targetVer === 'seongsu'
-        ? '/nowhere'
-        : window.location.pathname.replace(/\.html$/, '');
-      const qs = nextParams.toString();
-      window.location.href = qs ? `${basePath}?${qs}` : basePath;
-    });
-  });
+  // 선택 화면을 거쳤으면 0.3 초 겹침(world-select.js SELECT_FADE_MS)이 보이도록 한 번 양보한다 — 이어지는 렌더러 · 월드 생성(동기 약 850 ms)이 메인 스레드를 막기 전에.
+  // 로더 문구는 위에서 이미 월드에 맞게 바꿨으므로 겹치는 동안 다른 월드 문구가 비치지 않는다
+  if (entry.select) await new Promise((r) => setTimeout(r, SELECT_FADE_MS));
 
   const renderer = new THREE.WebGLRenderer({
     canvas,
@@ -161,9 +153,6 @@ async function boot() {
     count: quality.rainCount,
   });
 
-  const walkBtn = document.getElementById('nw-btn-walk');
-  const introBtn = document.getElementById('nw-btn-intro');
-
   const timeSlider = document.getElementById('nw-time-slider');
   const timeReadout = document.getElementById('nw-time-readout');
 
@@ -187,6 +176,7 @@ async function boot() {
   }
 
   const walkHud = createWalkHud();
+  let modes = null;   // 방식 컨트롤러 — 아래(시나리오 다음)에서 만든다. 그 전에 보행이 바뀌어도 안전하게
   const camCtrl = createCameraController({
     camera,
     canvas,
@@ -198,11 +188,8 @@ async function boot() {
       syncCamUI(camDef.id);
     },
     onWalkChange(active) {
-      if (walkBtn) {
-        walkBtn.classList.toggle('is-active', active);
-        walkBtn.setAttribute('aria-pressed', String(active));
-      }
       walkHud.setState({ walk: active, locked: false });
+      modes?.syncWalk(active);   // V 키 · 실내 출입 등으로 보행이 바뀌면 방식(직접 걷기 ↔ 자유 시점)도 맞춘다
     },
     onPointerLockChange(locked) {
       walkHud.setState({ walk: camCtrl.isWalkMode(), locked });
@@ -220,6 +207,9 @@ async function boot() {
   // 화면 전환(검게): 실내 진입 · 층 이동 · 나가기와 스팟 컷 이동이 같이 쓴다
   const fade = createFade();
 
+  // 인트로 영화식 연출(위아래 띠 · 제목 자막 · 건너뛰기 › · 진행 선) — DOM 만
+  const cinema = createCinema();
+
   // 보행 이동 스팟: 외관은 두 건물 주변, 실내는 층마다(interior.onFloorChange 가 바꿔 끼운다)
   const exteriorSpotList = exteriorSpots(world.layout);
   let spotCutting = false;
@@ -232,7 +222,7 @@ async function boot() {
   });
   markers.setSpots(exteriorSpotList);
 
-  // ── 시나리오 투어: 인트로 → 건물 선택 → 정면 비행 → 입장(성수 → 실내) / 준비중(몽골) ──
+  // ── 가이드 투어(시나리오): 건물 선택 → 정면 비행 → 입장(성수 → 실내) / 준비중(몽골) ──
   // 모달이 뜨면 마우스 고정을 풀고, 누르던 이동 키를 비운다(질문 중에 계속 걷지 않게)
   const modal = createModal({
     onShow: () => {
@@ -253,6 +243,9 @@ async function boot() {
     isHelpOpen: () => help.isOpen(),
     fade,
     onFloorChange: (def) => markers.setSpots(def ? interiorSpots(def) : exteriorSpotList),
+    onChange: (inside) => {
+      if (!inside) modes?.refresh();   // 나오면 보행 여부에 맞춰 직접 걷기 · 이전 방식으로
+    },
   });
   // 성능 표시: P 키로 켜고 끈다. 키보드 없는 기기(아이패드 등)는 주소에 ?stats=1
   // 텍스처 추정은 외관 · 실내 장면을 함께 센다(실내에 있어도 외관 텍스처는 GPU 에 남아 있음 — 메모리 한도 판단용)
@@ -263,8 +256,6 @@ async function boot() {
   if (params.get('stats') === '1') perf.toggle(true);
   const scenario = createScenarioRunner({
     adapters: {
-      // 끝까지 재생 · 사용자 입력으로 건너뜀 → 건물 선택으로, 다른 동작이 끊음 → 투어 종료
-      intro: () => new Promise((resolve) => camCtrl.startIntro((reason) => resolve(reason === 'cancelled' ? CANCEL : reason))),
       modal: (step) => modal.show({ title: step.title, buttons: step.buttons }),
       fly: async (step) => {
         const to = approachFor(world.layout, step.building);
@@ -324,33 +315,104 @@ async function boot() {
     }
   }
 
+  // ── 인트로: 12 초 비행(camCtrl.startIntro) + 영화식 연출(위아래 띠 · 제목 자막 · 건너뛰기 · 진행 선).
+  // 끝나거나 건너뛰면 띠가 빠진 뒤(0.5 초) 이유('complete' | 'skipped' | 'cancelled')를 돌려준다.
+  // holdHud: 띠가 빠지는 동안에도 HUD 를 숨긴 채로(독이 잠깐 보였다 사라지지 않게) — 방식 고르기가 끝나거나 방식이 적용되며 푼다 ──
+  async function playIntro({ holdHud = false } = {}) {
+    const t = INTRO_TITLES[worldVer];
+    const reason = await new Promise((resolve) => {
+      cinema.start({ kicker: t.kicker, title: t.title, onSkip: () => camCtrl.skipIntro() });
+      camCtrl.startIntro((r) => resolve(r));
+    });
+    if (holdHud) document.body.classList.add('is-choosing');
+    await cinema.end();
+    return reason;
+  }
+
+  // ── 시작 흐름: (인트로 + 연출) → (방식 고르기) → 방식 적용. 바로가기 주소는 resolveEntry 가 정한 방식으로 바로 ──
+  async function runEntry() {
+    if (entry.intro) await playIntro({ holdHud: true });   // ?mode= 가 있어도 방식 적용 전까지 HUD 를 숨긴다(카메라 프리셋 묶음이 깜박이지 않게)
+    const mode = entry.mode || (await showModeMenu({ isBlocked: () => help.isOpen() || modal.isOpen() }));
+    try {
+      modes.set(mode);
+    } finally {
+      document.body.classList.remove('is-choosing');   // 방식 고르기가 이미 풀었으면 그대로, ?mode= 로 건너뛴 경우는 여기서 푼다(적용이 던져도 HUD 가 숨은 채 남지 않게)
+    }
+  }
+
   function startScenario(stepId) {
-    if (interior.isActive()) return;
+    // 실내 · 인트로 중에는 시작하지 않는다(인트로는 시나리오 밖 시작 흐름이 돌리고, 끝나면 방식 고르기로 이어진다)
+    if (interior.isActive() || camCtrl.isIntroActive()) return;
     modal.close();
     camCtrl.stopFlight();
-    // 인트로 중 '건물 이동' · '투어 시작' → 인트로를 끝내고 건너뛰기와 같이 거리 시점(시야각 포함)으로 내려온 뒤 시작
-    if (camCtrl.isIntroActive()) camCtrl.setPreset('street', true);
-    // 시나리오가 시작되면 보행 시점은 해제한다(스펙 §1.1 — 보행 중 '건물 이동')
+    // 시나리오가 시작되면 보행 시점은 해제한다(가이드 투어는 궤도 카메라로 비행)
     if (camCtrl.isWalkMode()) camCtrl.setWalkMode(false);
     scenario.start(stepId).catch((err) => console.error('[nowhere] 투어 오류', err));
   }
 
-  // Esc: 모달 · 조작 안내가 먼저 받고(캡처 단계), 남은 Esc 는 인트로 · 비행 중인 투어를 끝낸다
+  // 가이드 투어를 끝낸다(직접 걷기 · 자유 시점으로 바꿀 때): 떠 있는 투어 질문을 닫고 비행을 멈춘다
+  function endScenario() {
+    if (!scenario.isRunning()) return;
+    scenario.cancel();
+    modal.close();
+    camCtrl.stopFlight();
+  }
+
+  // ── 방식: 가이드 투어 · 직접 걷기 · 자유 시점(body[data-mode] · 상단 #nw-mode-seg) ──
+  modes = createModeController({
+    camCtrl,
+    startGuide: () => startScenario('chooseBuilding'),
+    endGuide: endScenario,
+    // 실내 출입 · 층 이동 · 둘러보기가 보행을 켰다 껐다 하는 동안은 방식을 바꾸지 않는다(나오면 interior onChange → refresh)
+    isSuspended: () => interior.isActive() || interior.isBusy(),
+  });
+  document.querySelectorAll('#nw-mode-seg [data-mode]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      btn.blur();   // Space(보행 점프) · Enter 가 이 버튼을 다시 누르지 않게
+      modes.set(btn.dataset.mode);
+    });
+  });
+
+  // 월드 전환: 다른 월드를 같은 방식으로 다시 연다 — 선택 화면 · 인트로 없이 거리 시점에서(?ver=…&noIntro=1&mode=…)
+  document.querySelectorAll('.nw-world-switch [data-world-ver]').forEach((btn) => {
+    const isCurrent = btn.dataset.worldVer === worldVer;
+    btn.classList.toggle('is-active', isCurrent);
+    btn.setAttribute('aria-pressed', String(isCurrent));
+    btn.addEventListener('click', () => {
+      const targetVer = btn.dataset.worldVer;
+      if (targetVer === worldVer) return;
+      const nextParams = new URLSearchParams(window.location.search);
+      nextParams.set('ver', targetVer);
+      nextParams.set('noIntro', '1');
+      nextParams.set('mode', modes.get() || 'free');
+      nextParams.delete('cam');   // 거리 시점에서 시작(주소에 있던 기상 · 시각 값만 넘어간다)
+      const basePath = window.location.pathname.includes('nowhere-mountain') && targetVer === 'seongsu'
+        ? '/nowhere'
+        : window.location.pathname.replace(/\.html$/, '');
+      window.location.href = `${basePath}?${nextParams.toString()}`;
+    });
+  });
+
+  // Esc: 모달 · 조작 안내 · 방식 고르기가 먼저 받고(캡처 단계), 남은 Esc 는 인트로를 건너뛰거나 비행 중인 투어를 끝낸다
   window.addEventListener(
     'keydown',
     (e) => {
-      // 조작 안내가 이미 받은 Esc(같은 창 캡처 단계라 stopPropagation 으로는 안 막힘)는 투어를 끝내지 않는다
+      // 조작 안내가 이미 받은 Esc(같은 창 캡처 단계라 stopPropagation 으로는 안 막힘)는 건너뛰지 않는다
       if (e.defaultPrevented || help.isOpen()) return;
-      if (e.key !== 'Escape' || !scenario.isRunning() || interior.isActive()) return;
-      if (!camCtrl.isIntroActive() && !camCtrl.isFlying()) return;
+      if (e.key !== 'Escape' || interior.isActive()) return;
+      if (camCtrl.isIntroActive()) {
+        // 인트로 중 Esc = 건너뛰기(거리 시점으로 바로 내려오고 인트로 뒤 흐름을 이어 간다)
+        e.preventDefault();
+        e.stopPropagation();
+        camCtrl.skipIntro();
+        return;
+      }
+      if (!scenario.isRunning() || !camCtrl.isFlying()) return;
+      // 건물 비행 중 Esc = 투어 끝내기(비행은 그 자리에서 멈춤)
       e.preventDefault();
       e.stopPropagation();
-      const wasIntro = camCtrl.isIntroActive();
       scenario.cancel();
       camCtrl.stopFlight();
-      camCtrl.cancelIntro();
-      // 인트로를 Esc 로 끝내면 공중에 멈추지 않고 건너뛰기와 같이 거리 시점으로 내려온다(비행은 그 자리에서 멈춤)
-      if (wasIntro) camCtrl.setPreset('street', true);
     },
     true,
   );
@@ -358,10 +420,6 @@ async function boot() {
   const initialCam = params.get('cam') || 'street';
   camCtrl.setPreset(initialCam, true);
   syncWeatherUI();
-
-  if (!params.get('noIntro') && !params.get('cam') && !params.get('weather') && !params.get('time')) {
-    startScenario('intro');
-  }
 
   // 옛 이름 호환: overcast·rain·snow → 기상, dusk·night → 시간
   function setWeatherPreset(name, instant = false) {
@@ -422,24 +480,6 @@ async function boot() {
     });
   });
 
-  if (walkBtn) {
-    walkBtn.addEventListener('click', () => {
-      camCtrl.setWalkMode(!camCtrl.isWalkMode());
-    });
-  }
-
-  if (introBtn) {
-    introBtn.addEventListener('click', () => {
-      startScenario('intro');
-    });
-  }
-  const buildingsBtn = document.getElementById('nw-btn-buildings');
-  if (buildingsBtn) {
-    buildingsBtn.addEventListener('click', () => {
-      startScenario('chooseBuilding');
-    });
-  }
-
   window.addEventListener('resize', () => {
     const w = window.innerWidth;
     const h = Math.max(1, window.innerHeight);
@@ -479,6 +519,7 @@ async function boot() {
     updateMoverActors(world.moverActors, elapsed);
     updateLegacyDrones(world.legacyDrones, elapsed);   // DS2(옛 layout.drones)
     camCtrl.update(dt);
+    if (cinema.isActive() && camCtrl.isIntroActive()) cinema.progress(camCtrl.getIntroProgress());   // 인트로 진행 선(경과 / 12 초) — 끝난 뒤 띠가 빠지는 동안 0 으로 되돌지 않게
     interior.update(dt);
     markers.update(dt);
 
@@ -501,9 +542,12 @@ async function boot() {
     help,
     modal,
     markers,
+    cinema,
     interior,
     scenario,
     startScenario,
+    modes,
+    entry,
     world,
     post,
     quality,
@@ -518,6 +562,7 @@ async function boot() {
         weather: weather.getWeather(),
         hour: weather.getHour(),
         camera: camCtrl.getPresetId(),
+        mode: modes.get(),
         walkMode: camCtrl.isWalkMode(),
         autoWalk: camCtrl.isAutoWalking(),
         introActive: camCtrl.isIntroActive(),
@@ -533,6 +578,8 @@ async function boot() {
     },
   };
   window.__NW_APP = app;
+  // 시작 흐름은 렌더 루프를 돌린 채 이어 간다(인트로 · 방식 고르기를 기다리는 동안에도 화면이 그려지게)
+  runEntry().catch((err) => console.error('[nowhere] 시작 흐름 오류', err));
   return app;
 }
 

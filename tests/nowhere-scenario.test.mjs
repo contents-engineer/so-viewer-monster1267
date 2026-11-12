@@ -5,15 +5,17 @@ import { SCENARIO, CANCEL, nextStepId, validateScenario, createScenarioRunner } 
 function fakeAdapters(choices, log) {
   const queue = [...choices];
   return {
-    intro: async (s) => { log.push(s.type); return 'complete'; },
     modal: async (s) => { log.push(`modal:${s.title}`); return queue.shift(); },
     fly: async (s) => { log.push(`fly:${s.building}`); return 'done'; },
     enterInterior: async (s) => { log.push(`enter:${s.building}`); return 'done'; },
   };
 }
 
-test('(a) 그래프가 유효하고 문구가 정확하다', () => {
+test('(a) 그래프가 유효하고 문구가 정확하다 · 시작은 건물 선택, 인트로 단계 없음', () => {
   assert.deepEqual(validateScenario(SCENARIO), []);
+  assert.equal(SCENARIO.start, 'chooseBuilding');
+  assert.equal(SCENARIO.steps.intro, undefined);
+  assert.ok(Object.values(SCENARIO.steps).every((s) => s.type !== 'intro'));
   assert.equal(SCENARIO.steps.chooseBuilding.title, '어떤 건물로 이동하시겠습니까?');
   assert.deepEqual(SCENARIO.steps.chooseBuilding.buttons.map((b) => b.label), ['하우스노웨어 성수', '하우스노웨어 몽골', '닫기']);
   assert.equal(SCENARIO.steps.askEnter.title, '입장하시겠습니까?');
@@ -22,12 +24,12 @@ test('(a) 그래프가 유효하고 문구가 정확하다', () => {
   assert.deepEqual(SCENARIO.steps.notReady.buttons.map((b) => b.label), ['하우스노웨어 성수로 이동', '확인']);
 });
 
-test('(b) 성수 → 예: 인트로 → 선택 → 비행 → 입장 질문 → 실내 진입', async () => {
+test('(b) 성수 → 예: 선택 → 비행 → 입장 질문 → 실내 진입', async () => {
   const log = [];
   let ended = 0;
   const r = createScenarioRunner({ adapters: fakeAdapters(['haus', 'yes'], log), onEnd: () => ended++ });
   assert.equal(await r.start(), 'done');
-  assert.deepEqual(log, ['intro', 'modal:어떤 건물로 이동하시겠습니까?', 'fly:haus', 'modal:입장하시겠습니까?', 'enter:haus']);
+  assert.deepEqual(log, ['modal:어떤 건물로 이동하시겠습니까?', 'fly:haus', 'modal:입장하시겠습니까?', 'enter:haus']);
   assert.equal(ended, 1);
   assert.equal(r.isRunning(), false);
 });
@@ -42,27 +44,30 @@ test('(c) 성수 → 아니오: 실내 진입 없이 끝', async () => {
 test('(d) 몽골 → 준비중입니다 → 확인 → 끝', async () => {
   const log = [];
   await createScenarioRunner({ adapters: fakeAdapters(['facearch', 'ok'], log) }).start();
-  assert.deepEqual(log, ['intro', 'modal:어떤 건물로 이동하시겠습니까?', 'fly:facearch', 'modal:준비중입니다']);
+  assert.deepEqual(log, ['modal:어떤 건물로 이동하시겠습니까?', 'fly:facearch', 'modal:준비중입니다']);
 });
 
 test('(e) 모달에서 Esc(null) 는 시나리오 종료', async () => {
   const log = [];
   await createScenarioRunner({ adapters: fakeAdapters([null], log) }).start();
-  assert.deepEqual(log, ['intro', 'modal:어떤 건물로 이동하시겠습니까?']);
+  assert.deepEqual(log, ['modal:어떤 건물로 이동하시겠습니까?']);
 });
 
-test("(f) start('chooseBuilding') 는 인트로 없이 모달부터", async () => {
-  const log = [];
-  await createScenarioRunner({ adapters: fakeAdapters(['facearch', 'ok'], log) }).start('chooseBuilding');
-  assert.equal(log[0], 'modal:어떤 건물로 이동하시겠습니까?');
+test("(f) start() 와 start('chooseBuilding') 은 같은 모달부터", async () => {
+  const a = [];
+  const b = [];
+  await createScenarioRunner({ adapters: fakeAdapters(['facearch', 'ok'], a) }).start();
+  await createScenarioRunner({ adapters: fakeAdapters(['facearch', 'ok'], b) }).start('chooseBuilding');
+  assert.equal(a[0], 'modal:어떤 건물로 이동하시겠습니까?');
+  assert.deepEqual(a, b);
 });
 
 test('(g) 어댑터가 CANCEL 을 돌려주면 끝, 비행 중 cancel() 하면 다음 단계로 가지 않는다', async () => {
   const log = [];
   const a = fakeAdapters(['haus', 'yes'], log);
-  a.intro = async () => CANCEL;
+  a.fly = async () => CANCEL;
   await createScenarioRunner({ adapters: a }).start();
-  assert.deepEqual(log, []);
+  assert.deepEqual(log, ['modal:어떤 건물로 이동하시겠습니까?']);
 
   const log2 = [];
   let release;
@@ -83,7 +88,7 @@ test('(g) 어댑터가 CANCEL 을 돌려주면 끝, 비행 중 cancel() 하면 �
 test('(h) nextStepId: 모달은 버튼의 next, 모르는 결과는 end, 나머지는 step.next', () => {
   assert.equal(nextStepId(SCENARIO.steps.chooseBuilding, 'haus'), 'flyHaus');
   assert.equal(nextStepId(SCENARIO.steps.chooseBuilding, null), 'end');
-  assert.equal(nextStepId(SCENARIO.steps.intro, 'skipped'), 'chooseBuilding');
+  assert.equal(nextStepId(SCENARIO.steps.flyHaus, 'done'), 'askEnter');
 });
 
 test('(i) 어댑터가 예외를 던져도 실행기는 정리된다(onEnd 한 번 · isRunning false), 예외는 호출자에게 전달', async () => {

@@ -127,14 +127,28 @@ export function createCameraController({
     camera.updateProjectionMatrix();
   }
 
-  // 아무 입력(마우스/터치/휠/키보드)으로 인트로 즉시 건너뛰기
-  // 콜백은 거리 시점 배치가 끝난 뒤 부른다('complete' 와 같은 순서) — 콜백이 곧바로 flyTo 를 불러도 setPreset 이 끊지 않게.
-  const onUserInterrupt = () => {
-    if (!introActive) return;
+  /**
+   * 인트로 건너뛰기: 거리 시점으로 바로 내려오고 onEnd('skipped'). 인트로 중이 아니면 false.
+   * 화면 클릭 · 휠 · 아무 키(아래)와 영화 연출의 '건너뛰기 ›' · Esc(main.js)가 같이 쓴다.
+   * 콜백은 거리 시점 배치가 끝난 뒤 부른다('complete' 와 같은 순서) — 콜백이 곧바로 flyTo 를 불러도 setPreset 이 끊지 않게.
+   */
+  function skipIntro() {
+    if (!introActive) return false;
     const cb = introOnEnd;
     introOnEnd = null;            // setPreset 안의 cancelIntro 가 'cancelled' 로 부르지 않게 미리 떼어 둔다
     setPreset('street', true);    // cancelIntro() → introActive false · controls 복구
     if (typeof cb === 'function') cb('skipped');
+    return true;
+  }
+
+  /** 인트로 경과 비율(0–1 = 경과 / INTRO_DURATION) — 영화 연출 진행 선. 인트로 중이 아니면 0 */
+  function getIntroProgress() {
+    return introActive ? Math.min(1, introElapsed / INTRO_DURATION) : 0;
+  }
+
+  // 아무 입력(마우스/터치/휠/키보드)으로 인트로 즉시 건너뛰기
+  const onUserInterrupt = () => {
+    skipIntro();
   };
   canvas.addEventListener('pointerdown', onUserInterrupt, { passive: true });
   canvas.addEventListener('wheel', onUserInterrupt, { passive: true });
@@ -164,7 +178,7 @@ export function createCameraController({
       return;
     }
     if (introActive && !e.metaKey && !e.ctrlKey) {
-      // 건너뛰기에 쓴 Enter · Space · Tab 의 기본 동작을 막는다 — 곧바로 뜨는 건물 선택 모달의 포커스된 버튼이
+      // 건너뛰기에 쓴 Enter · Space · Tab 의 기본 동작을 막는다 — 띠가 빠진 뒤 뜨는 방식 고르기의 포커스된 버튼이
       // 같은 키의 keypress 로 눌리거나(Enter · Space) 포커스가 밀리지(Tab) 않게
       if (e.key === 'Enter' || e.key === ' ' || e.key === 'Tab') e.preventDefault();
       onUserInterrupt();
@@ -651,6 +665,8 @@ export function createCameraController({
     setWalkMode,
     startIntro,
     cancelIntro,
+    skipIntro,
+    getIntroProgress,
     focusWorldPoint,
     flyTo,
     stopFlight,

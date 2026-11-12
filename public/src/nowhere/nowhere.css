@@ -47,22 +47,33 @@ html, body {
   flex-direction: column;
   justify-content: flex-end;
   padding: 40px 48px;
+  /* 월드가 정해지기 전(일반 주소 / — 월드 선택 화면 아래)은 무늬 없는 어두운 배경 */
+  background: #05080d;
+  transition: opacity 0.65s ease, visibility 0.65s ease;
+}
+
+/* 고른 월드(body[data-world-ver])의 선택 화면 이미지를 어둡게 덮어 그대로 이어 간다 — world-select.js WORLD_CARDS 와 같은 파일 */
+body[data-world-ver="seongsu"] .nw-loader {
   background:
     linear-gradient(180deg, rgba(9, 14, 24, 0.35) 0%, rgba(9, 14, 24, 0.88) 100%),
-    url('../../assets/nowhere/renders/hero-street.webp') center / cover no-repeat;
-  transition: opacity 0.65s ease, visibility 0.65s ease;
+    url('../../assets/nowhere/renders/hero-future.webp') center / cover no-repeat;
 }
 
 body[data-world-ver="ds2"] .nw-loader {
   background:
     linear-gradient(180deg, rgba(9, 14, 24, 0.35) 0%, rgba(9, 14, 24, 0.88) 100%),
-    url('../../assets/nowhere-ds2/renders/hero-street.webp') center / cover no-repeat;
+    url('../../assets/nowhere-ds2/renders/hero-valley.webp') center / cover no-repeat;
 }
 
 .nw-loader.is-hidden {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
+}
+
+/* 월드가 정해지기 전(/ 선택 화면 전)에는 성수 문구를 숨긴다 — 선택 화면이 고르는 순간 data-world-ver 를 붙인다 */
+body:not([data-world-ver]) .nw-loader-meta {
+  visibility: hidden;
 }
 
 .nw-loader-meta {
@@ -109,6 +120,162 @@ body[data-world-ver="ds2"] .nw-loader {
   width: 0%;
   background: var(--nw-accent);
   transition: width 0.2s ease;
+}
+
+/* ── 월드 선택 화면(world-select.js): 일반 주소(/) 첫 화면 — 왼쪽 성수 2041 · 오른쪽 DS2 산악, 로더(60) 위 ── */
+.nw-select {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  background: #05080d;
+  transition: opacity 0.3s ease;
+}
+.nw-select.is-done {
+  opacity: 0;
+  pointer-events: none;
+}
+.nw-select-brand {
+  position: absolute;
+  top: 22px;
+  left: 50%;
+  z-index: 2;
+  transform: translateX(-50%);
+  font-family: var(--nw-font-mono);
+  font-size: 12px;
+  letter-spacing: 0.32em;
+  color: var(--nw-text);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.nw-select.is-picked .nw-select-brand {
+  opacity: 0;
+}
+.nw-select-pane {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: #05080d;
+  color: var(--nw-text);
+  font-family: var(--nw-font-sans);
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: flex-grow 0.6s ease;
+}
+.nw-select-pane + .nw-select-pane {
+  border-left: 1px solid rgba(127, 150, 196, 0.25);
+}
+.nw-select-pane.is-active {
+  flex-grow: 1.5;   /* 60 : 40 */
+}
+.nw-select-bg {
+  position: absolute;
+  inset: 0;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  filter: brightness(0.5) saturate(0.85);
+  transform: scale(1);
+  transition: transform 0.6s ease, filter 0.6s ease;
+}
+.nw-select-pane.is-active .nw-select-bg {
+  filter: none;
+  transform: scale(1.06);
+  transition: transform 8s linear, filter 0.6s ease;   /* 8 초에 1.0 → 1.06 */
+}
+.nw-select-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(5, 8, 13, 0) 40%, rgba(5, 8, 13, 0.85) 100%);
+}
+.nw-select-text {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 36px 40px;
+}
+.nw-select-kicker,
+.nw-select-title,
+.nw-select-desc,
+.nw-select-cta {
+  display: block;
+}
+.nw-select-kicker {
+  font-family: var(--nw-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--nw-accent);
+}
+.nw-select-title {
+  font-size: clamp(26px, 3.4vw, 44px);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.nw-select-desc {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--nw-text-dim);
+  word-break: keep-all;
+}
+.nw-select-cta {
+  margin-top: 10px;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: var(--nw-text-dim);
+  transition: color 0.3s ease;
+}
+.nw-select-pane.is-active .nw-select-cta {
+  color: var(--nw-accent);
+}
+/* 고르면 고른 면이 화면 전체로(0.6 초) */
+.nw-select.is-picked .nw-select-pane {
+  flex-grow: 0;
+}
+.nw-select.is-picked .nw-select-pane.is-chosen {
+  flex-grow: 1;
+}
+/* 세로 화면(가로 < 세로, 폭 ≤ 720 px)은 위 · 아래로 */
+@media (max-width: 720px) and (orientation: portrait) {
+  .nw-select {
+    flex-direction: column;
+  }
+  .nw-select-pane + .nw-select-pane {
+    border-left: 0;
+    border-top: 1px solid rgba(127, 150, 196, 0.25);
+  }
+  .nw-select-text {
+    padding: 0 20px 22px;
+  }
+  .nw-select-brand {
+    top: 14px;
+  }
+}
+/* 움직임 줄이기: 넓어짐 · 확대 없이 밝기만 */
+@media (prefers-reduced-motion: reduce) {
+  .nw-select-pane,
+  .nw-select-bg,
+  .nw-select-pane.is-active .nw-select-bg {
+    transition: filter 0.3s ease;
+  }
+  .nw-select-pane.is-active {
+    flex-grow: 1;
+  }
+  .nw-select-pane.is-active .nw-select-bg {
+    transform: none;
+  }
 }
 
 /* ── 상단 HUD 바 ── */
@@ -174,6 +341,32 @@ body[data-world-ver="ds2"] .nw-loader {
 
 .nw-world-switch .nw-btn.is-active {
   border-color: var(--nw-accent);
+}
+
+/* 방식 전환(가이드 투어 | 직접 걷기 | 자유 시점) — 월드 전환과 같은 묶음 모양. 상태는 modes.js 가 is-active · aria-pressed 로 */
+.nw-mode-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: var(--nw-bg-panel-strong);
+  border: 1px solid var(--nw-line-struct);
+  border-radius: 2px;
+}
+
+.nw-mode-seg .nw-btn {
+  border: 1px solid transparent;
+  padding: 5px 9px;
+}
+
+.nw-mode-seg .nw-btn.is-active {
+  border-color: var(--nw-accent);
+}
+
+/* 카메라 프리셋 버튼은 자유 시점에서만(가이드 투어 · 직접 걷기에서는 숨김). 기상 · 시간 · 월드 전환 · 조작 안내는 항상 */
+body[data-mode="guide"] .nw-dock-camera,
+body[data-mode="walk"] .nw-dock-camera {
+  display: none;
 }
 
 .nw-btn {
@@ -285,9 +478,20 @@ body[data-world-ver="ds2"] .nw-loader {
     align-items: stretch;
     gap: 5px;
   }
+  /* 좁은 화면: 버튼 글이 낱자로 꺾이지 않게 한 줄로 두고(성수 / 2041, 가이드 투 / 어 …), 방식 전환은 둘째 줄 전체 폭으로 */
   .nw-top-actions {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     justify-content: flex-start;
+  }
+  .nw-top-actions .nw-btn {
+    white-space: nowrap;
+  }
+  .nw-top-actions .nw-mode-seg {
+    order: 1;
+    flex: 1 0 100%;
+  }
+  .nw-mode-seg .nw-btn {
+    flex: 1 1 0;
   }
   .nw-brand {
     padding: 5px 9px;
@@ -747,10 +951,9 @@ body[data-world-ver="ds2"] .nw-loader {
   height: auto;
 }
 
-/* 실내에서는 외관 전용 UI(월드 전환 · 투어 · 건물 이동 · 카메라 프리셋)를 숨긴다. 기상 · 시간은 유지 */
+/* 실내에서는 외관 전용 UI(월드 전환 · 방식 전환 · 카메라 프리셋)를 숨긴다 — 층 버튼 · 둘러보기 · 나가기를 쓴다. 기상 · 시간은 유지 */
 body.is-interior .nw-world-switch,
-body.is-interior #nw-btn-intro,
-body.is-interior #nw-btn-buildings,
+body.is-interior .nw-mode-seg,
 body.is-interior .nw-dock-camera {
   display: none;
 }
@@ -786,12 +989,237 @@ body.is-interior .nw-dock-camera {
 }
 @media (max-width: 720px) {
   .nw-interior-hud {
-    top: 88px;   /* 좁은 화면 상단 바(브랜드 + 보행 시점 · 조작 안내 줄, 아래 끝 약 81px) 아래로 */
+    top: 88px;   /* 좁은 화면 상단 바(브랜드 + 방식 전환 · 조작 안내 줄, 아래 끝 약 81px) 아래로 */
     left: 8px;
     right: 8px;
     flex-wrap: wrap;
   }
   .nw-interior-caption {
     bottom: 150px;
+  }
+}
+
+/* ── 인트로 영화식 연출(cinema.js): 위아래 검은 띠 · 제목 자막 · 건너뛰기 › · 진행 선 — DOM 만(그리기 0) ── */
+.nw-cinema {
+  --nw-cine-bar: max(48px, 11vh);
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;   /* 띠 · 자막 위 클릭 · 휠은 캔버스로 — 화면 클릭 · 휠로 건너뛰기(camera.js) */
+}
+.nw-cinema[hidden] {
+  display: none;
+}
+.nw-cinema-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: var(--nw-cine-bar);
+  background: #000;
+  transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.2, 1);   /* 0.6 초에 들어온다 */
+}
+.nw-cinema-bar-top {
+  top: 0;
+  transform: translateY(-100%);
+}
+.nw-cinema-bar-bottom {
+  bottom: 0;
+  transform: translateY(100%);
+}
+.nw-cinema.is-on .nw-cinema-bar {
+  transform: none;
+}
+.nw-cinema.is-out .nw-cinema-bar {
+  transition-duration: 0.5s;   /* 끝나거나 건너뛰면 0.5 초에 빠진다 */
+}
+.nw-cinema-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  background: rgba(127, 150, 196, 0.18);
+}
+.nw-cinema-progress-fill {
+  height: 100%;
+  background: var(--nw-accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+.nw-cinema-skip {
+  position: absolute;
+  right: 22px;
+  top: 50%;
+  transform: translateY(-50%);
+  min-height: 44px;
+  padding: 0 14px;
+  appearance: none;
+  border: 0;
+  background: none;
+  font-family: var(--nw-font-mono);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--nw-text-dim);
+  cursor: pointer;
+  pointer-events: auto;
+}
+.nw-cinema-skip:hover,
+.nw-cinema-skip:focus-visible {
+  color: var(--nw-text);
+  outline: none;
+}
+.nw-cinema-title {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--nw-cine-bar) + 28px);
+  padding: 0 24px;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.55);
+}
+.nw-cinema.is-title .nw-cinema-title {
+  opacity: 1;
+}
+.nw-cinema.is-out .nw-cinema-title {
+  transition-duration: 0.5s;
+}
+.nw-cinema-kicker {
+  font-family: var(--nw-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--nw-accent);
+}
+.nw-cinema-heading {
+  margin-top: 8px;
+  font-size: clamp(20px, 3.2vw, 34px);
+  font-weight: 300;
+  letter-spacing: 0.02em;
+  color: var(--nw-text);
+  word-break: keep-all;
+}
+@media (max-width: 720px) {
+  .nw-cinema-skip {
+    right: 8px;
+  }
+  .nw-cinema-title {
+    padding: 0 16px;
+  }
+}
+
+/* ── 인트로 연출(body.is-cinema) · 방식 고르기(body.is-choosing) 동안 HUD 숨김 ── */
+.nw-topbar,
+.nw-dock {
+  transition: opacity 0.4s ease, visibility 0.4s ease;
+}
+body.is-cinema .nw-topbar,
+body.is-cinema .nw-dock,
+body.is-cinema .nw-walk-hud,
+body.is-cinema .nw-spots,
+body.is-cinema .nw-perf,
+body.is-choosing .nw-topbar,
+body.is-choosing .nw-dock,
+body.is-choosing .nw-walk-hud,
+body.is-choosing .nw-spots,
+body.is-choosing .nw-perf {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* ── 방식 고르기(mode-menu.js): 인트로 뒤 거리 시점 위 — 아래쪽 가운데 제목 + 카드 세 장, 화면 아래쪽만 옅게 어둡게 ── */
+.nw-mode-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 31;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  padding: 24px 22px max(32px, env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgba(4, 8, 14, 0) 45%, rgba(4, 8, 14, 0.62) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.nw-mode-menu.is-on {
+  opacity: 1;
+}
+.nw-mode-menu-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--nw-text);
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.55);
+}
+.nw-mode-cards {
+  display: flex;
+  gap: 12px;
+  width: min(860px, 100%);
+}
+.nw-mode-card {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 14px 16px 16px;
+  appearance: none;
+  text-align: left;
+  background: var(--nw-bg-panel-strong);
+  border: 1px solid var(--nw-line-struct);
+  border-top: 2px solid var(--nw-line-struct);
+  border-radius: 3px;
+  color: var(--nw-text);
+  font-family: var(--nw-font-sans);
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+.nw-mode-card:focus {
+  outline: none;   /* 포커스는 is-focus(테두리 강조)로 보인다 */
+}
+.nw-mode-card.is-focus {
+  border-color: var(--nw-accent);
+  background: rgba(18, 36, 58, 0.92);
+  transform: translateY(-2px);
+}
+.nw-mode-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.nw-mode-card-en {
+  font-family: var(--nw-font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  color: var(--nw-accent);
+}
+.nw-mode-card-label {
+  font-size: 16px;
+  font-weight: 600;
+}
+.nw-mode-card-desc {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--nw-text-dim);
+  word-break: keep-all;
+}
+/* 세로 화면(가로 < 세로, 폭 ≤ 720 px)은 카드를 세로로 쌓는다 */
+@media (max-width: 720px) and (orientation: portrait) {
+  .nw-mode-cards {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .nw-mode-card {
+    flex: 0 0 auto;   /* 세로 쌓기에서 flex-basis 0 이면 카드 높이가 min-height 로 접혀 글이 넘친다 */
+    padding: 11px 14px 12px;
+  }
+  .nw-mode-menu-title {
+    font-size: 17px;
   }
 }

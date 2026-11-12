@@ -15,7 +15,7 @@ test('(a) 조작 안내는 공통·카메라 시점·보행 시점 세 묶음이
 
 test('(b) 코드에 바인딩된 단축키가 모두 안내에 실려 있고, 분석 모드 키(F · [ · ])는 없다', () => {
   const keys = new Set(allKeys());
-  for (const k of ['V', 'Esc', '?', 'P', 'W', 'A', 'S', 'D', 'Shift', 'Space', '↑', '↓', '←', '→', '휠', '클릭']) {
+  for (const k of ['V', 'Esc', '?', 'P', 'W', 'A', 'S', 'D', 'Shift', 'Space', '↑', '↓', '←', '→', '휠', '클릭', '1', '2', '3']) {
     assert.ok(keys.has(k), `안내에 '${k}' 없음`);
   }
   for (const k of ['F', '[', ']']) assert.equal(keys.has(k), false, `안내에 분석 모드 키 '${k}' 가 남아 있음`);
@@ -31,13 +31,13 @@ test('(b) 코드에 바인딩된 단축키가 모두 안내에 실려 있고, �
   assert.equal(existsSync(new URL('../public/src/nowhere/analysis.js', import.meta.url)), false, 'analysis.js 가 남아 있음');
 });
 
-test('(c) 투어가 main.js 에 연결되어 있다(자동 시작 · 투어 시작 · 건물 이동)', () => {
+test('(c) 시작 흐름 · 가이드 투어가 main.js 에 연결되어 있다(인트로는 시나리오 밖, 가이드 투어 = 건물 선택부터)', () => {
   const main = readFileSync(new URL('../public/src/nowhere/main.js', import.meta.url), 'utf8');
-  assert.match(main, /startScenario\('intro'\)/);
+  assert.doesNotMatch(main, /startScenario\('intro'\)/);
   assert.match(main, /startScenario\('chooseBuilding'\)/);
+  assert.match(main, /runEntry\(\)/);
   assert.match(main, /createInterior\(/);
   const descs = CONTROL_SECTIONS.flatMap((s) => s.rows.map((r) => r.desc)).join('\n');
-  assert.match(descs, /투어 시작/);
   assert.match(descs, /밖으로 나가기/);
 });
 
@@ -104,4 +104,21 @@ test('(f) 보행 이동 스팟 안내: 보행 시점 행(클릭 · 탭) · 보�
   assert.match(main, /createSpotMarkers\(/);
   assert.match(main, /planWalkPath\(/);
   assert.match(main, /markers\.update\(dt\)/);
+});
+
+test('(g) 시작 흐름 · 방식 안내: 투어 시작 · 건물 이동 버튼 행은 없고, 방식 전환 · 방식 고르기 · 월드 선택 · 인트로 건너뛰기 행이 있다', () => {
+  const rows = CONTROL_SECTIONS.flatMap((s) => s.rows);
+  const descs = rows.map((r) => r.desc).join('\n');
+  assert.doesNotMatch(descs, /투어 시작/);
+  assert.doesNotMatch(descs, /건물 이동/);
+  const modeRow = rows.find((r) => /^방식 전환/.test(r.desc));
+  assert.ok(modeRow, '방식 전환 행 없음');
+  assert.match(modeRow.desc, /가이드 투어 · 직접 걷기 · 자유 시점/);
+  assert.match(modeRow.desc, /카메라 프리셋 버튼은 자유 시점에서만/);
+  const menuRow = rows.find((r) => r.keys.join(',') === '1,2,3');
+  assert.ok(menuRow, '방식 고르기(1 · 2 · 3) 행 없음');
+  assert.match(menuRow.desc, /방식 고르기/);
+  assert.match(descs, /월드 선택/);
+  assert.match(descs, /인트로 건너뛰기/);
+  assert.match(descs, /새로 고침/);
 });

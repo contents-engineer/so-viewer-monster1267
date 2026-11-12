@@ -1,14 +1,13 @@
-// HAUS NOWHERE — 시나리오 투어: 단계 그래프(문구 포함) · 검증 · 실행기(순수, 테스트: tests/nowhere-scenario.test.mjs).
-// 실제 동작(인트로 · 모달 · 비행 · 실내 진입)은 main.js 가 어댑터로 넣는다.
-// 인트로를 사용자 입력으로 건너뛰어도('skipped') 건물 선택 모달로 이어지고, CANCEL · 모달 Esc(null) 는 시나리오를 끝낸다.
+// HAUS NOWHERE — 시나리오 투어(가이드 투어): 단계 그래프(문구 포함) · 검증 · 실행기(순수, 테스트: tests/nowhere-scenario.test.mjs).
+// 실제 동작(모달 · 비행 · 실내 진입)은 main.js 가 어댑터로 넣는다. 인트로는 시나리오 밖(main.js 시작 흐름)에서 돈다.
+// 건물 선택 모달에서 시작하고, CANCEL · 모달 Esc(null) 는 시나리오를 끝낸다.
 // 건물에 도착한 뒤의 모달(성수 입장 질문 · 몽골 준비중)에서 다른 건물로 바로 날아갈 수 있다(성수 ↔ 몽골).
 
 export const CANCEL = Symbol('scenario-cancel');
 
 export const SCENARIO = {
-  start: 'intro',
+  start: 'chooseBuilding',
   steps: {
-    intro: { type: 'intro', next: 'chooseBuilding' },
     chooseBuilding: {
       type: 'modal',
       title: '어떤 건물로 이동하시겠습니까?',
@@ -65,7 +64,7 @@ export function validateScenario(scenario) {
 }
 
 /**
- * adapters: { intro, modal, fly, enterInterior } — 각각 (step) => Promise<결과>. CANCEL 을 돌려주면 끝.
+ * adapters: { modal, fly, enterInterior } — 각각 (step) => Promise<결과>. CANCEL 을 돌려주면 끝.
  * start 를 다시 부르거나 cancel() 하면 앞선 실행은 기다리던 어댑터가 끝나는 대로 조용히 멈춘다(onEnd 는 한 번만).
  */
 export function createScenarioRunner({ scenario = SCENARIO, adapters, onEnd = null }) {
