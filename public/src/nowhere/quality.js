@@ -1,6 +1,8 @@
-// HAUS NOWHERE — 성수 2041: 기기 등급 판정(desktop / mobile) 및 예산 설정.
+// HAUS NOWHERE — 성수 2041: 기기 등급 판정(desktop / mobile) · 기기 구분(desktop / tablet / phone) 및 예산 설정.
 
 const MOBILE_UA_RE = /Android|iPhone|iPad|iPod|Mobile|Windows Phone|BlackBerry|Opera Mini/i;
+// 휴대폰 UA. 안드로이드는 따로 본다('Mobile' 이 있으면 휴대폰, 없으면 태블릿). iPad UA 에도 'Mobile/15E148' 이 있어 iPad 를 먼저 본다
+const PHONE_UA_RE = /Mobi|iPhone|iPod|Windows Phone|BlackBerry|Opera Mini/i;
 
 export function detectQualityTier(env = {}) {
   const ua =
@@ -28,7 +30,33 @@ export function detectQualityTier(env = {}) {
   return 'desktop';
 }
 
-export function getQualityConfig(tier = 'desktop', worldVer = 'seongsu') {
+/**
+ * 기기 구분 — 날으는 로드스터를 휴대폰에서 빼는 데 쓴다(자산 등급은 detectQualityTier 그대로, 태블릿 · 휴대폰 모두 모바일 자산).
+ *   태블릿: iPad(UA iPad, 또는 Macintosh + 터치 지점 2 개 이상 = iPadOS 데스크톱 모드), 안드로이드 중 UA 에 Mobile 이 없는 것,
+ *           그 밖의 터치 기기 중 min(screen.width, screen.height) ≥ 600
+ *   휴대폰: 그 밖의 모바일(Mobi · iPhone · Android … Mobile)과 화면이 600 보다 작은 터치 기기
+ */
+export function detectDeviceClass(env = {}) {
+  const ua = env.userAgent ?? (typeof navigator !== 'undefined' ? navigator.userAgent : '');
+  const maxTouchPoints = env.maxTouchPoints ?? (typeof navigator !== 'undefined' ? navigator.maxTouchPoints : 0) ?? 0;
+  const screenW = env.screenWidth ?? (typeof screen !== 'undefined' ? screen.width : 1440);
+  const screenH = env.screenHeight ?? (typeof screen !== 'undefined' ? screen.height : 900);
+  if (/iPad/.test(ua) || (/Macintosh/.test(ua) && maxTouchPoints > 1)) return 'tablet';
+  if (/Android/i.test(ua)) return /Mobile/i.test(ua) ? 'phone' : 'tablet';
+  if (PHONE_UA_RE.test(ua)) return 'phone';
+  if (maxTouchPoints > 0) return Math.min(screenW, screenH) >= 600 ? 'tablet' : 'phone';
+  return 'desktop';
+}
+
+/** 주소 ?tier= 와 기기 판정 → { tier, device }. tablet = 모바일 등급 + 태블릿(시험용), mobile = 휴대폰, desktop = 데스크톱, 그 밖(없음)은 판정 */
+export function resolveTier(forced, env = {}) {
+  if (forced === 'tablet') return { tier: 'mobile', device: 'tablet' };
+  if (forced === 'mobile') return { tier: 'mobile', device: 'phone' };
+  if (forced === 'desktop') return { tier: 'desktop', device: 'desktop' };
+  return { tier: detectQualityTier(env), device: detectDeviceClass(env) };
+}
+
+export function getQualityConfig(tier = 'desktop', worldVer = 'seongsu', device = tier === 'mobile' ? 'phone' : 'desktop') {
   const ver = worldVer === 'ds2' ? 'ds2' : 'seongsu';
   const baseDir = ver === 'ds2' ? 'assets/nowhere-ds2' : 'assets/nowhere';
   // 주인공 건물: 데스크톱은 원본, 모바일은 텍스처를 1024 로 줄인 사본(npm run nowhere:heroes:mobile)
@@ -36,9 +64,13 @@ export function getQualityConfig(tier = 'desktop', worldVer = 'seongsu') {
     tier === 'mobile'
       ? { haus: 'assets/mobile/gm_building.glb', facearch: 'assets/mobile/facearch.glb' }
       : { haus: 'assets/gm_building.glb', facearch: 'assets/facearch.glb' };
+  // 날으는 로드스터(성수): 데스크톱 · 태블릿만 — 휴대폰은 로드스터 · 분사 · 정차 포드를 그리지 않는다(world.js)
+  const roadsters = device !== 'phone';
   if (tier === 'mobile') {
     return {
       tier: 'mobile',
+      device,
+      roadsters,
       worldVer: ver,
       baseDir,
       assetDir: `${baseDir}/mobile`,
@@ -57,6 +89,8 @@ export function getQualityConfig(tier = 'desktop', worldVer = 'seongsu') {
   }
   return {
     tier: 'desktop',
+    device,
+    roadsters,
     worldVer: ver,
     baseDir,
     assetDir: baseDir,

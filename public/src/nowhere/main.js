@@ -1,6 +1,6 @@
 // HAUS NOWHERE — 성수 2041: 엔트리포인트 (웹 코어 + 기상·시간·카메라·이동체 연결)
 import * as THREE from 'three';
-import { detectQualityTier, getQualityConfig } from './quality.js';
+import { resolveTier, getQualityConfig } from './quality.js';
 import { createWorld, updateMoverActors, updateLegacyDrones } from './world.js';
 import { createPostPipeline } from './post.js';
 import { createWeatherController, getPresets, parseTimeParam, TIME_QUICK, weatherNamesFor, resolveWeather } from './weather.js';
@@ -36,12 +36,9 @@ async function boot() {
   const worldVer = entry.select ? await showWorldSelect() : entry.world;
   document.body.dataset.worldVer = worldVer;
 
-  const forcedTier = params.get('tier');
-  const tier =
-    forcedTier === 'mobile' || forcedTier === 'desktop'
-      ? forcedTier
-      : detectQualityTier();
-  const quality = getQualityConfig(tier, worldVer);
+  // 등급(자산 · 효과) + 기기 구분(날으는 로드스터는 휴대폰에서 뺀다). ?tier=desktop|tablet|mobile 로 강제 — tablet = 모바일 등급 + 태블릿(시험용)
+  const { tier, device } = resolveTier(params.get('tier'));
+  const quality = getQualityConfig(tier, worldVer, device);
 
   const worldLabel = worldVer === 'ds2' ? 'DS2 산악 고원' : '성수 2041';
   const loaderKickerEl = document.querySelector('.nw-loader-kicker');
@@ -112,6 +109,7 @@ async function boot() {
     renderer,
     scene,
     tier,
+    device,
     worldVer,
     onProgress({ ratio, label }) {
       const pct = Math.round(ratio * 100);
@@ -559,6 +557,7 @@ async function boot() {
       return {
         worldVer: quality.worldVer,
         tier: quality.tier,
+        device: quality.device,
         weather: weather.getWeather(),
         hour: weather.getHour(),
         camera: camCtrl.getPresetId(),

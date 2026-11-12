@@ -2,7 +2,7 @@
 
 **HAUS NOWHERE SEOUL**(81 m 사옥)과 **FaceArch**(31 m 필로티 조형 건물)를 중심으로 구축한 두 가지 3D 월드 아카이브 뷰어입니다.
 
-1. **성수 2041 (`ver=seongsu`)**: 성수동 뚝섬로 블록(붉은 벽돌 공장·공방·2호선 고가·가로수)을 2041년 모습으로 그린 월드. 방향은 세 가지입니다. **복원**(벽돌 세척 · 전신주와 전선 지중화 · 물탱크·실외기·광고판·내려진 셔터 철거), **녹화**(담쟁이 · 수직정원 · 지붕 태양광과 옥상정원 · 가로수 · 포켓 공원), **새 층**(2호선 고가 위 유리 튜브와 열차 · 스카이브리지 2개 · 신축 유리 타워 4동과 풍력 · 태양광 노면과 청록 발광선 · 투명 키오스크 · 카페 테라스). 기본 기상은 맑음이고, 자율주행 포드 · 튜브 열차 · 배송로봇 · 소포 드론 · 풍력 회전자가 `layout.movers` 경로를 따라 움직입니다
+1. **성수 2041 (`ver=seongsu`)**: 성수동 뚝섬로 블록(붉은 벽돌 공장·공방·2호선 고가·가로수)을 2041년 모습으로 그린 월드. 방향은 세 가지입니다. **복원**(벽돌 세척 · 전신주와 전선 지중화 · 물탱크·실외기·광고판·내려진 셔터 철거), **녹화**(담쟁이 · 수직정원 · 지붕 태양광과 옥상정원 · 가로수 · 포켓 공원), **새 층**(2호선 고가 위 유리 튜브와 열차 · 스카이브리지 2개 · 신축 유리 타워 4동과 풍력 · 태양광 노면과 청록 발광선 · 투명 키오스크 · 카페 테라스). 기본 기상은 맑음이고, 자율주행 포드 · 튜브 열차 · 배송로봇 · 소포 드론 · 풍력 회전자가 `layout.movers` 경로를 따라 움직입니다. 20 초에 한 번 뚝섬로에서 흰 날으는 로드스터가 분사로 떠올라 배럴 롤 뒤 지붕 너머로 날아가거나(A) 정차 포드 두 대를 킥플립으로 뛰어넘어 착지합니다(B). 로드스터는 데스크톱 · 태블릿에서만 보입니다
 2. **DS2 산악 고원 (`ver=ds2`)**: 양쪽으로 층리 대암벽(이끼 선반 + 회색 단애 + 세로 걸리)이 솟고 상류로 갈수록 V자로 겹쳐지는 빙하 U자 계곡, 이끼·황록 풀이 덮인 계곡 바닥의 회색 표석 들판과 개울, 북북동 암벽 너머 역광 태양 헤이즈, 북측 협곡 산악 고가교, 카이랄 개척 트러스 브리지·릴레이 비콘·홀로그램 이정표 결합 월드
 
 - 출하되는 모든 외부 텍스처·모델·HDRI는 **Poly Haven CC0** 이며, 한글 간판 생성용 글꼴은 **SIL OFL 1.1** 입니다.
@@ -20,7 +20,7 @@ npm run start:lan  # 같은 Wi-Fi 기기에서 http://<PC IP>:4173
 - **방식 지정**: `mode=guide|walk|free` (예: `http://localhost:4173/?ver=ds2&noIntro=1&mode=walk` — 인트로 · 방식 고르기 없이 직접 걷기). `noIntro=1` 이나 `cam` · `weather` · `time` 이 있으면 지금처럼 인트로 없이 자유 시점
 - **인트로 생략 + 특정 카메라/기상/시각 진입**: `http://localhost:4173/?ver=ds2&noIntro=1&cam=lot&weather=rain&time=21:30` (`weather` = `clear`(성수 기본) · `overcast` · `rain` · `snow`, 옛 값 `dusk` · `night` 는 시각 18:30 · 21:30 으로 적용 / `time` = `0`~`24` 또는 `HH:MM`)
 - **2041 골목 시점으로 진입**: `http://localhost:4173/?noIntro=1&cam=future` (성수 전용. 하단 카메라 프리셋의 `2041 골목` 버튼과 같은 시점)
-- **모바일 품질 강제 테스트**: `http://localhost:4173/?tier=mobile`
+- **품질 · 기기 강제 테스트**: `http://localhost:4173/?tier=mobile`(휴대폰 — 날으는 로드스터 없음) · `?tier=tablet`(모바일 등급 + 태블릿 — 로드스터 보임) · `?tier=desktop`
 
 | 조작 / 단축키 | 동작 |
 |---|---|
@@ -77,6 +77,7 @@ npm test
      app.world.followSun(app.camera); app.post.composer.render();
      Object.assign(document.createElement('a'), { href: app.renderer.domElement.toDataURL('image/png'), download: 'hero-<id>-1600.png' }).click();
      ```
+     `t = 30` 에는 날으는 로드스터 B 가 거리 시점 앞(약 47 m) 정차 포드 쪽으로 뛰어오른다. 로드스터를 빼려면 두 대가 모두 숨는 시각을 고른다(`layout.movers` 의 로드스터 `phase` + `visible` 밖 — 지금 값으로 A 0 … 16.5 s, B 20 … 39.1 s, 40 s 주기). 정차 포드 두 대(뚝섬로 x −67 · −73)는 시각과 상관없이 서 있다.
   4. 1600 × 900 PNG 를 **1280 × 720**으로 줄여 `build/nowhere/renders/hero-<id>.png`로 둡니다.
      `uv run --with pillow python -c "from PIL import Image; Image.open('hero-<id>-1600.png').resize((1280, 720), Image.LANCZOS).save('build/nowhere/renders/hero-<id>.png')"`
   5. `npm run nowhere:build -- -- --hero-from-captures`로 WebP 를 다시 만듭니다. 원본이 없는 장은 건너뛰고 경고만 냅니다(그 WebP 는 그대로).

@@ -170,3 +170,76 @@ test('(k) 튜브 유리(Task 12): future GLB 알파 = world.js GLASS_OPACITY, �
     assert.ok(Math.max(r, g, b) < 0.3 && b > r, `유리 색(선형) ${[r, g, b].map((v) => v.toFixed(3))}`);
   }
 });
+
+// 날으는 로드스터(2026-11-12): GLB 노드 아래 삼각형 수(인덱스 / 3). skip(자식 노드)이 참이면 그 자식은 세지 않는다
+function subtreeTris(j, idx, skip) {
+  const n = j.nodes[idx];
+  let tris = 0;
+  if (n.mesh !== undefined) {
+    for (const p of j.meshes[n.mesh].primitives) {
+      tris += (p.indices !== undefined ? j.accessors[p.indices].count : j.accessors[p.attributes.POSITION].count) / 3;
+    }
+  }
+  for (const c of n.children || []) if (!skip(j.nodes[c])) tris += subtreeTris(j, c, skip);
+  return tris;
+}
+// 차체 노드는 자식(분사)이 있어 optimize 의 위치 양자화가 메시를 이름 없는 자식 노드로 옮긴다 → 메시가 달린 노드를 찾는다
+const meshNodeOf = (j, idx) =>
+  j.nodes[idx].mesh !== undefined ? j.nodes[idx] : (j.nodes[idx].children || []).map((c) => j.nodes[c]).find((c) => !c.name && c.mesh !== undefined);
+const FUTURE_GLBS = ['../public/assets/nowhere/nowhere-future.glb', '../public/assets/nowhere/mobile/nowhere-future.glb'];
+
+test('(l) 날으는 로드스터: future GLB(데스크톱 · 모바일)에 차체 FU_roadster_a · b(NWF_mover 한 장, ≤ 3,000 삼각형)와 자식 분사(NWF_plume, ≤ 400, 모양 키 rear · bottom)', () => {
+  for (const rel of FUTURE_GLBS) {
+    const j = glbJson(rel);
+    const idx = (name) => j.nodes.findIndex((n) => n.name === name);
+    for (const car of ['FU_roadster_a', 'FU_roadster_b']) {
+      const ci = idx(car);
+      const pi = idx(`${car}_plume`);
+      assert.ok(ci >= 0 && pi >= 0, `${rel}: ${car} · ${car}_plume 없음`);
+      assert.ok((j.nodes[ci].children || []).includes(pi), `${rel}: ${car}_plume 이 ${car} 의 자식이 아니다`);
+      const body = subtreeTris(j, ci, (c) => Boolean(c.name));   // 이름 있는 자식(분사)은 빼고, 양자화가 만든 이름 없는 메시 자식은 센다
+      const plume = subtreeTris(j, pi, () => true);
+      assert.ok(body > 0 && body <= 3000, `${rel}: ${car} 삼각형 ${body}`);
+      assert.ok(plume > 0 && plume <= 400, `${rel}: ${car}_plume 삼각형 ${plume}`);
+      const bm = j.meshes[meshNodeOf(j, ci).mesh];
+      assert.equal(bm.primitives.length, 1, `${rel}: ${car} 프리미티브 ${bm.primitives.length}(재질 한 장 = 그리기 1)`);
+      assert.equal(j.materials[bm.primitives[0].material].name, 'NWF_mover');
+      const pm = j.meshes[j.nodes[pi].mesh];
+      assert.equal(j.materials[pm.primitives[0].material].name, 'NWF_plume');
+      assert.equal(pm.primitives[0].targets?.length, 2, `${rel}: ${car}_plume 모양 키 ${pm.primitives[0].targets?.length}`);
+      assert.deepEqual(pm.extras?.targetNames ?? ['rear', 'bottom'], ['rear', 'bottom']);   // 이름이 없으면 웹은 Blender 순서(0 rear · 1 bottom)를 쓴다
+    }
+  }
+});
+
+test('(m) 정차 포드: layout.solids 에 FU_parked_pod.0 · .1(서행 바깥 차로 연석 쪽, x −67 · −73 — CP 로 거리 시점 쪽으로 당김), future GLB 에 메시 FU_parked_pod 인스턴스 2', () => {
+  for (const [id, x] of [['FU_parked_pod.0', -67], ['FU_parked_pod.1', -73]]) {
+    const b = solid(id);
+    assert.ok(b, `${id} 없음`);
+    const cx = (b.min[0] + b.max[0]) / 2;
+    const cz = (b.min[2] + b.max[2]) / 2;
+    assert.ok(Math.abs(cx - x) <= 0.5 && Math.abs(cz - 36.9) <= 0.3, `${id} 가운데 (${cx}, ${cz})`);
+    assert.ok(b.max[1] <= 1.9 && b.min[2] >= 35.75, `${id} 지붕 ${b.max[1]} · 연석 쪽 ${b.min[2]}`);
+  }
+  for (const rel of FUTURE_GLBS) {
+    const j = glbJson(rel);
+    const mi = j.meshes.findIndex((m) => m.name === 'FU_parked_pod');
+    assert.ok(mi >= 0, `${rel}: 메시 FU_parked_pod 없음`);
+    let count = 0;
+    for (const n of j.nodes) {
+      if (n.mesh !== mi) continue;
+      const inst = n.extensions?.EXT_mesh_gpu_instancing;
+      count += inst ? j.accessors[Object.values(inst.attributes)[0]].count : 1;
+    }
+    assert.equal(count, 2, `${rel}: 정차 포드 ${count} 대`);
+  }
+});
+
+test('(n) 로드스터 웹 연결(world.js): 차체 · 분사는 이동체(병합 · 보행 장애물에서 빠짐), 정차 포드는 정적(보행 장애물), 휴대폰 숨김은 셋 모두', () => {
+  const MOVER_NODE = srcRegex('MOVER_NODE');
+  const ROADSTER_ONLY = srcRegex('ROADSTER_ONLY');
+  for (const nm of ['FU_roadster_a', 'FU_roadster_b', 'FU_roadster_a_plume', 'FU_taxi0']) assert.ok(MOVER_NODE.test(nm), `MOVER_NODE: ${nm}`);
+  for (const nm of ['FU_parked_pod', 'FU_parked_pod0', 'FU_terrace']) assert.ok(!MOVER_NODE.test(nm), `MOVER_NODE 가 ${nm} 를 이동체로 본다`);
+  for (const nm of ['FU_roadster_a', 'FU_roadster_b_plume', 'FU_parked_pod', 'FU_parked_pod1']) assert.ok(ROADSTER_ONLY.test(nm), `ROADSTER_ONLY: ${nm}`);
+  for (const nm of ['FU_taxi0', 'FU_terrace', 'PR_zelkova_a', 'NW_Merged_future_NWF_mover']) assert.ok(!ROADSTER_ONLY.test(nm), `ROADSTER_ONLY 가 ${nm} 를 숨긴다`);
+});

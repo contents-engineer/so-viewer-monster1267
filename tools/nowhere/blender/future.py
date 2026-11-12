@@ -20,7 +20,9 @@
 #                      nw_movers(JSON) → export.py 가 layout.movers 로 낸다(웹 movers.js 가 움직인다)
 #     보조: FU_smart_head.*(옛 가로등 기둥에 덧단 LED 헤드·센서 포드 3), FU_ev_post.*(EV 충전 기둥 2, LED 링),
 #           FU_shop_display(카페 진열창의 투명 디스플레이), FU_holo_ad(홀로그램 광고 한 곳, holo)
-#     (7) FU_tower_T1 … T4      성수 2041 신축 유리 타워 4동(TOWERS, 장면 밖 원경 대지). 커튼월 NWF_curtain(밤 창 35 %) + 셋백 테라스 ·
+#     (9) FU_roadster_a · b     날으는 로드스터 2 대(흰 쐐기형 2인승, NWF_mover 한 장, 원점 = 롤 축) + 자식 FU_roadster_*_plume(분사, NWF_plume,
+#                               모양 키 rear · bottom), FU_parked_pod.0 · .1(B 가 뛰어넘는 정차 포드, 링크 복제 → 인스턴스, nw_solid=1)
+#     (7) FU_tower_T1 … T4     성수 2041 신축 유리 타워 4동(TOWERS, 장면 밖 원경 대지). 커튼월 NWF_curtain(밤 창 35 %) + 셋백 테라스 ·
 #                               발코니 식재 띠 · 계단 정원 · 크라운 정원(유리 난간 NWF_glass_rail, 화단 NW_meadow, 관목 카드), T1 옥상
 #                               태양광 줄, T3 태양광 캐노피. nw_solid=1(layout.solids)
 #         FU_turbine_mast.<n> · FU_turbine_rotor.<n>   풍력 5기(T1 옥상 3 · T4 크라운 2, 방위 200°). 회전자 원점 = 허브, 축 = 로컬 +x
@@ -439,13 +441,27 @@ MOVER_CELL = {   # 재질 이름 → paint_mover 단색 칸 가운데(u, v)
 }
 MOVER_BAND = (0.882, 0.993)   # 열차 창 띠(v): 아틀라스 맨 위 128 px 를 가로 전체로 쓴다(창 모듈 4 개 = u 1 → 가로 반복)
 MOVER_PBR = (0.3, 0.1)        # NWF_mover (거칠기, 금속성): 진주색 · 흰 차체(0.28 … 0.32 · 0.1 … 0.15)에 맞춤. export 가 nw_pbr 을 읽는다
+MOVER_WHEEL = (0.5, 0.75, 0.625, 0.875)   # 로드스터 휠 원판 칸(u0, v0, u1, v1): paint_mover 행 3 아래 절반의 빈 칸(128 px)
+
+
+def _paint_wheel(alb, x0, y0, n):
+    """휠 원판(n × n px, 아래 행부터): 검은 타이어 고리 · 짙은 회색 림 · 동심 흐림 띠(바퀴살이 돌며 번진 자국) · 밝은 허브. 바퀴는 돌리지 않는다(스펙 §2).
+    림 · 흐림 · 허브 색은 라이브 Blender look 에서 '검은 휠'로 읽히게 한 단계 어둡게 맞췄다(Task 3: #3A3E42 · #6A7075 · #9AA0A4 → 아래)."""
+    yy, xx = np.mgrid[0:n, 0:n].astype(np.float32)
+    r = np.hypot(xx + 0.5 - n / 2, yy + 0.5 - n / 2) / (n / 2)              # 0 가운데 … 1 테두리
+    tire, rim, blur, hub = (_hexs(h) for h in ('#141618', '#2A2E32', '#545A5F', '#80868A'))
+    band = (0.5 + 0.5 * np.cos(r * 40.0))[..., None]
+    col = rim * (1.0 - 0.4 * band) + blur * 0.4 * band
+    col = np.where((r > 0.78)[..., None], tire, col)
+    col = np.where((r < 0.2)[..., None], hub, col)
+    alb[y0:y0 + n, x0:x0 + n, :3] = col
 
 
 def paint_mover():
     """이동체 아틀라스 1024²(아래 행부터, 칸 256). 알베도 · 발광 두 장.
     행 0 = paint_ui 행 0(흰 · 빨강 · 청록 #43ABA7 · 호박, 발광) · 행 1 = 골판지 #B98C5A(테이프 띠) · 어두운 유리 · 진주색 차체 · 흰 열차 차체 ·
     행 2 = paint_ui 택시 상태 화면(두 칸) · 검정 · 스마트 청록 #39C6E0(발광) · 행 3 아래 절반 = 파랑 LED · 흰 LED(발광), 위 절반(128 px) =
-    열차 창 띠(paint_train_window 를 가로로 4 번, 밤에만 켜지는 따뜻한 흰빛)."""
+    열차 창 띠(paint_train_window 를 가로로 4 번, 밤에만 켜지는 따뜻한 흰빛) · 행 3 아래 절반 u 0.5 … 0.625 = 로드스터 휠 원판(MOVER_WHEEL)."""
     W = 1024; C = 256
     ua, ue = _ui_arrays()
     alb = _canvas(W, W, _hexs('#0B0E12')); emi = _canvas(W, W, np.zeros(3, np.float32))
@@ -459,6 +475,7 @@ def paint_mover():
             _rect(emi, x0, y0, x0 + w, y0 + h, _hexs(col))
     _rect(alb, C, 3 * C, 2 * C, 3 * C + C // 2, _hexs('#C8CDD0')); _rect(emi, C, 3 * C, 2 * C, 3 * C + C // 2, _hexs('#E4EEF5'))
     _rect(alb, C // 2 - 14, C, C // 2 + 14, 2 * C, _hexs('#A27846'))         # 골판지 칸 가운데 세로 테이프
+    _paint_wheel(alb, 2 * C, 3 * C, C // 2)                                   # 로드스터 휠 원판 칸(2026-11-12, 발광 없음)
     ta, te = _train_window_arrays()
     for k in range(4):
         alb[W - C // 2:W, k * C:(k + 1) * C] = ta; emi[W - C // 2:W, k * C:(k + 1) * C] = te
@@ -482,6 +499,10 @@ def mover_atlas(me, M):
             if nm == 'NWF_train_window':
                 u, v = uv[li].uv
                 uv[li].uv = (u / 4.0, b0 + v * (b1 - b0))
+            elif nm == 'NWF_wheel':                            # 로드스터 휠 원판: 원판 UV(0 … 1) → 휠 칸
+                u, v = uv[li].uv
+                w0, w1, w2, w3 = MOVER_WHEEL
+                uv[li].uv = (w0 + u * (w2 - w0), w1 + v * (w3 - w1))
             else:
                 uv[li].uv = MOVER_CELL[nm]
     me.materials.clear()
@@ -733,6 +754,9 @@ def materials():
     M['mover'] = mat_ui('NWF_mover', mv_a, mv_e, 0.4, 3.0, rough=MOVER_PBR[0], surface='metal')
     next(n for n in M['mover'].node_tree.nodes if n.type == 'BSDF_PRINCIPLED').inputs['Metallic'].default_value = MOVER_PBR[1]
     M['mover']['nw_pbr'] = MOVER_PBR
+    # 날으는 로드스터(2026-11-12): 휠 원판 자리 표시(mover_atlas 가 NWF_mover 휠 칸으로 옮긴다 — 메시에 남지 않아 build() 끝에서 지워진다), 분사 기둥
+    M['wheel'] = mat_basic('NWF_wheel', '#3A3E42', 0.5)
+    M['plume'] = mat_glass('NWF_plume', '#F2F5F6', 0.45)
     kg = M['kiosk_glass']                     # 알파 0.55(웹은 world.js GLASS_OPACITY 가 같은 값으로 투명 · 깊이 쓰기 끔)
     next(n for n in kg.node_tree.nodes if n.type == 'BSDF_PRINCIPLED').inputs['Alpha'].default_value = 0.55
     kg.surface_render_method = 'BLENDED'; kg.use_backface_culling = False
@@ -2575,6 +2599,236 @@ def build_night_rig(sc):
     return NC
 
 
+# ═════════════════════════════ (9) 날으는 로드스터(2026-11-12 스펙 §2) ═════════════════════════════
+# 1980 년대풍 흰 쐐기형 2인승 쿠페(독자 디자인 — 로고 · 상표 글자 없음). 앞 = 로컬 +x. 원점 = 롤 축(바퀴 아래에서 RD_AXIS 위, 차 가운데)이라
+# 배럴 롤 · 킥플립이 몸통 가운데를 축으로 돈다. 모양은 라이브 Blender(MCP look)에서 맞춘 값이다(Task 3).
+RD_AXIS = 0.55                              # 바퀴 아래 → 원점(롤 축). layout.movers 키 pos 는 이 축의 자리
+RD_FLOOR_Z = 0.16                           # 몸통 아래면(바퀴 아래 기준)
+RD_SIDE = [   # 몸통 단면(앞 → 뒤): (x, 아래 z, 덮개(후드 · 데크) z, 반폭). 코 끝이 가장 낮고 뒤로 갈수록 높아지는 쐐기
+    (2.20, 0.30, 0.52, 0.70), (2.12, 0.22, 0.60, 0.86), (1.90, 0.18, 0.70, 0.94), (1.50, 0.16, 0.76, 0.97),
+    (1.00, 0.16, 0.81, 0.975), (0.50, 0.16, 0.82, 0.975), (0.00, 0.16, 0.83, 0.975), (-0.60, 0.16, 0.85, 0.975),
+    (-1.20, 0.16, 0.87, 0.975), (-1.70, 0.18, 0.91, 0.97), (-2.05, 0.22, 0.92, 0.95), (-2.20, 0.28, 0.90, 0.92),
+]
+RD_CANOPY = [   # 어두운 유리 캐노피(앞유리 밑 → 지붕 → 뒤창 끝): (x, 덮개 위 높이, 위 반폭). 아래 가장자리 반폭은 RD_CANOPY_BASE
+    (0.95, 0.00, 0.74), (0.55, 0.16, 0.66), (0.15, 0.27, 0.58), (-0.25, 0.29, 0.56), (-0.65, 0.26, 0.56), (-1.05, 0.16, 0.60), (-1.45, 0.00, 0.74),
+]
+RD_CANOPY_BASE = 0.80
+RD_CANOPY_SINK = 0.02                       # 캐노피 아래 가장자리를 덮개 어깨 곡면 아래로(틈이 보이지 않게)
+RD_WHEEL = dict(r=0.34, w=0.24, y=0.985, x=(1.42, -1.38), n=16)   # 바퀴 반지름 · 폭 · 바깥면 |y| · 앞뒤 축 x · 둘레 분할(돌리지 않는다)
+RD_ARCH = (0.01, 0.05)                      # 바퀴집 검은 테(바퀴 반지름 + 안 · 바깥)
+RD_WING = dict(x=(-2.18, -1.80), y=0.92, z=(1.10, 1.14), strut_x=-1.98, strut_y=0.55)   # 펼친 리어 윙 판 · 지주 2
+RD_TAIL_LIGHT = dict(z=(0.74, 0.78), y=0.86)                     # 꼬리 가는 빨간 줄(UI 빨강 칸 — 밤에 켜진다)
+RD_DIFFUSER = dict(y=0.74, z=(0.29, 0.42))                       # 꼬리 아래 검은 띠(노즐 뒤판)
+RD_SIDE_VENT = dict(x=(-0.50, -0.95), z=(0.36, 0.60), lean=0.12)  # 옆 분사구(검정, 뒷바퀴 앞): 앞 · 뒤 x, 아래 · 위 z, 위 가장자리 뒤로 기울기
+RD_NOZZLES = [(-0.54, 0.30), (-0.18, 0.30), (0.18, 0.30), (0.54, 0.30)]   # 번호판 아래 냉가스 노즐 4: (y, z), x −2.17 → −2.26
+RD_FLOOR_JETS = [(1.10, -0.55), (1.10, 0.55), (-1.20, -0.55), (-1.20, 0.55)]   # 바닥 분사구 4: (x, y)
+PLUME_SEG = 8                               # 분사 원뿔 둘레 분할
+PLUME_R = (0.05, 0.16, 0.34)                # 노즐 · 길이 40 % · 끝 반지름(최대 길이일 때)
+PLUME_LEN = (2.4, 2.0)                      # 최대 길이: 뒤 노즐 · 바닥 분사구(분사 1)
+PLUME_STUB = 0.02                           # 기본 모양 길이(노즐 자리에 접힌 원뿔 — 안 보인다)
+PLUME_U = (0.25, 0.75)                      # UV u: 뒤 · 바닥 원뿔(world.js 분사 알파 지도 2 열의 가운데 — 선형 거름에도 섞이지 않는다)
+
+
+def _rd_deck(x):
+    """덮개(후드 · 데크) 높이 z 를 RD_SIDE 에서 선형 보간."""
+    S = RD_SIDE
+    if x >= S[0][0]:
+        return S[0][2]
+    for a, b in zip(S, S[1:]):
+        if b[0] <= x <= a[0]:
+            return a[2] + (b[2] - a[2]) * (a[0] - x) / (a[0] - b[0])
+    return S[-1][2]
+
+
+def _rd_ring(x, zb, zt, w):
+    """몸통 단면 고리 12 점(앞에서 보아 반시계: 아래 가운데 → +y 옆 → 위 가운데 → −y 옆)."""
+    h = [(0.0, zb), (0.80 * w, zb), (w, zb + 0.10), (w, zt - 0.07), (0.94 * w, zt - 0.015), (0.50 * w, zt)]
+    pts = h + [(0.0, zt + 0.01)] + [(-y, z) for y, z in reversed(h[1:])]
+    return [(x, y, z) for y, z in pts]
+
+
+def _rd_canopy_ring(x, hc, wt):
+    """캐노피 단면 5 점(아래가 열린 고리, 덮개 위 0.005 — 아래 가장자리는 RD_CANOPY_SINK 만큼 묻는다): +y 아래 → +y 위 → 가운데 → −y 위 → −y 아래."""
+    z0 = _rd_deck(x) + 0.005
+    zt = z0 + hc
+    b = RD_CANOPY_BASE
+    zs = z0 - RD_CANOPY_SINK
+    return [(x, y, z) for y, z in ((b, zs), (wt, zt), (0.0, zt + (0.01 if hc > 0 else 0.0)), (-wt, zt), (-b, zs))]
+
+
+def roadster_mb():
+    """로드스터 차체(MB). 재질 번호: 0 흰 차체, 1 UI(빨간 줄), 2 검정(타이어 · 바닥 · 문턱 · 노즐 · 지주 · 바퀴집 · 꼬리 아래 띠 · 옆 분사구), 3 어두운 유리(캐노피), 4 휠 원판.
+    바퀴 아래 = z 0 으로 짓고 MB.T 로 RD_AXIS 만큼 내려 원점이 롤 축에 오게 한다. 바깥을 보는 면 = [앞 단면 k, 뒤 단면 k, 뒤 k+1, 앞 k+1]."""
+    mb = MB()
+    mb.T = Matrix.Translation((0.0, 0.0, -RD_AXIS))
+    seg_mat = [2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2]                 # 단면 고리 마디별 재질(아래 · 문턱 검정)
+    rings = [_rd_ring(x, zb, zt, w) for x, zb, zt, w in RD_SIDE]
+    n = len(rings[0])
+    for A, B in zip(rings, rings[1:]):
+        for k in range(n):
+            k1 = (k + 1) % n
+            mb.face([A[k], B[k], B[k1], A[k1]], seg_mat[k])
+    mb.face(rings[0], 0)                                            # 코 끝 면(+x)
+    mb.face(list(reversed(rings[-1])), 0)                           # 꼬리 면(−x)
+    for (xa, ha, wa), (xb, hb, wb) in zip(RD_CANOPY, RD_CANOPY[1:]):   # 캐노피(어두운 유리)
+        A = _rd_canopy_ring(xa, ha, wa)
+        B = _rd_canopy_ring(xb, hb, wb)
+        for k in range(len(A) - 1):
+            mb.face([A[k], B[k], B[k + 1], A[k + 1]], 3)
+    W = RD_WHEEL
+    for wx in W['x']:
+        for side in (1, -1):
+            yo = side * W['y']
+            yi = side * (W['y'] - W['w'])
+            mb.cyl((wx, yi, W['r']), (wx, yo, W['r']), W['r'], W['r'], W['n'], 2, caps=(False, False))   # 타이어(검정)
+            ang = [2 * math.pi * i / W['n'] for i in range(W['n'])]
+            ring = [(wx + W['r'] * math.cos(a), yo, W['r'] + W['r'] * math.sin(a)) for a in ang]
+            uv = [(0.5 + 0.48 * math.cos(a), 0.5 + 0.48 * math.sin(a)) for a in ang]
+            if side > 0:                                            # 각이 커지는 순서(x → z)는 −y 를 본다 → +y 쪽은 거꾸로
+                ring.reverse()
+                uv.reverse()
+            mb.face(ring, 4, uv)                                    # 바깥 원판(회전 흐림 무늬 — mover_atlas 가 휠 칸으로)
+            ra, rb = W['r'] + RD_ARCH[0], W['r'] + RD_ARCH[1]
+            ya = side * 0.978
+            for i in range(8):                                      # 바퀴집 검은 테(위 반원)
+                a0, a1 = math.pi * i / 8, math.pi * (i + 1) / 8
+                q = [(wx + ra * math.cos(a0), ya, W['r'] + ra * math.sin(a0)), (wx + ra * math.cos(a1), ya, W['r'] + ra * math.sin(a1)),
+                     (wx + rb * math.cos(a1), ya, W['r'] + rb * math.sin(a1)), (wx + rb * math.cos(a0), ya, W['r'] + rb * math.sin(a0))]
+                mb.face(q if side > 0 else list(reversed(q)), 2)
+    wg = RD_WING
+    for sy in (1, -1):                                              # 윙 지주(검정)
+        y = sy * wg['strut_y']
+        zb = _rd_deck(wg['strut_x'])
+        mb.box((wg['strut_x'] - 0.03, y - 0.02, zb - 0.02), (wg['strut_x'] + 0.03, y + 0.02, wg['z'][0]), 2)
+    mb.box((wg['x'][0], -wg['y'], wg['z'][0]), (wg['x'][1], wg['y'], wg['z'][1]), 0)   # 윙 판(흰색)
+    tl = RD_TAIL_LIGHT
+    mb.box((-2.215, -tl['y'], tl['z'][0]), (-2.199, tl['y'], tl['z'][1]), 1, rect=UI['red'])   # 꼬리 가는 빨간 줄
+    df = RD_DIFFUSER
+    mb.box((-2.212, -df['y'], df['z'][0]), (-2.199, df['y'], df['z'][1]), 2, faces='xyYzZ')   # 꼬리 아래 검은 띠(앞면 X 는 꼬리 안이라 뺀다)
+    sv = RD_SIDE_VENT
+    for sy in (1, -1):                                              # 옆 분사구(검은 사다리꼴, 옆면 바로 밖)
+        y = sy * 0.978
+        q = [(sv['x'][0], y, sv['z'][0]), (sv['x'][1], y, sv['z'][0]), (sv['x'][1] - sv['lean'], y, sv['z'][1]), (sv['x'][0] - sv['lean'], y, sv['z'][1])]
+        mb.face(q if sy > 0 else list(reversed(q)), 2)                 # 이 순서의 법선은 +y
+    for y, z in RD_NOZZLES:                                         # 번호판 아래 냉가스 노즐 4(검정, 양 끝 막음)
+        mb.cyl((-2.17, y, z), (-2.26, y, z), 0.05, 0.06, 8, 2)
+    return mb
+
+
+def _weld(me, dist=1e-4, sharp=40.0):
+    """MB 메시는 면마다 정점을 따로 만든다 → 같은 자리 정점을 합쳐 매끈 음영이 이어지게(루프 UV · 재질 번호 · nw_mask 는 그대로)."""
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=dist)
+    bm.to_mesh(me)
+    bm.free()
+    me.shade_smooth()
+    me.set_sharp_from_angle(angle=math.radians(sharp))
+    lib._make_render_color(me, 'nw_mask')
+    return me
+
+
+def plume_mesh(name, shade=1.0):
+    """분사 기둥 한 메시: 뒤 노즐 4(−x) + 바닥 분사구 4(−z)의 흰 반투명 원뿔(고리 3 단 × 8 분할 → 삼각형 256).
+    기본 모양 = 노즐 자리에 접힌 원뿔(PLUME_STUB), 모양 키 'rear' · 'bottom' = 최대 길이(웹이 thrust 로 늘인다 — movers.plumeMorph).
+    UV v = 노즐 0 → 끝 1(glTF 는 v 를 뒤집어 웹에서는 노즐 1 → 끝 0 — world.js 분사 알파가 이 방향). UV u = 원뿔 종류 표식(뒤 PLUME_U[0] ·
+    바닥 PLUME_U[1] — world.js 분사 알파 지도의 두 열, 바닥만 옅게 · 가장자리 감쇠). 면은 부드럽게(둘레 법선이 이어져 가장자리 감쇠가 각지지 않는다).
+    → (메시, rear 좌표, bottom 좌표)"""
+    base, rear, bottom, faces, uvs = [], [], [], [], []
+    cones = [((-2.26, y, z), (-1.0, 0.0, 0.0), PLUME_LEN[0], 'rear') for y, z in RD_NOZZLES]
+    cones += [((x, y, RD_FLOOR_Z - 0.01), (0.0, 0.0, -1.0), PLUME_LEN[1], 'bottom') for x, y in RD_FLOOR_JETS]
+    for p0, axis, length, kind in cones:
+        p0 = Vector(p0) - Vector((0.0, 0.0, RD_AXIS))
+        ax = Vector(axis)
+        t = ax.orthogonal().normalized()
+        s = ax.cross(t)
+        rings = []
+        for f, r in ((0.0, PLUME_R[0]), (0.4, PLUME_R[1]), (1.0, PLUME_R[2])):
+            ring = []
+            for i in range(PLUME_SEG):
+                a = 2 * math.pi * i / PLUME_SEG
+                off = t * math.cos(a) + s * math.sin(a)
+                stub = p0 + ax * (PLUME_STUB * f) + off * min(r, 0.06)
+                full = p0 + ax * (length * f) + off * r
+                base.append(tuple(stub))
+                rear.append(tuple(full if kind == 'rear' else stub))
+                bottom.append(tuple(full if kind == 'bottom' else stub))
+                ring.append(len(base) - 1)
+            rings.append((ring, f))
+        u = PLUME_U[0] if kind == 'rear' else PLUME_U[1]
+        for (ra, fa), (rb, fb) in zip(rings, rings[1:]):
+            for i in range(PLUME_SEG):
+                j = (i + 1) % PLUME_SEG
+                faces.append((ra[i], ra[j], rb[j], rb[i]))
+                uvs += [(u, fa), (u, fa), (u, fb), (u, fb)]
+    me = bpy.data.meshes.new(name)
+    me.from_pydata(base, [], faces)
+    me.validate(clean_customdata=False)
+    me.shade_smooth()
+    lib.set_uv(me, 'UVMap', None, per_loop=uvs)
+    lib.write_mask_values(me, [(0.0, 0.0, shade)] * len(me.vertices))
+    me[TAG] = 1
+    return me, rear, bottom
+
+
+def _plume_keys(o, rear, bottom):
+    """분사 객체에 모양 키(Basis · rear · bottom)를 단다. glTF morph target 0 = rear, 1 = bottom."""
+    o.shape_key_add(name='Basis', from_mix=False)
+    for nm, co in (('rear', rear), ('bottom', bottom)):
+        k = o.shape_key_add(name=nm, from_mix=False)
+        k.data.foreach_set('co', [c for p in co for c in p])
+        k.value = 0.0
+
+
+RD_LANE_Y = -37.125                       # 뚝섬로 서행 바깥 차로(동 → 서). 이동 포드 pod_w1 은 −40.375(틈 1.35 m)
+RD_SHOW_X = 160.0                         # 등장 x(두 차 같다) — Blender 자리 = 첫 키
+RD_CARS = [('FU_roadster_a', 1.0), ('FU_roadster_b', 0.97)]   # (객체, 정점 AO 배율 — 사본 바이트를 달리해 dedup · instance 가 이름을 지우지 않게)
+PARKED_PODS = [('FU_parked_pod.0', -67.0), ('FU_parked_pod.1', -73.0)]   # B 가 뛰어넘는 정차 포드(x) — 정류장(x −46) 서쪽 승하차 자리, A 는 그 위를 롤로 넘는다
+PARKED_POD_Y = -36.9                      # 같은 차로의 연석 쪽(연석 −35.75, 포드 반폭 0.925)
+PARKED_POD_SHADE = 0.86                   # 정점 AO 배율: 이동 포드 FU_taxi.0 … 4(1.0 … 0.9)와 겹치지 않게 — dedup 이 합치면 포드 이름이 지워진다
+
+
+def roadster_mesh(M, name, shade=1.0):
+    """차체 메시(NWF_mover 한 장 → 그리기 1). shade = 정점 AO 배율."""
+    mats = [M['train_white'], M['ui'], M['black'], M['glass_dark'], M['wheel']]
+    me = roadster_mb().to_mesh(name, mats, mask=lambda co: (0.0, 0.3, shade * (0.6 + 0.4 * smoothstep(-0.45, 0.5, co[2]))))
+    return mover_atlas(_weld(me), M)
+
+
+def build_roadsters(C, M, gz):
+    """날으는 로드스터 2 대(스펙 §2): 차체 = 단일 사용자 메시, 분사 = 자식 객체(NWF_plume, 모양 키 rear · bottom).
+    Blender 자리 = 첫 키(x RD_SHOW_X, 서행 바깥 차로, 노면 + RD_AXIS), 서쪽(rz π)을 본다 → layout.movers 의 origin · yaw0(Task 4)."""
+    z = _road_base(gz, RD_SHOW_X, RD_LANE_Y) + RD_AXIS
+    bodies, plumes = [], []
+    for nm, shade in RD_CARS:
+        body = obj(nm, roadster_mesh(M, nm, shade), C, (RD_SHOW_X, RD_LANE_Y, z), math.pi, surface='metal', night=True,
+                   nw_motif='flying_roadster')
+        me, rear, bottom = plume_mesh(f'{nm}_plume', shade)
+        me.materials.append(M['plume'])
+        pl = obj(f'{nm}_plume', me, C, (0.0, 0.0, 0.0), 0.0, surface='glass')
+        pl.parent = body                                           # 부모 역행렬은 단위 → 차체 로컬 그대로(웹에서 차와 함께 움직인다)
+        _plume_keys(pl, rear, bottom)
+        bodies.append(body)
+        plumes.append(pl)
+    _assert_unique(bodies, '로드스터')
+    _assert_unique(plumes, '로드스터 분사')
+    print('roadsters', [(o.name, tuple(round(c, 2) for c in o.dimensions), sum(len(p.vertices) - 2 for p in o.data.polygons))
+                        for o in bodies + plumes])
+    return bodies
+
+
+def build_parked_pods(C, M, gz):
+    """B 가 뛰어넘는 정차 포드 2 대: 포드 모양(taxi_mesh)을 한 메시로 링크 복제 → GPU 인스턴스(그리기 1). 움직이지 않으니 노드 이름이 지워져도 된다
+    (웹은 InstancedMesh 이름 = 메시 이름 FU_parked_pod 로 찾는다). nw_solid=1 → layout.solids(보행 장애물 · 경로 여유 검사)."""
+    me = taxi_mesh(M)
+    me.name = 'FU_parked_pod'
+    lib.write_mask_values(me, [(0.0, 0.35, PARKED_POD_SHADE * (0.55 + 0.45 * smoothstep(0.1, 0.9, v.co.z))) for v in me.vertices])
+    out = [obj(nm, me, C, (x, PARKED_POD_Y, _road_base(gz, x, PARKED_POD_Y)), math.pi, surface='metal', night=True, nw_solid=1,
+               nw_motif='parked_pod') for nm, x in PARKED_PODS]
+    print('parked pods', [(o.name, tuple(round(c, 2) for c in o.location)) for o in out])
+    return out
+
+
 # ═════════════════════════════ 이동체 표(Task 11, §4.4) ═════════════════════════════
 BOT_RUN = {'bot0': ('pingpong', 1.4), 'bot1': ('pingpong', 1.5), 'bot2': ('loop', 1.2)}   # BOT_STARTS id → (모드, m/s)
 TRAIN_RUNS = [('train_a', 16.0, 0.0, -700.0, 700.0), ('train_b', 14.0, 0.5, 700.0, -700.0)]  # TRAINS 순서: (id, m/s, 위상, x 시작, x 끝)
@@ -2609,6 +2863,156 @@ def _closed_dense(pts, step=2.0):
     return _densify(list(pts) + [pts[0]], step)[:-1]
 
 
+# ─────────────── 날으는 로드스터 시간표(2026-11-12 스펙 §3) — 값은 화면을 보며 조정하고, 조정 뒤에는 이 표가 기준이다
+RD_SPEED = 22.0                            # m/s(등장 → 분사, 착지 뒤 서진)
+RD_PERIOD = 40.0                           # 차마다 주기(s). 두 차는 위상 0 · 20 s(20 초에 한 번씩 번갈아)
+RD_A = dict(thrust_x=-36.0, rise=0.4, roll=1.2, ax=3.0, az=6.0, climb=6.0, end=(-346.0, 70.0, 90.0), end_vel=(-55.0, 30.0, 12.0))
+# A 날아가기: x −36(정류장 동쪽)에서 분사 → rise 0.4 s 상승(가속 서진 ax · 상승 az m/s²) → roll 1.2 s 진행 방향 축 360°(같은 차로 위, 정차 포드 위를
+#            축 3 m 넘게) → climb 6 s 동안 3 차 Hermite(롤 끝 속도 → end_vel)로 북서쪽 벽돌 지붕 너머 → 고도 90 m · (−346, 70) 에서 숨김.
+#            CP(2026-11-12): 거리 시점(three (−105, 1.7, 50.2))에서 이륙 · 롤이 읽히게 처음 값 x 10 · 끝 x −300 에서 46 m 서쪽으로 당겼다(동작 모양 그대로,
+#            이륙 70 m · 롤 가운데 47 m). 이륙 x 는 −36.6 … −32.5 안이어야 한다 — 서쪽 끝 = 정차 포드 위를 축 3 m 로 넘는 자리,
+#            동쪽 끝 = x −65 북측 가로등 머리(차로 바로 위 8.9 m, layout.solids 에 없다)를 축 5.9 m 이하로(머리 아래 3 m) 지나는 자리
+RD_B = dict(takeoff_x=-55.0, land_x=-85.0, apex=5.9, flip=0.5, cushion=0.3, hide_x=-260.0)
+# B 점프 착지: x −55 에서 분사 이륙 → 포물선(바퀴 높이 최고 5.9 m, x −70) · 꼭대기 ±0.5 s 진행 방향 축 360° 킥플립 → 마지막 0.3 s 바닥 분사로
+#            받쳐(3 차 Hermite, 내려오는 속도 0) x −85 착지 → 서진 → x −260 에서 숨김. 정차 포드 FU_parked_pod.0 · .1(x −67 · −73)을 넘는다.
+#            CP(2026-11-12): 처음 값 x −18 → −48 에서 37 m 서쪽으로(꼭대기가 거리 시점에서 38 m). 꼭대기는 x −65 가로등 머리에서 4.4 m 넘게
+#            떨어져야 축이 머리 아래 3 m 를 지킨다(꼭대기 −70 → 머리까지 3.2 m).
+#            최종 리뷰(2026-11-12): 바퀴 높이 최고 6 → 5.9 m. 오르는 길(x −66)에서 x −65 스마트 헤드(SMART_POLES 첫째, 아래 면 = 로컬 8.9 m +
+#            보도 −0.036 m)까지 축 2.99 → 3.08 m(tests/nowhere-clearance (h) 비행 3 m). 정차 포드 위 여유 4.0 → 3.9 m, 거리 시점 거리는 그대로
+RD_STEP = (1.0, 0.05, 0.1)                 # 위치 키 간격(s): 주행 · 이륙 ~ 롤/점프 · A 상승 비행
+RD_KINK = 0.005                            # B 이륙 · 착지 바로 뒤 덧 위치 키(s). 웹 Catmull-Rom 접선(이웃 키 차분)이 이륙 순간 위로 튀는 속도 ·
+                                           # 착지 받침의 내려오는 속도를 앞뒤 주행 구간으로 끌어와 바퀴가 노면 아래로 8 · 2 cm 꺼지던 것을 1.2 cm 안으로
+
+
+def _frange(a, b, step):
+    """a … b 를 step 이하 같은 간격으로(양 끝 포함)."""
+    n = max(1, int(math.ceil((b - a) / step - 1e-9)))
+    return [a + (b - a) * k / n for k in range(n + 1)]
+
+
+def _rd_keys(traj, times, events):
+    """traj(t) → (x, y, z), times = 위치 표본 시각, events = [(t, {채널: 값})] → 키 목록(Blender 좌표, 시각 순, 1 ms 안 같은 시각은 하나로).
+    pos 는 모든 키에, 채널(yaw · roll · pitch · thrust)은 그 값을 정하는 키에만 둔다 — 웹 movers.roadsterPose 가 채널마다 그 키들 사이를
+    선형 + smoothstep 으로 잇는다(촘촘한 위치 키마다 채널을 두면 키마다 기울기가 0 이 되어 롤이 끊겨 보인다)."""
+    keys = {}
+    for t in list(times) + [t for t, _ in events]:
+        tk = round(t, 3)
+        keys.setdefault(tk, {'t': tk, 'pos': [round(c, 4) for c in traj(tk)]})
+    for t, ch in events:
+        keys[round(t, 3)].update({k: round(v, 6) for k, v in ch.items()})
+    out = [keys[t] for t in sorted(keys)]
+    for name in ('yaw', 'roll', 'pitch', 'thrust'):
+        if name not in out[0] or name not in out[-1]:
+            raise RuntimeError(f'로드스터 키: 첫 · 끝 키에 {name} 가 없다')
+    return out
+
+
+def roadster_a(gz):
+    """A 날아가기(위상 0) → (키, 보이는 구간 (0, 끝))."""
+    a = RD_A
+    v = RD_SPEED
+    y = RD_LANE_Y
+    tT = (RD_SHOW_X - a['thrust_x']) / v                     # 분사 시작(정류장 동쪽)
+    s1 = a['rise'] + a['roll']                                # 롤 끝(분사 뒤 s)
+    D = a['climb']
+    z0 = _road_base(gz, a['thrust_x'], y) + RD_AXIS
+
+    def p1(s):                                                # 상승 · 롤: 같은 차로를 따라 가속 서진 · 가속 상승
+        return Vector((a['thrust_x'] - (v * s + 0.5 * a['ax'] * s * s), y, z0 + 0.5 * a['az'] * s * s))
+
+    P0 = p1(s1)
+    V0 = Vector((-(v + a['ax'] * s1), 0.0, a['az'] * s1))
+    P1 = Vector(a['end'])
+    V1 = Vector(a['end_vel'])
+
+    def p2(s):                                                # 북서쪽 지붕 너머로: 3 차 Hermite(롤 끝 속도 → end_vel)
+        u = (s - s1) / D
+        u2 = u * u
+        u3 = u2 * u
+        return (2 * u3 - 3 * u2 + 1) * P0 + (u3 - 2 * u2 + u) * D * V0 + (-2 * u3 + 3 * u2) * P1 + (u3 - u2) * D * V1
+
+    def traj(t):
+        if t <= tT:
+            x = RD_SHOW_X - v * t
+            return (x, y, _road_base(gz, x, y) + RD_AXIS)
+        s = t - tT
+        return tuple(p1(s) if s <= s1 else p2(s))
+
+    def heading(t):
+        p, q = traj(t - 0.05), traj(t + 0.05)
+        return math.atan2(q[1] - p[1], q[0] - p[0])
+
+    t_end = tT + s1 + D
+    turn = tT + s1 + 0.6 * D
+    times = _frange(0.0, tT, RD_STEP[0]) + _frange(tT, tT + s1, RD_STEP[1]) + _frange(tT + s1, t_end, RD_STEP[2])
+    events = [
+        (0.0, dict(yaw=math.pi, roll=0.0, pitch=0.0, thrust=0.0)),
+        (tT - 0.1, dict(thrust=0.0)),
+        (tT + 0.1, dict(thrust=1.0, pitch=0.0)),                                   # 뒤 · 바닥 분사 모두. 피치는 여기까지 0 — 달리는 동안(첫 키 → 롤
+                                                                                   # 시작 사이) 코가 들리면 뒷바퀴가 노면에 박힌다(뜨기 시작한 뒤 0.1 s 부터 든다)
+        (tT + a['rise'], dict(roll=0.0, pitch=0.08)),                              # 롤 시작
+        (tT + s1, dict(roll=2 * math.pi, pitch=0.18, yaw=math.pi, thrust=1.0)),    # 롤 끝(진행 방향 축 360°)
+        (tT + s1 + 0.5, dict(thrust=0.5)),                                         # 바닥 분사 끄기(0.5 이하 = 뒤 노즐만 — movers.plumeMorph)
+        (turn, dict(yaw=heading(turn), pitch=0.25)),                               # 북서쪽으로 돌며 들림
+        (t_end, dict(yaw=heading(t_end - 0.05), roll=2 * math.pi, pitch=0.2, thrust=0.0)),   # 뒤 노즐을 서서히 줄여 끝에서 0
+    ]
+    return _rd_keys(traj, times, events), (0.0, round(t_end, 3))
+
+
+def roadster_b(gz):
+    """B 점프 착지(위상 20 s) → (키, 보이는 구간 (0, 끝))."""
+    b = RD_B
+    v = RD_SPEED
+    y = RD_LANE_Y
+    tT = (RD_SHOW_X - b['takeoff_x']) / v                     # 이륙(분사 시작)
+    T = (b['takeoff_x'] - b['land_x']) / v                    # 공중 시간(30 m / 22 m/s ≈ 1.36 s)
+    tL = tT + T
+    t_end = tL + (b['land_x'] - b['hide_x']) / v
+    H = b['apex']
+    c = b['cushion']
+    sc = T - c
+    zT = _road_base(gz, b['takeoff_x'], y)
+    zL = _road_base(gz, b['land_x'], y)
+
+    def hp(s):                                                # 바퀴 높이 포물선(꼭대기 T/2 = x −70 에서 H)
+        return 4.0 * H * (s / T) * (1.0 - s / T)
+
+    def dhp(s):
+        return 4.0 * H / T * (1.0 - 2.0 * s / T)
+
+    def h(s):
+        if s <= sc:
+            return hp(s)
+        u = (s - sc) / c                                       # 착지 0.3 s: 바닥 분사로 받쳐 높이 0 · 내려오는 속도 0 으로(3 차 Hermite)
+        return (2 * u ** 3 - 3 * u ** 2 + 1) * hp(sc) + (u ** 3 - 2 * u ** 2 + u) * c * dhp(sc)
+
+    def traj(t):
+        if tT < t < tL:
+            s = t - tT
+            return (b['takeoff_x'] - v * s, y, zT + (zL - zT) * s / T + RD_AXIS + h(s))
+        x = RD_SHOW_X - v * t if t <= tT else b['land_x'] - v * (t - tL)
+        return (x, y, _road_base(gz, x, y) + RD_AXIS)
+
+    f0 = tT + T / 2 - b['flip']                              # 킥플립(꼭대기 ±0.5 s)
+    f1 = tT + T / 2 + b['flip']
+    times = _frange(0.0, tT, RD_STEP[0]) + _frange(tT, tL, RD_STEP[1]) + [tT + RD_KINK, tL + RD_KINK] + _frange(tL, t_end, RD_STEP[0])
+    events = [
+        (0.0, dict(yaw=math.pi, roll=0.0, pitch=0.0, thrust=0.0)),
+        (tT - 0.1, dict(thrust=0.0)),
+        (tT, dict(thrust=1.0, pitch=0.0)),                         # 이륙 분사 0.4 s. 피치는 뜨는 순간까지 0(그 전에 들면 뒷바퀴가 노면 아래 5 cm)
+        (tT + 0.3, dict(thrust=1.0)),
+        (tT + 0.45, dict(thrust=0.0)),
+        (f0, dict(roll=0.0, pitch=0.1)),
+        (f1, dict(roll=2 * math.pi, pitch=-0.06)),
+        (tL - c - 0.05, dict(thrust=0.0)),
+        (tL - c + 0.05, dict(thrust=1.0)),                         # 착지 분사 0.3 s(바닥으로 받친다)
+        (tL, dict(thrust=0.6, pitch=0.0)),
+        (tL + 0.1, dict(thrust=0.0)),
+        (t_end, dict(yaw=math.pi, roll=2 * math.pi, pitch=0.0, thrust=0.0)),
+    ]
+    return _rd_keys(traj, times, events), (0.0, round(t_end, 3))
+
+
 def mover_table(gz):
     """이동체 표(§4.4, Blender 좌표). export.py 가 three 좌표로 바꿔 layout.movers 로 낸다. gz = GroundZ(포드는 _road_base, 로봇은 지면).
     포드 · 배송로봇 경로는 Task 10 의 POD_ROUTES · rounded_loop(POD_LOOP, 반시계) · BOT_STARTS, 열차는 TRAINS 의 y · z 를 쓴다.
@@ -2638,7 +3042,10 @@ def mover_table(gz):
         rows.append(row(nm, id=rid, kind='bot', mode=mode, speed=speed, path=walk(line), **({'flipYaw': True} if mode == 'pingpong' else {})))
     for o in sorted((o for o in bpy.data.objects if o.name.startswith('FU_turbine_rotor.')), key=lambda o: o['nw_turbine']):
         rows.append(row(o.name, id=f"turbine_{o['nw_turbine']}", kind='spin', rpm=TURBINE_RPM))
-    print('movers', [(r['id'], r['object'], len(r.get('path', ()))) for r in rows])
+    for (nm, _), (rid, make, phase) in zip(RD_CARS, (('roadster_a', roadster_a, 0.0), ('roadster_b', roadster_b, RD_PERIOD / 2))):
+        keys, visible = make(gz)
+        rows.append(row(nm, id=rid, kind='roadster', plume=f'{nm}_plume', period=RD_PERIOD, phase=phase, keys=keys, visible=list(visible)))
+    print('movers', [(r['id'], r['object'], len(r.get('path', r.get('keys', ())))) for r in rows])
     return rows
 
 
@@ -2727,7 +3134,7 @@ def build():
         build_busstop(C, M, gz, kit if kit.font is not None else None)
     finally:
         kit.close()
-    build_taxis(C, M, gz)
+    taxis = build_taxis(C, M, gz)
     build_drones(C, M)
     build_helpers(C, M, gz)
     _, spots = build_towers(C, M)
@@ -2737,6 +3144,9 @@ def build():
     build_trains(C, M)
     build_bridges(C, M, gz)
     build_smart_street(C, M, gz)          # 스카이브리지 기둥 · 정류장 · 기존 소품을 피해 놓으므로 그 뒤에
+    build_roadsters(C, M, gz)             # 날으는 로드스터 2 대 + 분사(2026-11-12 스펙 §2)
+    parked = build_parked_pods(C, M, gz)  # B 가 뛰어넘는 정차 포드 2 대(링크 복제 → 인스턴스)
+    _assert_unique(taxis + parked[:1], '포드 · 정차 포드')
     sc['nw_movers'] = json.dumps(mover_table(gz))   # 이동체 표(Task 11) → export.py layout.movers
     build_anchors(sc)
     build_camera(sc)

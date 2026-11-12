@@ -15,19 +15,22 @@ import {
 import { createSkyDome } from './sky.js';
 import { createHeightGrid, createGroundQuery, createOccupancyGrid, isBlockedAt, obstacleTopAt } from './terrain.js';
 import { rasterizeMeshes, markObstacleMeshes } from './terrain-mesh.js';
-import { buildTrack, moverPose, spinAngle } from './movers.js';
+import { buildTrack, moverPose, spinAngle, roadsterPose, plumeMorph, PLUME_MIN } from './movers.js';
 
-// 경로 이동체 노드(layout.movers 의 object): 정적 병합 · 보행 장애물에서 뺀다
-const MOVER_NODE = /^FU_(drone|taxi|train|bot|turbine_rotor)/;
+// 경로 이동체 노드(layout.movers 의 object): 정적 병합 · 보행 장애물에서 뺀다(날으는 로드스터 차체 · 분사 포함)
+const MOVER_NODE = /^FU_(drone|taxi|train|bot|turbine_rotor|roadster)/;
+// 날으는 로드스터 전용 노드(차체 · 분사 · 정차 포드): 휴대폰(quality.roadsters 거짓)에서는 그리지 않고 보행 장애물에서도 뺀다
+const ROADSTER_ONLY = /^FU_(roadster|parked_pod)/;
 
 export async function createWorld({
   renderer,
   scene,
   tier = 'desktop',
+  device,
   worldVer = 'seongsu',
   onProgress = null,
 }) {
-  const quality = getQualityConfig(tier, worldVer);
+  const quality = getQualityConfig(tier, worldVer, device);   // device 가 없으면 등급에서(모바일 → 휴대폰)
 
   // 1) layout.json 로드
   const layoutRes = await fetch(quality.layoutUrl || 'assets/nowhere/layout.json');
@@ -200,6 +203,14 @@ export async function createWorld({
     return false;
   }
 
+  // 날으는 로드스터 전용 노드인지(조상까지). GLTFLoader 이름: FU_parked_pod.0 → FU_parked_pod0, 인스턴스 정차 포드는 메시 이름 FU_parked_pod
+  function isRoadsterOnly(node) {
+    for (let cur = node; cur; cur = cur.parent) {
+      if (typeof cur.name === 'string' && ROADSTER_ONLY.test(cur.name)) return true;
+    }
+    return false;
+  }
+
   // 장면 밖 원경(성수 2041 신축 타워 · 둘레 광장 · 풍력): 카메라를 따라가는 해 그림자 상자에 들지 않으므로 드리우지 않는다(받기는 그대로).
   // 병합되면 이름이 NW_Merged_* 로 바뀌므로 병합할 때 묶음이 모두 원경이면 nw_noCast 를 단다.
   // 노면에 붙은 태양광 띠(FU_road_pv.*, Task 10)도 같은 규칙으로 드리우지 않는다(노면 + 1 cm 판이 그림자 여드름만 만든다).
@@ -335,6 +346,13 @@ export async function createWorld({
       });
 
       node.material = Array.isArray(node.material) ? nextMats : nextMats[0];
+
+      // 휴대폰(quality.roadsters 거짓): 날으는 로드스터 · 분사 · 정차 포드를 그리지 않는다. 숨긴 메시는 병합되지 않고, 보행 장애물 격자(getWalkBlocker 의
+      // pick)도 숨긴 메시를 건너뛴다 → 정차 포드가 길을 막지 않는다
+      if (worldVer !== 'ds2' && !quality.roadsters && isRoadsterOnly(node)) {
+        node.visible = false;
+        return;
+      }
 
       // 고폴리 반복 소품(덮개 차량 등) 및 모바일 등급 소품 감축으로 데스크톱(≤2.0M)·모바일(≤0.9M) 예산 충족
       if (quality.tier === 'mobile') {
@@ -556,7 +574,9 @@ export async function createWorld({
     futureRoot.traverse((n) => {
       if (n.userData?.name) byGltfName.set(n.userData.name, n);
     });
+    const plumeMat = createPlumeMaterial();   // 날으는 로드스터 분사(두 대가 함께 쓴다)
     for (const def of layout.movers) {
+      if (def.kind === 'roadster' && !quality.roadsters) continue;   // 휴대폰: 로드스터를 만들지 않는다(메시는 processRoot 가 숨겼다)
       const obj = byGltfName.get(def.object) || futureRoot.getObjectByName(def.object);
       if (!obj) {
         console.warn(`[nowhere] 이동체 ${def.id}: ${def.object} 없음`);
@@ -572,6 +592,26 @@ export async function createWorld({
         futureRoot.add(target);
         target.updateMatrixWorld(true);
         target.attach(obj);
+      }
+      if (def.kind === 'roadster') {
+        // 분사(Blender 에서 차체의 자식): 웹 재질로 바꾸고 그림자를 끈다. 모양 키 번호는 이름(rear · bottom)으로, 없으면 Blender 순서 0 · 1
+        // 분사의 로컬 변환(optimize 의 위치 양자화 되돌림)은 건드리지 않는다 — 모양 키 영향 · 보임만 정한다
+        let plume = null;
+        (byGltfName.get(def.plume) || futureRoot.getObjectByName(def.plume))?.traverse((n) => {
+          if (!plume && n.isMesh) plume = n;
+        });
+        if (plume) {
+          plume.material = plumeMat;
+          plume.castShadow = false;
+          plume.receiveShadow = false;
+          plume.visible = false;
+        } else {
+          console.warn(`[nowhere] 이동체 ${def.id}: 분사 ${def.plume} 없음`);
+        }
+        const dict = plume?.morphTargetDictionary || {};
+        target.visible = false;   // 첫 프레임 전까지(보이는 구간 밖이면 updateMoverActors 가 계속 숨긴다)
+        moverActors.push({ def, object: target, plume, morph: { rear: dict.rear ?? 0, bottom: dict.bottom ?? 1 } });
+        continue;
       }
       if (def.kind === 'spin') {
         moverActors.push({ def, object: target, base: target.quaternion.clone() });
@@ -638,6 +678,49 @@ export async function createWorld({
   };
 }
 
+/** 날으는 로드스터 분사 재질(웹에서 NWF_plume 을 바꾼다): 흰 압축공기 — 반투명, 노즐에서 끝으로 옅어지는 알파(UV v), 깊이 쓰기 · 그림자 없음, 양면.
+ *  Lambert 라 낮에는 밝고 밤에는 거리 조명만큼만 보인다(혼자 빛나지 않는다).
+ *  알파 지도 2 열 = 원뿔 종류(future.py PLUME_U: u 0.25 뒤 · 0.75 바닥). 바닥 분사는 CP(2026-11-12)대로 더 옅게 — 최대 알파를 낮추고 노즐부터
+ *  끝까지 곧바로 줄며, 시선과 거의 나란한 가장자리(|법선 · 시선| 작음)를 지워 원뿔 윤곽선이 남지 않는다. 뒤 분사는 그대로(뒤에서 보면 원뿔
+ *  안쪽을 들여다보는 각이라 가장자리 감쇠를 걸면 사라진다).
+ *  한 번에 그린다(forceSinglePass): 양면 반투명은 three 가 뒷면 → 앞면 두 번 그리는데(차마다 그리기 +1), 한 색 · 깊이 쓰기 없음이라 순서가
+ *  바뀌어도 색은 같다. FrontSide 로 줄이면 뒤에서 열린 끝을 들여다볼 때 보이는 안쪽 면(뒷면)이 빠져 뒤 분사가 사라진다. */
+function createPlumeMaterial() {
+  const n = 32;
+  const data = new Uint8Array(2 * n * 4);
+  for (let i = 0; i < n; i++) {
+    // 행 i = glTF v = i / (n − 1). glTF 는 Blender UV 의 v 를 뒤집으므로 노즐(Blender v 0) = 마지막 행, 끝(Blender v 1) = 0 행 → 0
+    const v = i / (n - 1);
+    const rear = Math.round(255 * 0.75 * Math.pow(v, 1.6));   // 뒤: 노즐 0.75 → 끝 0(처음 값 그대로)
+    const bottom = Math.round(255 * 0.4 * Math.pow(v, 2.2));  // 바닥: 노즐 0.4 → 끝 0, 더 빨리 옅어진다
+    data.set([rear, rear, rear, 255, bottom, bottom, bottom, 255], i * 8);
+  }
+  const alphaMap = new THREE.DataTexture(data, 2, n);
+  alphaMap.magFilter = THREE.LinearFilter;
+  alphaMap.minFilter = THREE.LinearFilter;
+  alphaMap.needsUpdate = true;
+  const mat = new THREE.MeshLambertMaterial({
+    color: '#F4F7F8',
+    emissive: '#2E3236',
+    alphaMap,
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  mat.forceSinglePass = true;
+  mat.onBeforeCompile = (shader) => {
+    // 바닥 원뿔(u > 0.5)만: 가장자리 감쇠 — 원뿔 가운데(시선과 수직인 면)는 그대로, 윤곽(시선과 나란한 면)은 0
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <normal_fragment_maps>',
+      `#include <normal_fragment_maps>
+      float nwPlumeFace = abs( dot( normal, normalize( vViewPosition ) ) );
+      diffuseColor.a *= mix( 1.0, smoothstep( 0.1, 0.8, nwPlumeFace ), step( 0.5, vAlphaMapUv.x ) );`,
+    );
+  };
+  mat.name = 'NWF_plume_web';
+  return mat;
+}
+
 /** 서치라이트 원뿔을 꼭짓점(apex = 드론 경로 첫 점 = Blender 원점)에 둔 피벗에 붙인다 → 피벗(THREE.Group).
  *  meshopt 양자화로 빔 메시의 원점이 원뿔 중심(bbox 중심)으로 옮겨져 있다. 그대로 드론 위치에 두면 원뿔 가운데가 드론에 붙어
  *  위아래로 뻗는다 → Blender 원점(= 원뿔 꼭짓점)에 피벗을 두고 붙인다. */
@@ -686,6 +769,25 @@ const _xAxis = new THREE.Vector3(1, 0, 0);
 /** 매 프레임: 경로 위 위치 · 방향, 회전자 각도, 드론 서치라이트. */
 export function updateMoverActors(actors, elapsed) {
   for (const a of actors) {
+    if (a.def.kind === 'roadster') {
+      const p = roadsterPose(a.def, elapsed);
+      a.object.visible = p.visible;
+      if (!p.visible) continue;
+      a.object.position.set(p.pos[0], p.pos[1], p.pos[2]);
+      // 머리 방향 → 들림 → 롤: 'YZX' = 세계 y(yaw)로 돌린 뒤 차의 옆축 z(pitch, + 코가 위), 마지막에 차의 앞 = 진행 방향 축 x(roll)
+      a.object.rotation.set(p.roll, p.yaw, p.pitch, 'YZX');
+      if (a.plume) {
+        const on = p.thrust > PLUME_MIN;
+        a.plume.visible = on;
+        const inf = a.plume.morphTargetInfluences;
+        if (on && inf) {
+          const m = plumeMorph(p.thrust);   // 길이 ∝ thrust(뒤), 바닥은 0.5 넘는 부분
+          inf[a.morph.rear] = m.rear;
+          inf[a.morph.bottom] = m.bottom;
+        }
+      }
+      continue;
+    }
     if (a.def.kind === 'spin') {
       a.object.quaternion.copy(a.base).multiply(_qSpin.setFromAxisAngle(_xAxis, spinAngle(a.def, elapsed)));
       continue;

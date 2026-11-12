@@ -6,7 +6,7 @@
 #      - buildings (BLD_haus, BLD_facearch)
 #      - cameras (CAM_street, CAM_aerial, CAM_viaduct, CAM_night, CAM_ground, CAM_lot, CAM_future)
 #      - anchors (ANCHOR_* 24개: id, layer, pos, title, facts, lore, source, render)
-#      - movers (이동체 표: future.py 가 장면 속성 nw_movers 에 기록한 드론 · 포드 · 열차 · 배송로봇 · 풍력 회전자)
+#      - movers (이동체 표: future.py 가 장면 속성 nw_movers 에 기록한 드론 · 포드 · 열차 · 배송로봇 · 풍력 회전자 · 날으는 로드스터 시간표 키(keys[].pos 도 three 좌표))
 #      - solids (경로 여유 검사용 상자: 건물 표 · 아파트 · 고가 상판 · HAUS · FaceArch · nw_solid=1 객체, solid_boxes())
 #      모든 좌표는 Blender Z-up (x, y, z) → Three.js Y-up (x, z, −y) 로 변환.
 #   2) public/assets/nowhere/sky-1k.hdr 복사 (build/nowhere-src/hdri/urban_street_03_1k.hdr).
@@ -343,6 +343,8 @@ def export_layout(sc):
             m['path'] = [to_three(p) for p in m['path']]
         if 'origin' in m:
             m['origin'] = to_three(m['origin'])
+        for k in m.get('keys', ()):        # 날으는 로드스터 시간표 키: 위치만 바꾼다(yaw = Blender rotation z = three rotation.y, pitch · roll 은 차 로컬 축)
+            k['pos'] = to_three(k['pos'])
         if m.get('beam') is None:
             m.pop('beam', None)
 

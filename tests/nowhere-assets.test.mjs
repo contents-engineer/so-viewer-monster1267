@@ -262,3 +262,16 @@ test('(h) 주인공 건물 원본은 바이트 그대로이고, 모바일 사본
     assert.ok(statSync(mob).size < statSync(orig).size, `${name} 사본이 원본보다 작아야 한다`);
   }
 });
+
+test('(i) 날으는 로드스터 전송량: future GLB + layout.json 이 로드스터 전(2026-11-12 main 1f2815d)보다 0.3 MB 넘게 늘지 않는다(데스크톱 · 모바일)', () => {
+  const BASE = { desktop: 1349060 + 296395, mobile: 1072192 + 296395 };   // nowhere-future.glb + layout.json 바이트(로드스터 전)
+  const layoutBytes = statSync(resolve(NW_ASSETS, 'layout.json')).size;
+  const now = {
+    desktop: statSync(resolve(NW_ASSETS, 'nowhere-future.glb')).size + layoutBytes,
+    mobile: statSync(resolve(NW_ASSETS, 'mobile', 'nowhere-future.glb')).size + layoutBytes,
+  };
+  for (const k of ['desktop', 'mobile']) {
+    const grow = now[k] - BASE[k];
+    assert.ok(grow <= 0.3 * 1024 * 1024, `${k}: +${(grow / 1024).toFixed(1)} KB > 300 KB`);
+  }
+});
