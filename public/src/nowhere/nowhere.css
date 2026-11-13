@@ -8,6 +8,11 @@
   --nw-warn: #F2B84B;
   --nw-text: #E6EDF6;
   --nw-text-dim: #98A9C4;
+  /* 카테고리 표지(hub-index.js CATEGORIES — 보행 ◇ 스팟 테두리 · 글자). 글자는 --nw-bg-panel-strong 바탕이 흰 장면 위에 놓여도 대비 4.5:1 이상 */
+  --nw-cat-architecture: #F2BE5C;
+  --nw-cat-exhibit: #C3A6FF;
+  --nw-cat-product: #7BE3AE;
+  --nw-cat-move: #E6EDF6;
   --nw-font-sans: 'IBM Plex Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
   --nw-font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 }
@@ -658,7 +663,8 @@ body[data-mode="walk"] .nw-dock-camera {
   }
 }
 
-/* ── 보행 이동 스팟 마커(spot-markers.js): 멀리 작은 마름모 · 가까이 둥근 아이콘 + 이름 · 건물 대표 이름 · 거리 ── */
+/* ── 보행 이동 스팟 마커(spot-markers.js): 멀리 작은 마름모 · 가까이 둥근 아이콘 + 이름 · 건물 대표 이름 · 거리.
+   카테고리(data-category)마다 색 --nw-cat — 먼 단계 ◇ 는 테두리만, 가까운 단계는 테두리 + 동그라미 안 글자(data-glyph) ── */
 .nw-spots {
   position: fixed;
   inset: 0;
@@ -692,12 +698,24 @@ body[data-mode="walk"] .nw-dock-camera {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+.nw-spot[data-category="architecture"] {
+  --nw-cat: var(--nw-cat-architecture);
+}
+.nw-spot[data-category="exhibit"] {
+  --nw-cat: var(--nw-cat-exhibit);
+}
+.nw-spot[data-category="product"] {
+  --nw-cat: var(--nw-cat-product);
+}
+.nw-spot[data-category="move"] {
+  --nw-cat: var(--nw-cat-move);
+}
 .nw-spot-icon {
   position: relative;
   width: 10px;
   height: 10px;
   transform: rotate(45deg);
-  border: 1.5px solid rgba(236, 244, 255, 0.95);
+  border: 1.5px solid var(--nw-cat);
   background: rgba(200, 225, 255, 0.18);
   box-shadow: 0 0 8px rgba(150, 205, 255, 0.6);
   transition: width 0.2s ease, height 0.2s ease, border-radius 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
@@ -710,18 +728,24 @@ body[data-mode="walk"] .nw-dock-camera {
   height: 28px;
   border-radius: 50%;
   transform: none;
-  background: rgba(200, 225, 255, 0.12);
+  background: var(--nw-bg-panel-strong);
 }
 .nw-spot.is-near .nw-spot-icon::after {
-  content: '';
+  content: attr(data-glyph);
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 6px;
-  height: 6px;
-  margin: -3px 0 0 -3px;
-  border-radius: 50%;
-  background: rgba(236, 244, 255, 0.95);
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--nw-font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--nw-cat);
+}
+/* → 는 고정폭 글꼴에서 글자보다 작아 보여 크게(A · E · P 와 비슷한 크기) */
+.nw-spot.is-near[data-category="move"] .nw-spot-icon::after {
+  font-size: 17px;
 }
 .nw-spot.is-aimed .nw-spot-icon,
 .nw-spot:hover .nw-spot-icon {

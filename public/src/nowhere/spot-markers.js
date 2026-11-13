@@ -1,9 +1,10 @@
 // HAUS NOWHERE — 보행 이동 스팟 마커(DOM 오버레이 — 그리기 0): 스팟 자리 보정(보행 지형이 준비되면 빈 자리로) · 화면 투영 ·
-// 단계(멀리 작은 마름모 / 가까이 아이콘 + 이름 / 건물 대표 이름 · 거리) · 가림(보행 충돌 격자) · 클릭 · 탭 · 포인터 잠금 조준 클릭 → onPick(spot).
+// 단계(멀리 작은 마름모 / 가까이 아이콘 + 이름 / 건물 대표 이름 · 거리) · 카테고리 표지(건축 A · 전시물 E · 제품 P · 이동 → — 색 · 글자) · 가림(보행 충돌 격자) · 클릭 · 탭 · 포인터 잠금 조준 클릭 → onPick(spot).
 // 보행 시점일 때만 보이고 비행 · isSuspended(모달 · 조작 안내 · 화면 전환 · 둘러보기) 중에는 숨긴다.
 import * as THREE from 'three';
 import { spotStage, isSpotOccluded, SPOT_LIFT, SPOT_FAR } from './walk-spots.js';
 import { walkPredicates, nearestFreePoint, GOAL_SNAP } from './walk-path.js';
+import { CATEGORIES, spotCategory } from './hub-index.js';
 
 const OCCLUSION_INTERVAL = 0.2;   // s — 가림 검사 간격
 const AIM_RADIUS = 22;            // px — 포인터 잠금 조준점이 마커 위로 판정되는 반경(터치 대상 44 px 의 절반)
@@ -48,8 +49,12 @@ export function createSpotMarkers({ camera, canvas, camCtrl, onPick, isSuspended
       btn.className = 'nw-spot';
       btn.hidden = true;
       btn.setAttribute('aria-label', s.label);
+      // 카테고리 표지(hub-index.js): 버튼 data-category → 색(nowhere.css --nw-cat-*), 아이콘 data-glyph → 가까운 단계 동그라미 안 글자
+      const cat = CATEGORIES.find((c) => c.id === spotCategory(s));
+      btn.dataset.category = cat.id;
       const icon = document.createElement('span');
       icon.className = 'nw-spot-icon';
+      icon.dataset.glyph = cat.glyph;
       const label = document.createElement('span');
       label.className = 'nw-spot-label';
       btn.append(icon, label);
