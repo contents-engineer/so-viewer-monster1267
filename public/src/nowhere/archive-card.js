@@ -167,6 +167,7 @@ export function createArchiveCard({ camera, canvas, quality, getBoxes, isSuspend
       if (sx !== t.sx || sy !== t.sy) {
         t.btn.style.transform = `translate(${sx}px, ${sy}px)`;
         t.btn.style.setProperty('--sx', `${sx}px`);   // 이름표를 화면 가장자리 안으로 밀어 넣는 데 쓴다(nowhere.css)
+        t.btn.style.setProperty('--sy', `${sy}px`);   // 위 끝도 — 올려다볼 때 이름표 윗부분이 잘리지 않게(nowhere.css)
         t.sx = sx;
         t.sy = sy;
       }

@@ -321,6 +321,128 @@ body:not([data-world-ver]) .nw-loader-meta {
   color: var(--nw-text);
 }
 
+/* 현장 정보 HUD(hud.js — H 키): 켜져 있으면 kicker 가 살아 있는 좌표 줄 — 단위(m) · 한국어 그대로(대문자로 바꾸지 않음) */
+.nw-brand-kicker.is-live {
+  text-transform: none;
+  letter-spacing: 0.04em;
+  word-break: keep-all;   /* 좁은 휴대폰에서 꺾이면 낱말 사이에서(「비(타 / 임폴)」 처럼 자르지 않게) */
+}
+
+/* ── 현장 정보 HUD 방위 띠(hud.js): 외관 위 가운데, 클릭 통과. 폭은 hud.js 상수(--nw-compass-w · 휴대폰 --nw-compass-w-phone),
+   시선 ±60° · 15° 눈금 · N · E · S · W(위 줄), 아래 두 줄에 건물 하나씩 ◆ 이름 · 거리(글은 늘 가운데 쪽으로 뻗는다 — is-end 는 ◆ 왼쪽에) ── */
+.nw-compass {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  z-index: 20;
+  width: var(--nw-compass-w);
+  height: 46px;
+  transform: translateX(-50%);
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--nw-bg-panel);
+  border: 1px solid var(--nw-line-struct);
+  border-radius: 2px;
+  backdrop-filter: blur(8px);
+  font-family: var(--nw-font-mono);
+  font-size: 10px;
+  line-height: 1;
+  color: var(--nw-text);
+}
+.nw-compass[hidden] {
+  display: none;
+}
+.nw-compass-strip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 16px;
+}
+.nw-compass-tick {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 7px;
+  background: var(--nw-text-dim);
+  transform: translateX(-50%);
+}
+.nw-compass-tick.is-cardinal {
+  top: 3px;
+  width: auto;
+  height: auto;
+  background: none;
+  font-weight: 500;
+  color: var(--nw-accent);
+}
+.nw-compass-center {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: rgba(230, 237, 246, 0.35);
+}
+.nw-compass-mark {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 13px;
+  white-space: nowrap;
+  transform: translateX(-5px);   /* ◆ 칸(10 px) 가운데가 그 방위 */
+}
+.nw-compass-mark[data-row='0'] {
+  top: 17px;
+}
+.nw-compass-mark[data-row='1'] {
+  top: 30px;
+}
+.nw-compass-mark.is-end {
+  transform: translateX(calc(-100% + 5px));
+}
+.nw-compass-mark.is-end .nw-compass-gem {
+  order: 1;
+}
+.nw-compass-mark[hidden] {
+  display: none;
+}
+.nw-compass-gem {
+  width: 10px;
+  text-align: center;
+  color: var(--nw-cat-architecture);
+}
+.nw-compass-dist {
+  color: var(--nw-text-dim);
+}
+/* 위 막대 한 줄에 브랜드 · 띠 · 오른쪽 버튼이 다 들어가지 않는 폭(오른쪽 버튼 줄 약 540 px)은 위 막대 실제 아래 끝(hud.js 가 재는 --nw-topbar-bottom —
+   좌표 줄 · 월드 제목이 두 줄로 꺾여도)과 보행 안내(오른쪽 위 66–90 px) 아래로 */
+@media (min-width: 721px) and (max-width: 1479px) {
+  .nw-compass {
+    top: max(96px, calc(var(--nw-topbar-bottom, 76px) + 8px));
+  }
+}
+/* 휴대폰: 위 막대 세로 줄(브랜드 · 월드 · 목록 · 조작 안내 · 방식 전환)의 마지막 칸으로 흐른다 — 좌표 줄이 두 줄로 꺾여도 버튼 줄과 겹치지 않게 */
+@media (max-width: 720px) {
+  .nw-compass {
+    position: relative;
+    top: auto;
+    left: auto;
+    flex: none;
+    align-self: center;
+    transform: none;
+    width: var(--nw-compass-w-phone);
+  }
+  .nw-compass-name {
+    display: none;
+  }
+}
+/* 실내 · 감상 · 사진 모드(photo.js body.is-photo)에서는 띠를 숨긴다(인트로 · 방식 고르기는 위 막대와 함께 아래에서 흐리게) */
+body.is-interior .nw-compass,
+body.is-showcase .nw-compass,
+body.is-photo .nw-compass {
+  display: none;
+}
+
 .nw-top-actions {
   pointer-events: auto;
   display: flex;
@@ -1172,10 +1294,12 @@ body.is-interior .nw-dock-camera {
 
 /* ── 인트로 연출(body.is-cinema) · 방식 고르기(body.is-choosing) 동안 HUD 숨김 ── */
 .nw-topbar,
-.nw-dock {
+.nw-dock,
+.nw-compass {
   transition: opacity 0.4s ease, visibility 0.4s ease;
 }
 body.is-cinema .nw-topbar,
+body.is-cinema .nw-compass,
 body.is-cinema .nw-dock,
 body.is-cinema .nw-walk-hud,
 body.is-cinema .nw-spots,
@@ -1185,6 +1309,7 @@ body.is-cinema .nw-archive-card,
 body.is-cinema .nw-exhibit-tags,
 body.is-cinema .nw-hub,
 body.is-choosing .nw-topbar,
+body.is-choosing .nw-compass,
 body.is-choosing .nw-dock,
 body.is-choosing .nw-walk-hud,
 body.is-choosing .nw-spots,
@@ -1691,8 +1816,10 @@ body.is-showcase .nw-hub {
   position: absolute;
   left: 0;
   top: 0;
-  /* transform translate(x, y) 가 가리키는 점 = 이름표 아래 가운데. 가로는 화면 가장자리 8px 안으로 밀어 넣는다(--sx = 이름표 화면 x — 이동 스팟 이름과 같은 방식) */
-  translate: clamp(calc(8px - var(--sx, 50vw)), -50%, calc(100vw - 8px - var(--sx, 50vw) - 100%)) -100%;
+  /* transform translate(x, y) 가 가리키는 점 = 이름표 아래 가운데. 가로는 화면 가장자리 8px 안으로 밀어 넣는다(--sx = 이름표 화면 x — 이동 스팟 이름과 같은 방식).
+     세로도 같은 방식: 위를 올려다봐 이름표 자리가 화면 위 끝에 가까우면 이름표 윗변이 위 막대 · 방위 띠 아래 끝(hud.js 가 재는 --nw-top-hud-bottom,
+     없으면 화면 위 끝) + 8px 아래에 오도록 내린다(--sy = 이름표 화면 y — 잘리거나 위 막대 · 띠에 가리지 않게) */
+  translate: clamp(calc(8px - var(--sx, 50vw)), -50%, calc(100vw - 8px - var(--sx, 50vw) - 100%)) max(-100%, calc(var(--nw-top-hud-bottom, 0px) + 8px - var(--sy, 50vh)));
   min-height: 32px;
   display: flex;
   align-items: center;

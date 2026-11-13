@@ -32,6 +32,7 @@ import { exhibitCollection, cloneExhibit } from './exhibits.js';
 import { createExhibitTags } from './exhibit-tags.js';
 import { createHubPanel } from './hub-panel.js';
 import { hubIndex, runGoPlan } from './hub-index.js';
+import { createHud, hudKeyAction, HUD_BUILDINGS } from './hud.js';
 
 async function boot() {
   const canvas = document.getElementById('nw-canvas');
@@ -348,6 +349,39 @@ async function boot() {
     if ((e.key === 'p' || e.key === 'P') && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat) perf.toggle();
   });
   if (params.get('stats') === '1') perf.toggle(true);
+  // 현장 정보 HUD(hud.js — H 키, 기본 켜짐): 왼쪽 위 브랜드 작은 글씨를 살아 있는 좌표 줄로(성수 위경도 · 산악 장면 좌표 · 실내 층 이름 · 방위),
+  // 외관 위 가운데 방위 띠(시선 ±60° · 두 건물 ◆ 이름 · 거리). 기상 글자는 독 버튼 글자 그대로, 시각은 독과 같은 HH:MM.
+  // 원래 kicker 문구는 위에서 월드에 맞게 바꾼 뒤에 읽는다(끄면 그 월드 문구로). 인트로 · 방식 고르기 · 감상 · 모달 · 조작 안내 · 목록 동안은 H 를 듣지 않는다
+  const weatherLabels = Object.fromEntries([...document.querySelectorAll('[data-weather]')].map((b) => [b.dataset.weather, b.textContent.trim()]));
+  const viewDir = new THREE.Vector3();
+  const hud = createHud({
+    kickerEl: brandKickerEl,
+    mount: document.querySelector('.nw-topbar') || document.body,
+    worldVer,
+    buildings: HUD_BUILDINGS.filter((b) => world.layout.buildings?.[b.id]).map((b) => {
+      const [x, , z] = world.layout.buildings[b.id].pos;
+      return { name: b.name, x, z };
+    }),
+    getView: () => {
+      camera.getWorldDirection(viewDir);
+      return { x: camera.position.x, y: camera.position.y, z: camera.position.z, dx: viewDir.x, dz: viewDir.z };
+    },
+    getFloorLabel: () => interior.currentFloorDef()?.label ?? null,
+    getHour: () => weather.getHour(),
+    getWeatherLabel: () => weatherLabels[weather.getWeather()] || '',
+  });
+  const hudBlocked = () => cinema.isActive() || camCtrl.isIntroActive() || document.body.classList.contains('is-choosing') || showcase.isActive() || showcase.isBusy() || hub.isOpen() || modal.isOpen() || help.isOpen();
+  window.addEventListener('keydown', (e) => {
+    const t = e.target;
+    const act = hudKeyAction({
+      key: e.key, code: e.code, repeat: e.repeat, metaKey: e.metaKey, ctrlKey: e.ctrlKey, altKey: e.altKey, defaultPrevented: e.defaultPrevented,
+      typing: Boolean(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)),
+      blocked: hudBlocked(),
+    });
+    if (act !== 'toggle') return;
+    e.preventDefault();
+    hud.toggle();
+  });
   const scenario = createScenarioRunner({
     adapters: {
       modal: (step) => modal.show({ title: step.title, buttons: step.buttons }),
@@ -740,6 +774,7 @@ async function boot() {
     retail.update();
     if (!studio) archive.update();   // 건물 이름표 자리 · 카드 거리(감상 중에는 외관 카메라가 멈춰 있다 — 이름표 · 카드는 CSS 로 숨김)
     if (!studio) exhibitTags.update();   // 실내 전시물 이름표(감상 중에는 CSS 로 숨김)
+    if (!studio) hud.update(performance.now());   // 좌표 줄 · 방위 띠(HUD_UPDATE_MS 마다, 바뀐 것만 DOM — 감상 중에는 위 막대 · 띠가 숨어 있다)
 
     renderer.info.reset();
     if (studio) {
@@ -773,6 +808,7 @@ async function boot() {
     openExhibit,
     exhibitTags,
     hub,
+    hud,
     cinema,
     interior,
     scenario,
