@@ -243,3 +243,16 @@ test('(n) 로드스터 웹 연결(world.js): 차체 · 분사는 이동체(병�
   for (const nm of ['FU_roadster_a', 'FU_roadster_b_plume', 'FU_parked_pod', 'FU_parked_pod1']) assert.ok(ROADSTER_ONLY.test(nm), `ROADSTER_ONLY: ${nm}`);
   for (const nm of ['FU_taxi0', 'FU_terrace', 'PR_zelkova_a', 'NW_Merged_future_NWF_mover']) assert.ok(!ROADSTER_ONLY.test(nm), `ROADSTER_ONLY 가 ${nm} 를 숨긴다`);
 });
+
+test('(j2) 태블릿(quality.cityEdge): 중경 링 BD_mid 는 휴대폰에서만 숨기고, 구조물 인스턴스(아파트 · 고가 경간 · 아치)는 태블릿에서 솎지 않는다', () => {
+  // 인트로 · 거리 시점이 블록 가장자리 큰길(서쪽 x −110 · 남쪽 z −143)을 따라가 BD_mid 가 없으면 길 건너가 빈 땅이 된다
+  assert.match(worldSrc, /!quality\.cityEdge && node\.name\.startsWith\('BD_mid_'\)/, 'BD_mid 숨김은 cityEdge 가 거짓(휴대폰)일 때만');
+  assert.doesNotMatch(worldSrc, /node\.name === 'PR_wires' \|\| node\.name\.startsWith\('BD_mid_'\)/, '모바일 등급 전체에서 BD_mid 를 숨기던 조건이 남아 있다');
+  const STRUCT = srcRegex('MOBILE_STRUCT_INST');
+  for (const nm of ['PR_apt', 'PR_apt_1', 'PR_via_span', 'PR_via_infill', 'PR_via_infill_1']) assert.ok(STRUCT.test(nm), `${nm} 는 태블릿에서 솎지 않는다`);
+  for (const nm of ['PR_zelkova_b', 'PR_ph_shrub', 'PR_streetlight', 'PR_via', 'BD_mid_n']) assert.ok(!STRUCT.test(nm), `${nm} 는 구조물이 아니다`);
+  assert.match(worldSrc, /quality\.cityEdge && MOBILE_STRUCT_INST\.test\(node\.name\)/, '구조물 예외는 cityEdge(태블릿)에서만');
+  const j = glbJson('../public/assets/nowhere/mobile/nowhere-present.glb');
+  const instMeshes = new Set(j.nodes.filter((n) => n.extensions?.EXT_mesh_gpu_instancing).map((n) => j.meshes[n.mesh].name));
+  for (const nm of ['PR_apt', 'PR_via_span', 'PR_via_infill']) assert.ok(instMeshes.has(nm), `모바일 GLB 에 인스턴스 ${nm} 없음`);
+});

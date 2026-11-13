@@ -66,11 +66,16 @@ export function getQualityConfig(tier = 'desktop', worldVer = 'seongsu', device 
       : { haus: 'assets/gm_building.glb', facearch: 'assets/facearch.glb' };
   // 날으는 로드스터(성수): 데스크톱 · 태블릿만 — 휴대폰은 로드스터 · 분사 · 정차 포드를 그리지 않는다(world.js)
   const roadsters = device !== 'phone';
+  // 블록 바깥 중경 도시 링(BD_mid) · 구조물 인스턴스(아파트 · 고가 경간 · 아치, world.js MOBILE_STRUCT_INST): 데스크톱 · 태블릿은 다 그린다.
+  // 휴대폰만 예산(0.9 M) 때문에 숨기거나 솎는다 — 인트로 · 거리 시점이 블록 가장자리 큰길을 따라가 이것이 없으면 길 건너가 빈 땅이라 맵이 잘린 듯 보인다.
+  // 태블릿 예산: 그리기 ≤ 186(그대로) · 삼각형 0.92 → 0.98 M(성수 실측 최대 조감 177 · 0.952 M, 로드스터 최악 +20 K 포함 ≤ 0.98 M)
+  const cityEdge = device !== 'phone';
   if (tier === 'mobile') {
     return {
       tier: 'mobile',
       device,
       roadsters,
+      cityEdge,
       worldVer: ver,
       baseDir,
       assetDir: `${baseDir}/mobile`,
@@ -91,6 +96,7 @@ export function getQualityConfig(tier = 'desktop', worldVer = 'seongsu', device 
     tier: 'desktop',
     device,
     roadsters,
+    cityEdge,
     worldVer: ver,
     baseDir,
     assetDir: baseDir,

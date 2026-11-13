@@ -248,6 +248,9 @@ export async function createWorld({
   // 늘어난 삼각형(+5.2 K)은 원경 크림색 상자(backdrop.py FAR_*_KEEP, 줄이기 순서 1)를 덜어 맞춘다. 화분 가로수(PR_zelkova_b · PR_planter)는
   // 예산이 모자라 아래 규칙대로 솎는다(Task 12 Step 2 줄이기 3: 화분형 가로수 수)
   const MOBILE_FULL_INST = /^(PR_zelkova_a|FU_terrace)/;
+  // 태블릿(quality.cityEdge)에서는 솎지 않는 구조물 인스턴스(성수만): 아파트 PR_apt(3 동) · 2호선 고가 경간 PR_via_span · 아래 벽돌 아치 PR_via_infill.
+  // 소품과 달리 빠지면 건물 · 고가가 끊겨 보인다(+약 9.9 K 삼각형, 병합되어 그리기는 늘지 않음). 휴대폰은 예산 때문에 위 규칙대로 솎는다
+  const MOBILE_STRUCT_INST = /^(PR_apt|PR_via_(span|infill))(_\d+)?$/;
   function isFarCaster(node) {
     for (let cur = node; cur; cur = cur.parent) {
       if (typeof cur.name === 'string' && FAR_CASTER.test(cur.name)) return true;
@@ -356,15 +359,16 @@ export async function createWorld({
 
       // 고폴리 반복 소품(덮개 차량 등) 및 모바일 등급 소품 감축으로 데스크톱(≤2.0M)·모바일(≤0.9M) 예산 충족
       if (quality.tier === 'mobile') {
-        if (node.name === 'PR_wires' || node.name.startsWith('BD_mid_') || (worldVer !== 'ds2' && MOBILE_HIDE.test(node.name))) {
+        // 중경 링 BD_mid 는 휴대폰만 숨긴다(태블릿은 quality.cityEdge — 길 건너가 비지 않게, +4 그리기 · +42.7 K 삼각형)
+        if (node.name === 'PR_wires' || (!quality.cityEdge && node.name.startsWith('BD_mid_')) || (worldVer !== 'ds2' && MOBILE_HIDE.test(node.name))) {
           node.visible = false;
           return;
         }
       }
       if (node.isInstancedMesh) {
         const triPerInst = (node.geometry?.index ? node.geometry.index.count : (node.geometry?.attributes?.position?.count || 0)) / 3;
-        if (quality.tier === 'mobile' && worldVer !== 'ds2' && MOBILE_FULL_INST.test(node.name)) {
-          // 솎지 않음(모바일 공원 느티나무 · 카페 테라스 — 아래 MOBILE_FULL_INST)
+        if (quality.tier === 'mobile' && worldVer !== 'ds2' && (MOBILE_FULL_INST.test(node.name) || (quality.cityEdge && MOBILE_STRUCT_INST.test(node.name)))) {
+          // 솎지 않음(모바일 공원 느티나무 · 카페 테라스 — MOBILE_FULL_INST, 태블릿 구조물 — MOBILE_STRUCT_INST)
         } else if (quality.tier === 'mobile') {
           if (triPerInst > 350) {
             node.count = Math.min(node.count, 2);

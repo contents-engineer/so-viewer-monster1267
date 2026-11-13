@@ -180,3 +180,11 @@ test('(w) getQualityConfig: device · roadsters(휴대폰만 끔), device 를 �
   assert.equal(getQualityConfig('mobile', 'seongsu', 'tablet').assetDir, getQualityConfig('mobile', 'seongsu', 'phone').assetDir);
   assert.deepEqual(getQualityConfig('mobile', 'seongsu', 'tablet').heroUrls, getQualityConfig('mobile', 'seongsu', 'phone').heroUrls);
 });
+
+test('(w2) cityEdge: 태블릿 · 데스크톱은 블록 바깥 중경 링(BD_mid) · 구조물 인스턴스를 다 그린다 — 휴대폰만 끈다(모바일 예산 0.9 M)', () => {
+  assert.equal(getQualityConfig('desktop', 'seongsu', 'desktop').cityEdge, true);
+  assert.equal(getQualityConfig('mobile', 'seongsu', 'tablet').cityEdge, true, '태블릿은 인트로 · 거리 시점에서 길 건너가 비지 않게');
+  assert.equal(getQualityConfig('mobile', 'ds2', 'tablet').cityEdge, true);
+  assert.equal(getQualityConfig('mobile', 'seongsu', 'phone').cityEdge, false);
+  assert.equal(getQualityConfig('mobile').cityEdge, false, 'device 를 안 주면 모바일 = 휴대폰');
+});
