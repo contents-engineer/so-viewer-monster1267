@@ -165,7 +165,7 @@ export function createHud({ kickerEl, mount = document.body, worldVer, buildings
   band.append(strip, center, ...marks.map((m) => m.node));
   mount.append(band);
 
-  // 위 막대 아래 끝(--nw-topbar-bottom — 721–1479 px 에서 띠를 그 아래에)과 위 막대 · 띠를 합친 아래 끝(:root --nw-top-hud-bottom — 건물 이름표가
+  // 위 막대 아래 끝(--nw-topbar-bottom — 721–1639 px 에서 띠를 그 아래에)과 위 막대 · 띠를 합친 아래 끝(:root --nw-top-hud-bottom — 건물 이름표가
   // 올라가는 한계, nowhere.css)을 잰다. 위 막대(좌표 줄이 꺾임 · 창 폭) · 띠(켜고 끄기 · 숨김) 크기가 바뀔 때만 — 매 프레임 읽지 않는다
   if (typeof ResizeObserver === 'function' && mount !== document.body) {
     const measure = () => {

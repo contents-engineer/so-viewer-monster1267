@@ -414,9 +414,9 @@ body:not([data-world-ver]) .nw-loader-meta {
 .nw-compass-dist {
   color: var(--nw-text-dim);
 }
-/* 위 막대 한 줄에 브랜드 · 띠 · 오른쪽 버튼이 다 들어가지 않는 폭(오른쪽 버튼 줄 약 540 px)은 위 막대 실제 아래 끝(hud.js 가 재는 --nw-topbar-bottom —
+/* 위 막대 한 줄에 브랜드 · 띠 · 오른쪽 버튼이 다 들어가지 않는 폭(오른쪽 버튼 줄 약 600 px — 사진 버튼 포함, 1600 px 에서 띠 오른쪽 960 · 버튼 왼쪽 976 — 다른 OS 글꼴 여유로 1640 px 부터 한 줄)은 위 막대 실제 아래 끝(hud.js 가 재는 --nw-topbar-bottom —
    좌표 줄 · 월드 제목이 두 줄로 꺾여도)과 보행 안내(오른쪽 위 66–90 px) 아래로 */
-@media (min-width: 721px) and (max-width: 1479px) {
+@media (min-width: 721px) and (max-width: 1639px) {
   .nw-compass {
     top: max(96px, calc(var(--nw-topbar-bottom, 76px) + 8px));
   }
@@ -2150,5 +2150,161 @@ body.is-showcase .nw-hub {
   }
   .nw-hub-head {
     padding: max(14px, env(safe-area-inset-top)) 8px 12px 18px;
+  }
+}
+
+/* ── 사진 모드(photo.js — C · 위 막대 「사진」): 화면 요소(위 막대 · 방위 띠 · 독 · 보행 안내 · 스팟 · 성능 표시 · 실내 HUD · 자막 · 제품 · 전시물 · 건물 이름표 · 건물 카드 · 목록)를
+   모두 숨기고 아래 가운데 도구 줄만 — 화각 · 저장 · 링크 복사(실내는 이유) · 닫기, 그 위에 알림 · 링크 글 칸. 누르는 자리 44 px. 모달 · 화면 전환 · 조작 안내 아래 ── */
+body.is-photo .nw-topbar,
+body.is-photo .nw-compass,
+body.is-photo .nw-dock,
+body.is-photo .nw-walk-hud,
+body.is-photo .nw-spots,
+body.is-photo .nw-perf,
+body.is-photo .nw-interior-hud,
+body.is-photo .nw-interior-caption,
+body.is-photo .nw-retail-tags,
+body.is-photo .nw-exhibit-tags,
+body.is-photo .nw-archive-tags,
+body.is-photo .nw-archive-card,
+body.is-photo .nw-hub {
+  display: none;
+}
+.nw-photo-btn.is-blocked {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.nw-photo-btn.is-blocked:hover {
+  color: var(--nw-text-dim);
+  border-color: var(--nw-line-struct);
+}
+.nw-photo {
+  position: fixed;
+  left: 50%;
+  bottom: max(18px, calc(env(safe-area-inset-bottom) + 8px));
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  transform: translateX(-50%);
+  word-break: keep-all;
+}
+.nw-photo[hidden] {
+  display: none;
+}
+.nw-photo-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px;
+  background: var(--nw-bg-panel-strong);
+  border: 1px solid var(--nw-line-struct);
+  border-radius: 2px;
+  backdrop-filter: blur(8px);
+}
+.nw-photo-bar .nw-btn {
+  min-height: 44px;
+  min-width: 44px;
+}
+.nw-photo-fov {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px 0 8px;
+  font-size: 12px;
+  color: var(--nw-text-dim);
+}
+.nw-photo-fov-slider {
+  width: 150px;
+  height: 44px;
+  margin: 0;
+  accent-color: var(--nw-accent);
+  cursor: pointer;
+}
+.nw-photo-fov-value {
+  min-width: 3ch;
+  font-family: var(--nw-font-mono);
+  font-size: 12px;
+  text-align: right;
+  color: var(--nw-text);
+}
+.nw-photo-note {
+  padding: 0 8px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--nw-text-dim);
+}
+.nw-photo-note[hidden],
+.nw-photo-msg[hidden],
+.nw-photo-url[hidden] {
+  display: none;
+}
+.nw-photo-msg {
+  margin: 0;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--nw-text);
+  background: var(--nw-bg-panel-strong);
+  border: 1px solid var(--nw-accent);
+  border-radius: 2px;
+  text-align: center;
+}
+.nw-photo-url {
+  box-sizing: border-box;
+  width: min(560px, calc(100vw - 32px));
+  min-height: 44px;
+  padding: 0 10px;
+  font-family: var(--nw-font-mono);
+  font-size: 12px;
+  color: var(--nw-text);
+  background: var(--nw-bg-panel-strong);
+  border: 1px solid var(--nw-line-strong);
+  border-radius: 2px;
+  user-select: all;
+}
+/* 휴대폰 · 터치 화면: 위 막대 「사진」 버튼은 폭 44 px 이상, 누르는 자리는 높이 44 px(위로 넓힌다 — 목록 버튼과 같이) */
+@media (max-width: 720px), (pointer: coarse) {
+  .nw-photo-btn {
+    position: relative;
+    min-width: 44px;
+  }
+  .nw-photo-btn::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -5px;
+    height: 44px;
+  }
+}
+/* 휴대폰: 화각 줄은 한 줄 전체(슬라이더가 남은 폭을 채움), 버튼 셋은 그 아래 한 줄 — 실내 이유 문구는 맨 아래 한 줄 전체(저장 · 닫기가 한 줄에 남게) */
+@media (max-width: 720px) {
+  .nw-photo {
+    width: calc(100vw - 16px);
+    max-width: none;
+  }
+  .nw-photo-bar {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .nw-photo-fov {
+    flex: 1 1 100%;
+  }
+  .nw-photo-fov-slider {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+  }
+  .nw-photo-note {
+    order: 1;
+    flex: 1 1 100%;
+    padding-bottom: 4px;
+    text-align: center;
   }
 }

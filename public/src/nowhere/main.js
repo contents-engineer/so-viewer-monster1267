@@ -33,6 +33,7 @@ import { createExhibitTags } from './exhibit-tags.js';
 import { createHubPanel } from './hub-panel.js';
 import { hubIndex, runGoPlan } from './hub-index.js';
 import { createHud, hudKeyAction, HUD_BUILDINGS } from './hud.js';
+import { createPhotoMode, parseFovParam } from './photo.js';
 
 async function boot() {
   const canvas = document.getElementById('nw-canvas');
@@ -44,6 +45,7 @@ async function boot() {
   // 시작 결정: 일반 주소(/)는 월드 선택 화면부터 — 고르기 전에는 렌더러 · 월드를 만들지 않는다(이미지 두 장만 받음)
   const entry = resolveEntry(params, window.__NW_DEFAULT_WORLD);
   const pose = parsePose(params);   // 같은 자리 주소(at · look — 반대 월드 건물 카드에서 넘어옴): 방식을 적용한 뒤 그 자리로(runEntry)
+  const poseFov = parseFovParam(params);   // 사진 링크 화각(fov — 20–90 정수, 아니면 null): 시작 방식이 자유 시점일 때만 처음 한 번(runEntry)
   const worldVer = entry.select ? await showWorldSelect() : entry.world;
   document.body.dataset.worldVer = worldVer;
 
@@ -205,6 +207,26 @@ async function boot() {
     },
   });
 
+  // 사진 모드(photo.js — C 키 · 위 막대 「사진」): 화면 요소를 모두 숨기고(body.is-photo) 아래 가운데 도구 줄(화각 · 저장 · 링크 복사 · 닫기)만 — 지금 방식 조작으로 구도를 잡는다.
+  // 키 처리기(창 캡처)가 조작 안내 · 모달 · 감상 · 목록 · 건물 카드 · main Esc 보다 먼저 받도록 그것들보다 먼저 만든다 — 떠 있는 동안 Esc 는 사진 모드부터 닫고, V · ? · L · H · P · K 는 막는다.
+  // 인트로 · 방식 고르기 · 감상 · 모달 · 조작 안내 · 목록 · 비행 · 컷 이동 · 실내 전환 · 층 둘러보기 동안은 열지 않고, 떠 있다가 그렇게 되면(실내 엘리베이터 질문 등) 닫는다.
+  // 저장은 렌더 루프가 그린 직후 afterRender 로, 링크는 지금 자리 · 시선 목표 · 보행 여부 · 시각 · 기상(실내는 링크 없음)
+  const photo = createPhotoMode({
+    camera,
+    canvas,
+    worldVer,
+    getPose: () => ({ at: camera.position.toArray(), target: camCtrl.controls.target.toArray(), walking: camCtrl.isWalkMode() }),
+    getHour: () => weather.getHour(),
+    getWeather: () => weather.getWeather(),
+    isInterior: () => interior.isActive(),
+    isPointerLocked: () => camCtrl.isPointerLocked(),
+    isBlocked: () => cinema.isActive() || camCtrl.isIntroActive() || document.body.classList.contains('is-choosing') || showcase.isActive() || showcase.isBusy() || modal.isOpen() || help.isOpen() || hub.isOpen() || camCtrl.isFlying() || spotCutting || interior.isBusy() || interior.isTouring(),
+    onOpen: () => {
+      camCtrl.releasePointer();  // 마우스 고정을 풀어 도구 줄을 바로 누를 수 있게(시선 둘러보기는 드래그로)
+      camCtrl.cancelWalkTo();   // 스팟으로 걷던 중이면 그 자리에서 멈춘다(도착 카드 · 입장 질문이 숨은 채 뜨지 않게)
+    },
+  });
+
   // 조작 안내(? 키 · 상단 버튼). 열 때 보행 마우스 고정을 풀고(안내를 클릭으로 닫게) 스팟 자동 걷기를 멈춘다.
   const help = createHelpOverlay({
     onOpen: () => {
@@ -227,7 +249,7 @@ async function boot() {
     canvas,
     camCtrl,
     onPick: (spot) => goToSpot(spot),
-    isSuspended: () => spotCutting || modal.isOpen() || help.isOpen() || interior.isBusy() || interior.isTouring() || showcase.isActive() || showcase.isBusy(),
+    isSuspended: () => spotCutting || modal.isOpen() || help.isOpen() || interior.isBusy() || interior.isTouring() || showcase.isActive() || showcase.isBusy() || photo.isActive(),
   });
   markers.setSpots(exteriorSpotList);
 
@@ -245,7 +267,7 @@ async function boot() {
     canvas,
     getEnvMap: () => studioEnvironment(renderer),
     onOpen: (id) => openShowcase(id),
-    isSuspended: () => spotCutting || modal.isOpen() || help.isOpen() || interior.isBusy() || interior.isTouring() || showcase.isActive() || showcase.isBusy(),
+    isSuspended: () => spotCutting || modal.isOpen() || help.isOpen() || interior.isBusy() || interior.isTouring() || showcase.isActive() || showcase.isBusy() || photo.isActive(),
   });
   // 실내 전시물(inner-layout exhibits — 네 층): 8 m 안 이름표 「<이름> · 자세히 보기」 · 자유 시점 클릭 · 보행 마우스 고정 중 조준점 클릭 → 전시물 감상.
   // 리테일 진열 다음에 만든다 — 두 캔버스 캡처 click 처리기는 등록 순서대로 돌므로 제품 · 받침대를 맞힌 클릭은 리테일이 먼저 받아 막는다(제품이 먼저).
@@ -258,7 +280,7 @@ async function boot() {
       const root = interior.currentRoot();
       return def && root ? { def, root } : null;
     },
-    isSuspended: () => !interior.isActive() || spotCutting || modal.isOpen() || help.isOpen() || interior.isBusy() || interior.isTouring() || showcase.isActive() || showcase.isBusy(),
+    isSuspended: () => !interior.isActive() || spotCutting || modal.isOpen() || help.isOpen() || interior.isBusy() || interior.isTouring() || showcase.isActive() || showcase.isBusy() || photo.isActive(),
     isWalking: () => camCtrl.isWalkMode(),
     isSpotAimed: () => markers.isAimed(),
     onOpen: (id) => openExhibit(id),
@@ -336,7 +358,7 @@ async function boot() {
     canvas,
     quality,
     getBoxes: () => world.buildingBoxes,
-    isSuspended: () => cinema.isActive() || camCtrl.isIntroActive() || document.body.classList.contains('is-choosing') || scenario.isRunning() || interior.isActive() || interior.isBusy() || showcase.isActive() || showcase.isBusy() || help.isOpen() || modal.isOpen() || spotCutting || camCtrl.isFlying(),
+    isSuspended: () => cinema.isActive() || camCtrl.isIntroActive() || document.body.classList.contains('is-choosing') || scenario.isRunning() || interior.isActive() || interior.isBusy() || showcase.isActive() || showcase.isBusy() || help.isOpen() || modal.isOpen() || spotCutting || camCtrl.isFlying() || photo.isActive(),
     isWalking: () => camCtrl.isWalkMode(),
     onDetail: (id) => openArchive(id),
     sameSpotWorld: otherWorldLabel,
@@ -562,6 +584,11 @@ async function boot() {
         camCtrl.placeAt(p.at, p.look);
       }
     }
+    // 사진 링크 화각: 시작 자유 시점에만 — 그 뒤 프리셋 · 보행 · 인트로는 camera.js 가 자기 화각으로 바꾼다(보행 50° · 프리셋 화각)
+    if (poseFov !== null && modes.get() === 'free') {
+      camera.fov = poseFov;
+      camera.updateProjectionMatrix();
+    }
   }
 
   function startScenario(stepId) {
@@ -600,7 +627,7 @@ async function boot() {
   });
 
   // 월드 전환: 다른 월드를 새 월드의 인트로부터 다시 열고, 인트로가 끝나면 지금 방식 그대로 이어 간다(?ver=…&mode=… — 선택 화면 · 방식 고르기 없음).
-  // 주소는 entry.js worldSwitchUrl — 인트로를 막는 값(noIntro · cam · weather · time · at · look)은 지운다. 새 월드는 기본 기상 · 시각으로 인트로부터
+  // 주소는 entry.js worldSwitchUrl — 인트로를 막는 값(noIntro · cam · weather · time · at · look)과 사진 링크 화각(fov)은 지운다. 새 월드는 기본 기상 · 시각 · 화각으로 인트로부터
   document.querySelectorAll('.nw-world-switch [data-world-ver]').forEach((btn) => {
     const isCurrent = btn.dataset.worldVer === worldVer;
     btn.classList.toggle('is-active', isCurrent);
@@ -637,7 +664,7 @@ async function boot() {
     fade.fadeTo(false, '', SAME_SPOT_FADE_MS);
   });
 
-  // Esc: 모달 · 조작 안내 · 방식 고르기가 먼저 받고(캡처 단계), 남은 Esc 는 인트로를 건너뛰거나 비행 중인 투어를 끝낸다
+  // Esc: 사진 모드 · 모달 · 조작 안내 · 방식 고르기가 먼저 받고(캡처 단계), 남은 Esc 는 인트로를 건너뛰거나 비행 중인 투어를 끝낸다
   window.addEventListener(
     'keydown',
     (e) => {
@@ -771,6 +798,7 @@ async function boot() {
     }
     markers.update(dt);
     hub.update();   // 목록 버튼: 열 수 없으면 흐리게(감상 중에는 위 막대째 숨어 있다)
+    photo.update();   // 사진 모드: 막히면 닫기 · 사진 화각 다시 맞추기(카메라 갱신 뒤) · 위 막대 버튼 흐리게
     retail.update();
     if (!studio) archive.update();   // 건물 이름표 자리 · 카드 거리(감상 중에는 외관 카메라가 멈춰 있다 — 이름표 · 카드는 CSS 로 숨김)
     if (!studio) exhibitTags.update();   // 실내 전시물 이름표(감상 중에는 CSS 로 숨김)
@@ -783,6 +811,7 @@ async function boot() {
     } else {
       world.followSun(camera);
       post.composer.render();
+      photo.afterRender();   // 사진 저장: 그린 직후 같은 프레임에 캔버스를 읽는다(preserveDrawingBuffer 없이 — 감상 중에는 사진 모드가 닫혀 있다)
     }
     perf.frame(performance.now());   // 꺼져 있으면 바로 돌아간다
   }
@@ -809,6 +838,7 @@ async function boot() {
     exhibitTags,
     hub,
     hud,
+    photo,
     cinema,
     interior,
     scenario,

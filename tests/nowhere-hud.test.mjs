@@ -321,13 +321,13 @@ test('(k2) 위 막대 · 띠 아래 끝 재기(ResizeObserver — 크기가 바�
     assert.equal(observers.length, 1);
     assert.deepEqual(observers[0].targets, [bar, hud.element], '위 막대 · 띠 크기를 본다');
     const rootStyle = dom.document.documentElement.style;
-    // 721–1479 px: 위 막대(좌표 줄 · 제목 두 줄) 아래 끝 110, 띠는 그 아래 118 … 164
+    // 721–1599 px: 위 막대(좌표 줄 · 제목 두 줄) 아래 끝 110, 띠는 그 아래 118 … 164
     bar.rect = { bottom: 110.4, height: 92 };
     hud.element.rect = { bottom: 164, height: 46 };
     observers[0].cb([]);
     assert.equal(hud.element.style['--nw-topbar-bottom'], '110px');
     assert.equal(rootStyle['--nw-top-hud-bottom'], '164px');
-    // 1480 px 이상: 띠가 위 막대 줄 안(18 … 64) — 아래 끝은 위 막대(브랜드 76)
+    // 1600 px 이상: 띠가 위 막대 줄 안(18 … 64) — 아래 끝은 위 막대(브랜드 76)
     bar.rect = { bottom: 76, height: 58 };
     hud.element.rect = { bottom: 64, height: 46 };
     observers[0].cb([]);
@@ -377,9 +377,9 @@ test('(m) CSS: 방위 띠는 위 가운데(폭 변수 — hud.js 상수), 외관
   assert.match(phone, /\.nw-compass \{[^}]*position: relative;[^}]*width: var\(--nw-compass-w-phone\)/, '휴대폰은 위 막대 세로 줄의 마지막 칸');
   assert.match(phone, /\.nw-compass-name \{\s*display: none;/);
   assert.match(css, /\.nw-brand-kicker\.is-live \{[^}]*text-transform: none;/);
-  // 721–1479 px: 고정 높이가 아니라 위 막대 실제 아래 끝(hud.js 가 잼) 아래 — 보행 안내(66–90 px) 아래 96 px 보다 위로는 오지 않는다
-  const mid = css.match(/@media \(min-width: 721px\) and \(max-width: 1479px\) \{([\s\S]*?)\n\}/);
-  assert.ok(mid, '721–1479 px 배치 없음');
+  // 721–1599 px(사진 버튼이 들어가 오른쪽 버튼 줄이 약 600 px — 1600 px 부터 한 줄): 고정 높이가 아니라 위 막대 실제 아래 끝(hud.js 가 잼) 아래 — 보행 안내(66–90 px) 아래 96 px 보다 위로는 오지 않는다
+  const mid = css.match(/@media \(min-width: 721px\) and \(max-width: 1639px\) \{([\s\S]*?)\n\}/);
+  assert.ok(mid, '721–1599 px 배치 없음');
   assert.match(mid[1], /\.nw-compass \{\s*top: max\(96px, calc\(var\(--nw-topbar-bottom, 76px\) \+ 8px\)\);/);
 });
 

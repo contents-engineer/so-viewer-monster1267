@@ -167,13 +167,13 @@ test('(k) 같은 자리 주소 → 새 페이지: 인트로 없이 반대 월드
 });
 
 test('(l) worldSwitchUrl(위 막대 월드 버튼): 경로 규칙 · 지울 값은 같고 at · look 도 지운다 — 새 월드 인트로부터(지금 그대로)', () => {
-  const href = worldSwitchUrl({ pathname: '/nowhere-mountain', search: '?ver=ds2&mode=walk&noIntro=1&cam=lot&weather=rain&time=21:30&at=1,2,3&look=4,5,6&tier=mobile', targetVer: 'seongsu', mode: 'walk' });
+  const href = worldSwitchUrl({ pathname: '/nowhere-mountain', search: '?ver=ds2&mode=walk&noIntro=1&cam=lot&weather=rain&time=21:30&at=1,2,3&look=4,5,6&fov=30&tier=mobile', targetVer: 'seongsu', mode: 'walk' });
   assert.equal(pathOf(href), '/nowhere');
   const p = paramsOf(href);
   assert.equal(p.get('ver'), 'seongsu');
   assert.equal(p.get('mode'), 'walk');
   assert.equal(p.get('tier'), 'mobile');
-  for (const k of ['noIntro', 'cam', 'weather', 'time', 'at', 'look']) assert.equal(p.has(k), false, `${k} 가 남음`);
+  for (const k of ['noIntro', 'cam', 'weather', 'time', 'at', 'look', 'fov']) assert.equal(p.has(k), false, `${k} 가 남음`);   // fov = 사진 링크 화각(새 월드는 기본 화각)
   assert.deepEqual(resolveEntry(p, DEF.nowhere), { select: false, world: 'seongsu', intro: true, mode: 'walk' });
   assert.equal(parsePose(p), null);
   assert.equal(paramsOf(worldSwitchUrl({ pathname: '/', search: '', targetVer: 'ds2', mode: null })).get('mode'), 'free');

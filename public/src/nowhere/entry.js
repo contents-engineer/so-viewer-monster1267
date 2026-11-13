@@ -15,8 +15,8 @@ export const SAME_SPOT_SNAP_M = 6;      // 보행: 그 자리가 반대 월드 �
 export const POSE_DECIMALS = 2;         // 주소의 at · look 좌표 반올림(소수 자리)
 export const POSE_LIMIT = 2000;         // 장면 한계(m) — at · look 이 이 밖이면 무시하고 기본 시점
 
-// 월드를 바꿀 때 지우는 값: 인트로를 막는 바로가기 값(resolveEntry)과 같은 자리 값 — 새 월드는 기본 기상 · 시각
-const SWITCH_DROP = ['noIntro', 'cam', 'weather', 'time', 'at', 'look'];
+// 월드를 바꿀 때 지우는 값: 인트로를 막는 바로가기 값(resolveEntry)과 같은 자리 값 · 사진 링크 화각(fov — photo.js) — 새 월드는 기본 기상 · 시각 · 화각
+const SWITCH_DROP = ['noIntro', 'cam', 'weather', 'time', 'at', 'look', 'fov'];
 
 export function resolveEntry(params, defaultWorld = null) {
   const get = (key) => (params && typeof params.get === 'function' ? params.get(key) : null) || '';
