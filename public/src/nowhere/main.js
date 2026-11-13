@@ -371,7 +371,7 @@ async function boot() {
     });
   });
 
-  // 월드 전환: 다른 월드를 같은 방식으로 다시 연다 — 선택 화면 · 인트로 없이 거리 시점에서(?ver=…&noIntro=1&mode=…)
+  // 월드 전환: 다른 월드를 새 월드의 인트로부터 다시 열고, 인트로가 끝나면 지금 방식 그대로 이어 간다(?ver=…&mode=… — 선택 화면 · 방식 고르기 없음)
   document.querySelectorAll('.nw-world-switch [data-world-ver]').forEach((btn) => {
     const isCurrent = btn.dataset.worldVer === worldVer;
     btn.classList.toggle('is-active', isCurrent);
@@ -381,9 +381,12 @@ async function boot() {
       if (targetVer === worldVer) return;
       const nextParams = new URLSearchParams(window.location.search);
       nextParams.set('ver', targetVer);
-      nextParams.set('noIntro', '1');
       nextParams.set('mode', modes.get() || 'free');
-      nextParams.delete('cam');   // 거리 시점에서 시작(주소에 있던 기상 · 시각 값만 넘어간다)
+      // 인트로를 막는 값(noIntro · cam · weather · time — resolveEntry 의 바로가기 조건)은 지운다. 새 월드는 기본 기상 · 시각으로 인트로부터
+      nextParams.delete('noIntro');
+      nextParams.delete('cam');
+      nextParams.delete('weather');
+      nextParams.delete('time');
       const basePath = window.location.pathname.includes('nowhere-mountain') && targetVer === 'seongsu'
         ? '/nowhere'
         : window.location.pathname.replace(/\.html$/, '');

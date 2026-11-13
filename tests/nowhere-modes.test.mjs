@@ -173,6 +173,9 @@ test('(h) main.js · CSS: 방식 연결(보행 동기화 · 실내 · 가이드 
   assert.match(main, /startGuide: \(\) => startScenario\('chooseBuilding'\)/);
   assert.match(main, /nextParams\.set\('mode', /);
   assert.match(main, /nextParams\.delete\('cam'\)/);
+  // 월드 전환은 새 월드의 인트로를 보여 준 뒤 지금 방식으로 이어 간다 — 인트로를 막는 값(noIntro · weather · time)을 넘기지 않는다
+  assert.doesNotMatch(main, /nextParams\.set\('noIntro'/);
+  for (const k of ['noIntro', 'weather', 'time']) assert.match(main, new RegExp(`nextParams\\.delete\\('${k}'\\)`), `월드 전환이 ${k} 를 지우지 않음`);
   assert.doesNotMatch(main, /nw-btn-(intro|buildings|walk)/);
   const css = readPub('src/nowhere/nowhere.css');
   assert.match(css, /body\[data-mode="guide"\] \.nw-dock-camera/);
