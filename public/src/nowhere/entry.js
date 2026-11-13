@@ -1,6 +1,6 @@
 // HAUS NOWHERE — 시작 결정(순수, three · DOM 없음 — 테스트: tests/nowhere-entry.test.mjs).
 // 주소 매개변수 + 페이지 기본 월드(window.__NW_DEFAULT_WORLD: index.html 없음 · nowhere.html 'seongsu' · nowhere-mountain.html 'ds2') →
-// { select: 월드 선택 화면을 띄울지, world, intro: 인트로를 돌릴지, mode: 둘러보기 방식(null 이면 인트로 뒤 방식 고르기) }.
+// { select: 월드 선택 화면을 띄울지, world, intro: 인트로를 돌릴지, mode: 둘러보기 방식(null 이면 인트로 뒤 방식 고르기) }. 발표 모드 켜짐 · 컷 길이는 kiosk.js parseKioskParams.
 // 선택 화면에서 고른 뒤에는 { world: 고른 것, intro: true, mode: null } 로 이어 간다(주소는 바꾸지 않는다).
 // 월드 전환 주소: 위 막대 월드 버튼(worldSwitchUrl — 새 월드 인트로부터)과 건물 카드 「이 자리 그대로 …」(sameSpotUrl — at · look 으로 인트로 없이 같은 자리)가
 // 같은 경로 규칙 · 지울 값을 쓴다. 새 페이지는 parsePose 로 그 자리를 읽는다(main.js 시작 흐름 — 방식 적용 뒤).
@@ -24,15 +24,17 @@ export function resolveEntry(params, defaultWorld = null) {
   const deep = Boolean(get('cam') || get('weather') || get('time') || get('at'));
   const noIntro = get('noIntro') === '1';
   const modeParam = MODE_IDS.includes(get('mode')) ? get('mode') : null;
+  // 발표 모드(kiosk.js — ?kiosk=1): 인트로 뒤 방식 고르기 없이 자유 시점(프리셋 · 실내 둘러보기를 자유 시점으로 돈다), 월드가 없으면 선택 화면 없이 성수
+  const kiosk = get('kiosk') === '1';
   let world = WORLD_IDS.includes(get('ver')) ? get('ver') : WORLD_IDS.includes(defaultWorld) ? defaultWorld : null;
-  // 선택 화면은 월드가 정해지지 않았고 바로가기 · noIntro=1 · mode 가 모두 없을 때만
-  const select = world === null && !deep && !noIntro && !modeParam;
+  // 선택 화면은 월드가 정해지지 않았고 바로가기 · noIntro=1 · mode · kiosk=1 이 모두 없을 때만
+  const select = world === null && !deep && !noIntro && !modeParam && !kiosk;
   if (!select && world === null) world = 'seongsu';
   return {
     select,
     world,
     intro: !deep && !noIntro,
-    mode: modeParam || (deep || noIntro ? 'free' : null),
+    mode: kiosk ? 'free' : modeParam || (deep || noIntro ? 'free' : null),
   };
 }
 

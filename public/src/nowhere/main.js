@@ -34,6 +34,7 @@ import { createHubPanel } from './hub-panel.js';
 import { hubIndex, runGoPlan } from './hub-index.js';
 import { createHud, hudKeyAction, HUD_BUILDINGS } from './hud.js';
 import { createPhotoMode, parseFovParam } from './photo.js';
+import { createKiosk, parseKioskParams, kioskFloorOrder, kioskSwitchUrl } from './kiosk.js';
 
 async function boot() {
   const canvas = document.getElementById('nw-canvas');
@@ -204,6 +205,46 @@ async function boot() {
     },
     onPointerLockChange(locked) {
       walkHud.setState({ walk: camCtrl.isWalkMode(), locked });
+    },
+  });
+
+  // 발표 모드(kiosk.js — ?kiosk=1 · K): 외관 프리셋(layout 순서 · 한 컷씩) → 실내 층 둘러보기(기본 층부터) → 밖으로 → 반대 월드(?kiosk=1, 인트로부터) 자동 순환.
+  // 키 · 누름 처리기(창 캡처)가 사진 모드 · 조작 안내 · 모달 · 목록 · 건물 카드보다 먼저 받도록 가장 먼저 만든다 — 도는 중 아무 입력이면 멈추고 그 입력은 삼킨다
+  // (V · ? · L · Esc · 카드 · 스팟 클릭이 함께 일어나지 않게 — 감상도 열리지 않는다). 멈추면 그 자리에서 자유 시점(프리셋 전환 · 둘러보기 비행을 그 자리에서 끊는다).
+  // 프리셋은 버튼과 같은 setCameraPreset — 밤 프리셋이 시각을 밤으로 바꾸면 다음 프리셋에서 시작할 때 시각으로 되돌린다(프리셋마다 제 분위기)
+  const kioskParams = parseKioskParams(params);
+  let kioskHour = null;   // 발표를 시작할 때 시각
+  const kiosk = createKiosk({
+    shotS: kioskParams.shotS,
+    getPresets: () => (world.layout.cameras || []).map((c) => c.id),
+    loadFloors: async (firstId) => kioskFloorOrder(await interior.loadLayout(), firstId),
+    isInside: () => interior.isActive(),
+    currentFloor: () => interior.currentFloor(),
+    showPreset: (id) => {
+      if (kioskHour !== null && Math.abs(weather.getHour() - kioskHour) > 0.01) setTimeOfDay(kioskHour);
+      setCameraPreset(id);
+    },
+    enter: () => interior.enter('haus'),
+    goToFloor: (id) => interior.goToFloor(id),
+    playTour: () => interior.playTour(),
+    exit: () => interior.exit(),
+    switchWorld: () => {
+      window.location.href = kioskSwitchUrl({ pathname: window.location.pathname, search: window.location.search, targetVer: otherWorldVer });
+    },
+    isBlocked: () => kioskBlocked(),
+    onStart: () => {
+      kioskHour = weather.getHour();
+      archive.hide();
+      modes.set('free');   // 보행 · 가이드 투어였으면 그 자리에서 자유 시점으로(실내에서도 — 둘러보기가 보행을 끈다)
+    },
+    onStop: () => {
+      interior.stopTour();
+      camCtrl.stopFlight();
+      // 프리셋 전환 중이면 그 자리에서 멈춘다. 실내 들어가기 · 층 이동 중이면 실내가 옮긴 뒤 onSettle
+      if (!interior.isBusy() && !camCtrl.isWalkMode()) camCtrl.placeAt(camera.position.toArray(), camCtrl.controls.target.toArray());
+    },
+    onSettle: () => {
+      if (interior.isActive() && camCtrl.isWalkMode()) camCtrl.setWalkMode(false);   // 실내는 도착하면 보행을 켠다 — 멈춘 자리는 자유 시점
     },
   });
 
@@ -393,6 +434,8 @@ async function boot() {
     getWeatherLabel: () => weatherLabels[weather.getWeather()] || '',
   });
   const hudBlocked = () => cinema.isActive() || camCtrl.isIntroActive() || document.body.classList.contains('is-choosing') || showcase.isActive() || showcase.isBusy() || hub.isOpen() || modal.isOpen() || help.isOpen();
+  // 발표 모드 K: 인트로 · 방식 고르기 · 비행 · 컷 이동 · 실내 전환 · 층 둘러보기 · 감상 · 모달 · 조작 안내 · 목록 · 사진 모드 동안은 시작하지 않는다
+  const kioskBlocked = () => cinema.isActive() || camCtrl.isIntroActive() || document.body.classList.contains('is-choosing') || camCtrl.isFlying() || spotCutting || interior.isBusy() || interior.isTouring() || showcase.isActive() || showcase.isBusy() || modal.isOpen() || help.isOpen() || hub.isOpen() || photo.isActive();
   window.addEventListener('keydown', (e) => {
     const t = e.target;
     const act = hudKeyAction({
@@ -563,7 +606,7 @@ async function boot() {
 
   // ── 시작 흐름: (인트로 + 연출) → (방식 고르기) → 방식 적용. 바로가기 주소는 resolveEntry 가 정한 방식으로 바로 ──
   async function runEntry() {
-    if (entry.intro) await playIntro({ holdHud: true });   // ?mode= 가 있어도 방식 적용 전까지 HUD 를 숨긴다(카메라 프리셋 묶음이 깜박이지 않게)
+    const introEnd = entry.intro ? await playIntro({ holdHud: true }) : null;   // ?mode= 가 있어도 방식 적용 전까지 HUD 를 숨긴다(카메라 프리셋 묶음이 깜박이지 않게)
     const mode = entry.mode || (await showModeMenu({ isBlocked: () => help.isOpen() || modal.isOpen() }));
     try {
       modes.set(mode);
@@ -588,6 +631,11 @@ async function boot() {
     if (poseFov !== null && modes.get() === 'free') {
       camera.fov = poseFov;
       camera.updateProjectionMatrix();
+    }
+    // 발표 모드(?kiosk=1): 인트로를 끝까지 봤으면(인트로 없는 주소 포함) 방식을 적용한 뒤 시작. 인트로를 입력으로 건너뛰었으면 발표 중 입력과 같이 멈춤(알림 · 주소 정리)
+    if (kioskParams.on) {
+      const started = (introEnd === null || introEnd === 'complete') && kiosk.start();
+      if (!started) kiosk.stop();
     }
   }
 
@@ -839,6 +887,7 @@ async function boot() {
     hub,
     hud,
     photo,
+    kiosk,
     cinema,
     interior,
     scenario,

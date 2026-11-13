@@ -2308,3 +2308,46 @@ body.is-photo .nw-hub {
     text-align: center;
   }
 }
+
+/* ── 발표 모드(kiosk.js — ?kiosk=1 · K): 아래 가운데 작은 칩 「발표 모드 · 아무 키나 누르면 멈춥니다」 / 멈춘 뒤 「발표 모드를 멈췄습니다」 2 초.
+   자리(--nw-kiosk-bottom)는 kiosk.js 가 잰다 — 독 · 실내 둘러보기 자막과 겹치지 않는 가장 낮은 자리: 넓은 화면은 독 줄 아래 끝(두 묶음 사이 빈 자리),
+   좁은 화면 · 휴대폰은 독 위 8 px(휴대폰 실내에서 자막이 보이면 자막 위). 누르지 않는 표시(입력은 창이 받아 발표를 멈춘다). 사진 모드 · 감상 · 인트로 · 방식 고르기에서는 숨김 ── */
+.nw-kiosk {
+  position: fixed;
+  left: 50%;
+  bottom: var(--nw-kiosk-bottom, 18px);
+  z-index: 21;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 6px 12px;
+  transform: translateX(-50%);
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--nw-text);
+  background: var(--nw-bg-panel);
+  border: 1px solid var(--nw-line-struct);
+  border-radius: 2px;
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+  word-break: keep-all;
+}
+.nw-kiosk::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--nw-accent);
+}
+.nw-kiosk[hidden] {
+  display: none;
+}
+body.is-photo .nw-kiosk,
+body.is-showcase .nw-kiosk,
+body.is-cinema .nw-kiosk,
+body.is-choosing .nw-kiosk {
+  display: none;
+}

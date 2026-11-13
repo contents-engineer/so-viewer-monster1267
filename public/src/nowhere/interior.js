@@ -122,12 +122,19 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
       await fadeTo(false, '', TOUR_CUT_MS);
     },
   });
+  /** 지금 층 둘러보기를 시작한다 → 끝 약속('done' 끝까지 | 'stopped' 입력 · 층 이동 · 나가기 · stopTour 로 멈춤). 실내가 아니거나 전환 중 · 둘러볼 곳이 없으면 null.
+   *  「이 층 둘러보기」 버튼과 발표 모드(kiosk.js — 끝나면 다음 층)가 같이 쓴다. 끝난 뒤 보행으로 돌아가는 것은 버튼 쪽만 */
+  function playTour() {
+    if (!active || busy || !floorDef?.tour?.length) return null;
+    return tour.play(floorDef.tour);
+  }
   tourBtn.addEventListener('click', () => {
     // 포커스를 풀어 Enter 를 누르고 있을 때 키 반복이 버튼을 다시 눌러 둘러보기를 처음부터 시작하지 않게
     tourBtn.blur();
-    if (!active || busy || !floorDef?.tour?.length) return;
-    const floorId = floorDef.id;
-    tour.play(floorDef.tour).then((r) => {
+    const floorId = floorDef?.id;
+    const played = playTour();
+    if (!played) return;
+    played.then((r) => {
       // 끝까지 보면 마지막 지점에서 보행으로 돌아간다(지점은 전시물 밖 — 보행이 지면 눈높이로 붙임). 입력으로 멈췄으면(stopped) 그 자리에서 보행 꺼진 채.
       // 모달 · 도움말이 떠 있으면 켜지 않는다(읽는 동안 그 뒤에서 시점이 눈높이로 바뀌고 보행 안내가 뜨지 않게)
       if (r === 'done' && active && !busy && floorDef?.id === floorId && !modal.isOpen() && !isHelpOpen()) camCtrl.setWalkMode(true);
@@ -502,6 +509,8 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     currentFloorDef: () => (active ? floorDef : null),
     currentRoot: () => (active ? floorRoot : null),
     isTouring: () => tour.isPlaying(),
+    playTour,
+    stopTour: () => tour.stop(),
     isBusy: () => busy,
     showCaption,
     /** 엘리베이터 · 출구 영역 트리거를 다시 장전 — 영역 안에서 질문을 닫은 뒤 스팟으로 다시 도착했을 때 질문이 다시 뜨게 */
