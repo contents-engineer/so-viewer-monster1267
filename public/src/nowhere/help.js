@@ -46,11 +46,11 @@ export const CONTROL_SECTIONS = [
       { keys: ['Shift'], desc: '누른 채 달리기' },
       { keys: ['Space'], desc: '점프 — 낮은 바위 · 턱을 넘거나 올라서기' },
       { keys: ['↑', '↓'], desc: '올려다보기 · 내려다보기' },
-      { keys: ['←', '→'], desc: '좌우로 돌아보기' },
+      { keys: ['←', '→', 'Q', 'E'], desc: '좌우로 돌아보기 — Q · E 는 WASD 에 손을 둔 채로(Q 왼쪽 · E 오른쪽)' },
       { keys: ['클릭'], desc: '마우스 시선 고정 — 마우스만 움직여 둘러보기 (Esc 로 해제)' },
       { keys: ['드래그'], desc: '마우스 고정 없이 둘러보기' },
       { keys: ['한 손가락'], desc: '터치: 끌어서 둘러보기 — 이동은 ◇ 스팟 탭' },
-      { keys: ['클릭', '탭'], desc: '◇ 이동 스팟(실내 볼거리 · 엘리베이터 · 출구, 두 건물 주변) — 그 자리까지 길을 찾아 걸어가기(30 m 넘으면 달리기). WASD · 방향키 · Space · 화면 클릭 · 휠로 멈춤. 마우스 고정 중에는 조준점을 스팟에 맞추고 클릭. 성수 정문에 도착하면 입장 질문' },
+      { keys: ['클릭', '탭'], desc: '◇ 이동 스팟(실내 볼거리 · 엘리베이터 · 출구, 두 건물 주변) — 그 자리까지 길을 찾아 걸어가기(30 m 넘으면 달리기). WASD · Q · E · 방향키 · Space · 화면 클릭 · 휠로 멈춤. 마우스 고정 중에는 조준점을 스팟에 맞추고 클릭. 성수 정문에 도착하면 입장 질문' },
     ],
     note: '건물 · 바위 등 장애물과 50° 넘는 비탈은 지나갈 수 없습니다.',
   },
@@ -179,7 +179,7 @@ export function createWalkHud() {
     root.classList.toggle('is-locked', Boolean(locked));
     hint.textContent = locked
       ? 'Esc  마우스 고정 해제 · 조준점을 ◇ 스팟에 맞추고 클릭  걸어가기'
-      : '화면 클릭  마우스로 둘러보기 · ◇ 스팟 클릭  걸어가기 · WASD 이동 · Shift 달리기 · Space 점프 · ? 조작 안내';
+      : '화면 클릭  마우스로 둘러보기 · ◇ 스팟 클릭  걸어가기 · WASD 이동 · Q/E 돌기 · Shift 달리기 · Space 점프 · ? 조작 안내';
   }
   return { setState, element: root };
 }

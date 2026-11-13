@@ -1,4 +1,4 @@
-// HAUS NOWHERE — 보행 시점 키 시선(게임 방식): ↑/↓ 올려다보기·내려다보기, ←/→ 좌우로 돌아보기.
+// HAUS NOWHERE — 보행 시점 키 시선(게임 방식): ↑/↓ 올려다보기·내려다보기, ←/→ · Q/E 좌우로 돌아보기.
 // 이동은 WASD 가 맡는다. three 의존 없는 순수 모듈(테스트: tests/nowhere-look.test.mjs). 좌표는 Three.js(시선 기본 −Z, 위 +Y).
 
 export const LOOK_LIMIT = (80 * Math.PI) / 180;   // 상하 시선 한계 ±80°
@@ -28,8 +28,9 @@ export function stepLook(
     yaw -= mouse.dx * mouseSens;      // 오른쪽(+dx)으로 밀면 오른쪽으로 돈다
     pitch -= mouse.dy * mouseSens;    // 위(−dy)로 밀면 올려다본다
   }
-  if (keys.has('ArrowLeft')) yaw += yawSpeed * dt;
-  if (keys.has('ArrowRight')) yaw -= yawSpeed * dt;
+  // 좌우 돌아보기: ← · Q 왼쪽, → · E 오른쪽(WASD 에 손을 둔 채 돌 수 있게). 둘을 함께 눌러도 한 번만 친다
+  if (keys.has('ArrowLeft') || keys.has('KeyQ')) yaw += yawSpeed * dt;
+  if (keys.has('ArrowRight') || keys.has('KeyE')) yaw -= yawSpeed * dt;
   if (keys.has('ArrowUp')) pitch += pitchSpeed * dt;
   if (keys.has('ArrowDown')) pitch -= pitchSpeed * dt;
   pitch = Math.max(-limit, Math.min(limit, pitch));

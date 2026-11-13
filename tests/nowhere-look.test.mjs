@@ -57,3 +57,17 @@ test('(f) 마우스 시선(포인터 잠금): 오른쪽으로 밀면 오른쪽, 
   const top = stepLook({ x: 0, y: 0, z: -1 }, keys, 0, {}, { dx: 0, dy: -1e6 });
   assert.ok(near(Math.asin(top.y), LOOK_LIMIT, 1e-6));
 });
+
+test('(f) Q 는 ← 처럼 왼쪽, E 는 → 처럼 오른쪽으로 돌아본다(같은 속도) · 보행 자동 걷기는 Q · E 로도 멈춘다', async () => {
+  const opts = { yawSpeed: Math.PI / 2 };
+  const q = stepLook({ x: 0, y: 0, z: -1 }, new Set(['KeyQ']), 1, opts);
+  const left = stepLook({ x: 0, y: 0, z: -1 }, new Set(['ArrowLeft']), 1, opts);
+  assert.ok(near(q.x, left.x) && near(q.z, left.z) && near(q.x, -1), 'Q = ←');
+  const e = stepLook({ x: 0, y: 0, z: -1 }, new Set(['KeyE']), 1, opts);
+  assert.ok(near(e.x, 1) && near(e.z, 0), 'E = →');
+  const both = stepLook({ x: 0, y: 0, z: -1 }, new Set(['KeyQ', 'ArrowLeft']), 0.5, opts);
+  assert.ok(near(both.x, -Math.SQRT1_2) && near(both.z, -Math.SQRT1_2), 'Q 와 ← 를 함께 눌러도 두 배로 돌지 않는다(0.5 s × 90°/s = 45°)');
+  const { readFileSync } = await import('node:fs');
+  const cam = readFileSync(new URL('../public/src/nowhere/camera.js', import.meta.url), 'utf8');
+  assert.match(cam, /AUTO_WALK_STOP_KEYS = new Set\(\[[^\]]*'KeyQ'[^\]]*'KeyE'/);
+});
