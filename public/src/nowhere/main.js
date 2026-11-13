@@ -26,7 +26,7 @@ import { createModeController } from './modes.js';
 import { createRetailDisplay } from './retail-display.js';
 import { createShowcase, studioEnvironment } from './showcase.js';
 import { productCollection } from './products.js';
-import { buildingCollection, cardBuildingForSpot } from './archive.js';
+import { buildingCollection, buildingParts, cardBuildingForSpot } from './archive.js';
 import { createArchiveCard } from './archive-card.js';
 
 async function boot() {
@@ -385,12 +385,16 @@ async function boot() {
     });
   }
 
-  // 건물 감상: 외관 아카이브 카드 「자세히 보기」 → 두 건물 목록(HAUS → FaceArch), 모델은 월드가 받은 같은 주소(quality.heroUrls — 브라우저 캐시)
+  // 건물 감상: 외관 아카이브 카드 「자세히 보기」 → 두 건물 목록(HAUS → FaceArch), 모델은 월드가 받은 같은 주소(quality.heroUrls — 브라우저 캐시).
+  // 부위 표지는 이 월드 layout anchors(건물 로컬 좌표 — 모델 루트와 같은 좌표계)
   async function openArchive(id) {
     if (interior.isActive() || interior.isBusy() || showcase.isActive() || showcase.isBusy()) return;
     const collection = buildingCollection(archive.records(), quality.heroUrls, id);
     if (!collection.items.some((it) => it.id === id)) return;
-    await openStage(collection);
+    await openStage({
+      ...collection,
+      parts: (item) => buildingParts(world.layout, item.id, item.name),
+    });
   }
 
   // 감상 모드를 나온 뒤(화면이 어두운 동안): 연 자리 · 시선 그대로, 보행 중이었으면 보행으로(실내 · 외관)

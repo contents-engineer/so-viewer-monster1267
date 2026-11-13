@@ -4,13 +4,15 @@
 // 조작: 드래그 · 한 손가락 회전, 휠 · 두 손가락 확대(항목 크기 기준 최소 · 최대 거리), 4 초 동안 입력이 없으면 천천히 자동 회전,
 // ← / → · 이전 · 다음 버튼 = 목록 순서, Esc · < BACK = 나가기(onClose — main.js 가 연 자리 · 시선 · 보행 여부를 되돌린다).
 // 모델: 가벼운 것(collection.loadLite 또는 item.liteUrl)을 먼저 보여 주고, item.hiUrl 이 있으면 데스크톱 · 태블릿은 받아 바꾼다(휴대폰은 가벼운 것만).
+// 부위 표지(collection.parts — 건물 감상): 모델 자식 점(건물 로컬 좌표)을 매 프레임 투영한 작은 버튼(부위 이름). 모델 뒤면 흐리게(누를 수 있음),
+// 누르면 패널이 그 부위로(kicker · 제목 · 항목 · 설명 · ‹ 건물 정보), 다시 누르거나 ‹ 건물 정보 · 다른 건물이면 건물 정보로.
 // 키는 창 캡처 단계에서 먼저 받는다(조작 안내 · 모달이 열려 있으면 그쪽 몫).
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { stepItem, showcaseKeyGate, stageFraming, stageView, AUTO_ROTATE_DELAY } from './products.js';
+import { stepItem, showcaseKeyGate, stageFraming, stageView, stageLift, partLabel, hitHidesPart, AUTO_ROTATE_DELAY } from './products.js';
 
 export const SHOWCASE_FADE_MS = 200;   // 실내 ↔ 감상 무대 화면 전환(어둡게 · 밝게 각각)
 const FOV = 30;
@@ -20,6 +22,8 @@ const AUTO_ROTATE_SPEED = 2;          // OrbitControls 단위(60 / 2 = 30 초에
 const START_AZIMUTH = 28;             // ° — 처음 시선: 정면에서 오른쪽으로
 const START_ELEVATION = 14;           // ° — 처음 시선: 조금 위에서
 const DISC_SCALE = 4.5;               // 바닥 원판 지름 = 항목 경계 구 반지름 × 이 값
+const PART_CHECK_MS = 120;            // ms — 부위 표지 가림을 이만큼마다 표지 하나씩 돌아가며 다시 잰다
+const PART_CHUNK = 128;               // 삼각형 — 가림 광선 가속: 메시 삼각형을 이만큼씩 묶은 경계 상자로 먼저 거른다
 // 감상 종류별 이름(화면 aria-label · 오류 문구)
 const KINDS = {
   product: { label: '제품 감상', noun: '제품' },
@@ -69,7 +73,8 @@ function makeFloorDisc() {
 
 /**
  * open(collection) — collection = { kind: 'product' | 'building', items: [{ id, name, kicker, crumbs, rows: [{ label, value }], note, liteUrl?, hiUrl? }],
- *   startId, loadLite?(item) → Promise<Object3D | null>(원본 — clone 해서 쓴다. 없으면 무대 로더가 item.liteUrl 을 받는다), hint }.
+ *   startId, loadLite?(item) → Promise<Object3D | null>(원본 — clone 해서 쓴다. 없으면 무대 로더가 item.liteUrl 을 받는다), hint,
+ *   parts?(item) → [{ id, title, local: [x, y, z](모델 루트 좌표), kicker, rows, lore }] }.
  * isBlocked() → 조작 안내 · 모달이 열려 있으면 감상 키를 처리하지 않는다. onHelp → '조작 안내' 버튼. onClose → 나간 뒤(화면이 어두운 동안) 부른다.
  */
 export function createShowcase({ renderer, canvas, quality, fade, isBlocked = () => false, onHelp = null, onClose = null }) {
@@ -128,16 +133,22 @@ export function createShowcase({ renderer, canvas, quality, fade, isBlocked = ()
   helpBtn.type = 'button';
   helpBtn.append(el('span', 'nw-btn-kbd', '?'));
   top.append(back, crumbs, helpBtn);
+  const partsLayer = el('div', 'nw-showcase-parts');   // 부위 표지 버튼(무대 위 — 패널 · 위 · 아래 버튼보다 뒤)
   const panel = el('aside', 'nw-showcase-panel');
+  const partBack = el('button', 'nw-btn nw-showcase-part-back', '‹ 건물 정보');
+  partBack.type = 'button';
+  partBack.hidden = true;
   const kicker = el('div', 'nw-showcase-kicker');
   const title = el('h2', 'nw-showcase-name');
   const info = el('dl', 'nw-showcase-info');
   const note = el('p', 'nw-showcase-note');
   note.hidden = true;
+  const lore = el('p', 'nw-showcase-lore');   // 부위 설명(anchors lore)
+  lore.hidden = true;
   const status = el('div', 'nw-showcase-status', '고해상도 불러오는 중…');
   status.hidden = true;
   status.setAttribute('aria-live', 'polite');
-  panel.append(kicker, title, info, note, status);
+  panel.append(partBack, kicker, title, info, note, lore, status);
   const pager = el('div', 'nw-showcase-pager');
   const prevBtn = el('button', 'nw-btn nw-showcase-prev', '‹ 이전');
   prevBtn.type = 'button';
@@ -146,7 +157,7 @@ export function createShowcase({ renderer, canvas, quality, fade, isBlocked = ()
   nextBtn.type = 'button';
   pager.append(prevBtn, count, nextBtn);
   const hint = el('div', 'nw-showcase-hint');
-  root.append(top, panel, pager, hint);
+  root.append(partsLayer, top, panel, pager, hint);
   document.body.append(root);
 
   let active = false;
@@ -156,6 +167,11 @@ export function createShowcase({ renderer, canvas, quality, fade, isBlocked = ()
   let level = null;   // 'lite' | 'hi'
   let model = null;
   let token = 0;      // 항목을 바꾸거나 나가면 늘린다 — 늦게 도착한 고해상도는 버린다
+  let marks = [];     // 부위 표지 [{ part, anchor(모델 자식 점), btn, shown, behind, sx, sy }]
+  let partId = null;  // 패널에 띄운 부위(없으면 건물 정보)
+  let partNext = 0;   // 다음에 가림을 잴 표지
+  let partCheckAt = 0;
+  let partsFresh = false;   // 표지를 새로 만들었으면 다음 프레임에 셋 다 잰다
 
   const kindOf = () => KINDS[list?.kind] || KINDS.product;
 
@@ -174,17 +190,78 @@ export function createShowcase({ renderer, canvas, quality, fade, isBlocked = ()
     note.hidden = !item.note;
     count.textContent = `${list.items.indexOf(item) + 1} / ${list.items.length}`;
     pager.hidden = list.items.length < 2;
+    lore.hidden = true;
+    partBack.hidden = true;
+  }
+
+  // 부위 패널: kicker(<건물> · PART) · 부위 제목 · 항목 · 설명 문단 · ‹ 건물 정보(경로 · 쪽수는 건물 그대로)
+  function fillPart(part) {
+    kicker.textContent = part.kicker;
+    title.textContent = part.title;
+    info.replaceChildren(...part.rows.flatMap((r) => [el('dt', null, r.label), el('dd', null, r.value)]));
+    note.hidden = true;
+    lore.textContent = part.lore;
+    lore.hidden = !part.lore;
+    partBack.hidden = false;
+  }
+
+  /** 패널을 부위(id) 또는 건물 정보(null)로 */
+  function selectPart(id) {
+    const m = marks.find((x) => x.part.id === id);
+    partId = m ? id : null;
+    for (const x of marks) {
+      x.btn.classList.toggle('is-active', x.part.id === partId);
+      x.btn.setAttribute('aria-pressed', String(x.part.id === partId));
+    }
+    if (m) fillPart(m.part);
+    else fillInfo(list.items.find((it) => it.id === itemId));
+    idle = 0;
+  }
+
+  // 그 항목의 부위 표지를 새로 만든다(목록에 parts 가 없으면 없음) — 패널은 건물 정보로. 표지 점은 setModel 이 모델에 붙인다
+  function setParts(item) {
+    for (const m of marks) m.anchor.removeFromParent();
+    partId = null;
+    const parts = typeof list.parts === 'function' ? list.parts(item) : [];
+    marks = parts.map((part) => {
+      const anchor = new THREE.Object3D();
+      anchor.name = `NW_ShowcasePart_${part.id}`;
+      anchor.position.fromArray(part.local);
+      const btn = el('button', 'nw-showcase-part', partLabel(part.title));
+      btn.type = 'button';
+      btn.hidden = true;
+      btn.setAttribute('aria-label', part.title);
+      btn.setAttribute('aria-pressed', 'false');
+      btn.addEventListener('click', () => {
+        btn.blur();
+        selectPart(partId === part.id ? null : part.id);
+      });
+      return { part, anchor, btn, shown: false, behind: false, sx: NaN, sy: NaN };
+    });
+    partsLayer.replaceChildren(...marks.map((m) => m.btn));
+    partNext = 0;
+    partsFresh = true;
   }
 
   // 화면 크기에 맞춰 투영을 정한다 — 옆 정보 패널 배치면 패널 왼쪽 빈 곳 가운데가 투영 가운데(stageView: 화면은 그대로 두고 더 넓은 가상 화면의
-  // 오른쪽 부분을 그린다). 빈 곳의 가로 / 세로 비율을 돌려준다(제품 거리 맞춤용)
+  // 오른쪽 부분을 그린다). 건물 감상(부위 표지가 있는 목록)은 아래 패널 배치면 투영 가운데를 위로 올린다(stageLift — 더 높은 가상 화면의 아래 부분,
+  // 올린 만큼 시야각을 넓혀 보이는 크기는 그대로). 빈 곳의 가로 / 세로 비율을 돌려준다(거리 맞춤용)
   let viewKey = '';
+  let viewLeft = 0;   // 캔버스 화면 자리(부위 표지 버튼 위치)
+  let viewTop = 0;
   function applyView() {
     const w = Math.max(1, canvas.clientWidth);
     const h = Math.max(1, canvas.clientHeight);
+    const rect = canvas.getBoundingClientRect();
+    viewLeft = rect.left;
+    viewTop = rect.top;
     const v = stageView(w, h);
-    camera.aspect = (w + 2 * v.shift) / h;
-    if (v.shift > 0) camera.setViewOffset(w + 2 * v.shift, h, 2 * v.shift, 0, w, h);
+    const lift = list?.parts ? stageLift(w, h) : 0;
+    const fullW = w + 2 * v.shift;
+    const fullH = h + 2 * lift;
+    camera.fov = lift > 0 ? THREE.MathUtils.radToDeg(2 * Math.atan((Math.tan(THREE.MathUtils.degToRad(FOV / 2)) * fullH) / h)) : FOV;
+    camera.aspect = fullW / fullH;
+    if (v.shift > 0 || lift > 0) camera.setViewOffset(fullW, fullH, 2 * v.shift, 2 * lift, w, h);
     else camera.clearViewOffset();
     camera.updateProjectionMatrix();
     viewKey = `${w}x${h}`;
@@ -217,6 +294,7 @@ export function createShowcase({ renderer, canvas, quality, fade, isBlocked = ()
     obj.position.set(0, 0, 0);
     const box = new THREE.Box3().setFromObject(obj);
     obj.position.sub(box.getCenter(new THREE.Vector3()));   // 경계 상자 가운데를 원점에
+    for (const m of marks) obj.add(m.anchor);   // 부위 표지 점(모델 루트 좌표)은 모델을 따라간다 — 경계 상자를 잰 뒤에 붙인다
     stage.add(obj);
     model = obj;
     level = lvl;
@@ -257,6 +335,7 @@ export function createShowcase({ renderer, canvas, quality, fade, isBlocked = ()
     if (!lite) return false;
     itemId = id;
     fillInfo(item);
+    setParts(item);
     setModel(lite.clone(true), 'lite', true);
     const upgrade = wantHi && item.hiUrl;
     status.hidden = !upgrade;   // '고해상도 불러오는 중…' 은 교체를 기다릴 때만
@@ -333,6 +412,10 @@ export function createShowcase({ renderer, canvas, quality, fade, isBlocked = ()
     back.blur();
     close();
   });
+  partBack.addEventListener('click', () => {
+    partBack.blur();
+    selectPart(null);
+  });
   prevBtn.addEventListener('click', () => {
     prevBtn.blur();
     step(-1);
@@ -386,6 +469,106 @@ export function createShowcase({ renderer, canvas, quality, fade, isBlocked = ()
     controls.update(dt);
   }
 
+  // 부위 표지: 매 프레임 표지 점을 무대 카메라(옆 패널 배치의 setViewOffset 포함)로 투영해 버튼을 옮기고, 화면 밖 · 카메라 뒤는 숨긴다.
+  // 가림은 PART_CHECK_MS 마다 표지 하나씩(새로 만든 직후는 셋 다) — 표지 점 → 카메라 광선이 모델에 먼저 들어가면 흐리게(hitHidesPart)
+  const pv = new THREE.Vector3();
+  const toCam = new THREE.Vector3();
+  const worldRay = new THREE.Ray();
+  const localRay = new THREE.Ray();
+  const inv = new THREE.Matrix4();
+  const va = new THREE.Vector3();
+  const vb = new THREE.Vector3();
+  const vc = new THREE.Vector3();
+  const hitP = new THREE.Vector3();
+  const triN = new THREE.Vector3();
+  // 메시 geometry 마다 삼각형 PART_CHUNK 개씩 묶은 경계 상자(메시 로컬)를 한 번 만든다(clone 은 geometry 를 같이 쓴다) — 광선은 지나는 묶음의
+  // 삼각형만 잰다(FaceArch 눈 메시 하나가 12.7만 삼각형 — Raycaster 로 다 훑으면 광선 하나에 10–20 ms)
+  const chunkCache = new WeakMap();
+  function chunksOf(geo) {
+    let cs = chunkCache.get(geo);
+    if (!cs) {
+      const pos = geo.attributes.position;
+      const idx = geo.index;
+      const n = idx ? idx.count : pos.count;
+      cs = [];
+      for (let s = 0; s < n; s += PART_CHUNK * 3) {
+        const e = Math.min(n, s + PART_CHUNK * 3);
+        const box = new THREE.Box3();
+        for (let i = s; i < e; i++) box.expandByPoint(va.fromBufferAttribute(pos, idx ? idx.getX(i) : i));
+        cs.push({ box, s, e });
+      }
+      chunkCache.set(geo, cs);
+    }
+    return cs;
+  }
+  // 표지 점 p(월드) → 카메라 광선이 표지를 가리는 면에 맞는지 — 하나 찾으면 멈춘다. 면 방향은 메시 로컬 법선 · 광선(행렬이 뒤집혔으면 부호를 바꾼다)
+  function isBehind(p) {
+    toCam.subVectors(camera.position, p);
+    const far = toCam.length();
+    worldRay.set(p, toCam.divideScalar(far));
+    let hidden = false;
+    model.traverse((o) => {
+      if (hidden || !o.isMesh) return;
+      const geo = o.geometry;
+      inv.copy(o.matrixWorld).invert();
+      localRay.copy(worldRay).applyMatrix4(inv);
+      if (!geo.boundingBox) geo.computeBoundingBox();
+      if (!localRay.intersectsBox(geo.boundingBox)) return;
+      const pos = geo.attributes.position;
+      const idx = geo.index;
+      const flip = o.matrixWorld.determinant() < 0 ? -1 : 1;
+      for (const c of chunksOf(geo)) {
+        if (!localRay.intersectsBox(c.box)) continue;
+        for (let i = c.s; i < c.e && !hidden; i += 3) {
+          va.fromBufferAttribute(pos, idx ? idx.getX(i) : i);
+          vb.fromBufferAttribute(pos, idx ? idx.getX(i + 1) : i + 1);
+          vc.fromBufferAttribute(pos, idx ? idx.getX(i + 2) : i + 2);
+          if (!localRay.intersectTriangle(va, vb, vc, false, hitP)) continue;
+          const dot = flip * THREE.Triangle.getNormal(va, vb, vc, triN).dot(localRay.direction);
+          hidden = hitHidesPart({ distance: hitP.applyMatrix4(o.matrixWorld).distanceTo(p), dot }, far);
+        }
+        if (hidden) break;
+      }
+    });
+    return hidden;
+  }
+  function updateParts() {
+    if (!marks.length || !model) return;
+    const now = performance.now();
+    let check = -1;
+    if (!partsFresh && now - partCheckAt >= PART_CHECK_MS) {
+      check = partNext++ % marks.length;
+      partCheckAt = now;
+    }
+    const w = Math.max(1, canvas.clientWidth);
+    const h = Math.max(1, canvas.clientHeight);
+    marks.forEach((m, i) => {
+      m.anchor.getWorldPosition(pv);
+      if (partsFresh || i === check) {
+        const behind = isBehind(pv);
+        if (behind !== m.behind) {
+          m.behind = behind;
+          m.btn.classList.toggle('is-behind', behind);
+        }
+      }
+      pv.project(camera);
+      const show = Math.abs(pv.x) <= 1 && Math.abs(pv.y) <= 1 && pv.z > -1 && pv.z < 1;
+      if (show !== m.shown) {
+        m.btn.hidden = !show;
+        m.shown = show;
+      }
+      if (!show) return;
+      const sx = Math.round(viewLeft + (pv.x * 0.5 + 0.5) * w);
+      const sy = Math.round(viewTop + (-pv.y * 0.5 + 0.5) * h);
+      if (sx !== m.sx || sy !== m.sy) {
+        m.btn.style.transform = `translate(${sx}px, ${sy}px)`;
+        m.sx = sx;
+        m.sy = sy;
+      }
+    });
+    partsFresh = false;
+  }
+
   function render() {
     if (`${Math.max(1, canvas.clientWidth)}x${Math.max(1, canvas.clientHeight)}` !== viewKey) applyView();   // 창 크기 · 방향이 바뀌면 투영만 다시(거리는 그대로)
     const exposure = renderer.toneMappingExposure;
@@ -393,6 +576,7 @@ export function createShowcase({ renderer, canvas, quality, fade, isBlocked = ()
     renderer.setRenderTarget(null);
     renderer.render(scene, camera);
     renderer.toneMappingExposure = exposure;
+    updateParts();   // 그린 뒤(모델 · 표지 점 · 카메라 행렬이 이번 프레임 값)
   }
 
   return {
@@ -412,7 +596,7 @@ export function createShowcase({ renderer, canvas, quality, fade, isBlocked = ()
       distance: camera.position.distanceTo(controls.target),
       minDistance: controls.minDistance,
       maxDistance: controls.maxDistance,
-      part: null,   // 고른 부위 id(부위 표지가 없으면 늘 null)
+      part: partId,   // 패널에 띄운 부위 id(건물 정보 · 부위 표지가 없는 목록이면 null)
     }),
     scene,
     camera,

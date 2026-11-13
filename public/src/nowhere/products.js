@@ -1,6 +1,6 @@
 // HAUS NOWHERE — 리테일 제품 목록(순수, three · DOM 없음 — 테스트: tests/nowhere-products.test.mjs).
 // assets/products/products.json 검증 · 층별 진열 · 제품 스팟(받침대 앞 1.2 m) · 정보 문구(크기 · 재질 · 빈 필드 숨김) ·
-// 경로 문구 · 이전 · 다음 순서 · 제품 감상 목록 · 감상 키 · 감상 무대 카메라 거리. 제품 · 진열을 늘릴 때는 GLB 를 넣고 products.json 만 고친다.
+// 경로 문구 · 이전 · 다음 순서 · 제품 감상 목록 · 감상 키 · 감상 무대 카메라 거리 · 부위 표지(이름 · 가림). 제품 · 진열을 늘릴 때는 GLB 를 넣고 products.json 만 고친다.
 // 좌표는 실내 층 Three.js(x, y 위, z). yaw 는 도(°) — 0 이면 제품 정면(모델 +z)이 +z 를 본다.
 
 export const PRODUCTS_URL = 'assets/products/products.json';
@@ -192,10 +192,40 @@ export const STAGE_PANEL = { width: 300, right: 22, gap: 24, minViewport: 721, p
  * 감상 무대 화면(width × height px)에서 제품을 둘 빈 곳. 옆 패널 배치면 패널 왼쪽 빈 폭 freeWidth 와, 투영 가운데를 왼쪽으로 옮길 shift px
  * (빈 곳 가운데 = 화면 가운데 − shift). 빈 폭은 화면의 절반 아래로 줄이지 않는다. 패널이 아래인 배치(휴대폰 · 세로 태블릿)는 { width, 0 }.
  */
+const bottomPanel = (width, height) => width < STAGE_PANEL.minViewport || (height > width && width <= STAGE_PANEL.portraitMax);
+
 export function stageView(width, height) {
-  if (width < STAGE_PANEL.minViewport || (height > width && width <= STAGE_PANEL.portraitMax)) return { freeWidth: width, shift: 0 };
+  if (bottomPanel(width, height)) return { freeWidth: width, shift: 0 };
   const freeWidth = Math.max(width / 2, width - (STAGE_PANEL.width + STAGE_PANEL.right + STAGE_PANEL.gap));
   return { freeWidth, shift: (width - freeWidth) / 2 };
+}
+
+// 아래 패널 배치에서 위 · 아래로 비우는 몫(px): 위 = < BACK · 경로 줄, 아래 = 정보 패널 아래 여백(nowhere.css bottom 104) + 건물 정보 패널 높이(390 × 844 에서 238)
+export const STAGE_BOTTOM = { top: 76, bottom: 344 };
+
+/** 건물 감상(부위 표지)에서 투영 가운데를 올릴 px — 아래 패널 배치면 위 · 아래 몫 사이 빈 곳 가운데로(표지가 패널에 가리지 않게), 옆 패널 배치는 0 */
+export function stageLift(width, height) {
+  return bottomPanel(width, height) ? (STAGE_BOTTOM.bottom - STAGE_BOTTOM.top) / 2 : 0;
+}
+
+// 감상 무대 부위 표지(collection.parts — 건물 감상): 표지 버튼 이름 · 가림 판정
+// anchors 는 부위 겉면 근처에 놓은 점이라 이 안에서 맞은 면은 가림으로 세지 않는다 — 표지가 붙은 외피, FaceArch 눈 점 앞 1.3 m 의 얇은 막.
+// HAUS 세 표지는 0.05 m 와 2 m 의 판정이 같다(Task 3 — 처음 거리 · 앙각 14° 에서 수평 30° 마다 12 방향)
+export const PART_RAY_NEAR = 2;   // m
+
+/** 부위 표지 버튼 이름: 부위 title 의 마지막 ' — ' 뒤, 없으면 title 전체(문구는 anchors 값 그대로) */
+export function partLabel(title) {
+  const at = title.lastIndexOf(' — ');
+  return at < 0 ? title : title.slice(at + 3);
+}
+
+/**
+ * 표지 점 → 카메라 광선이 맞은 곳 하나({ distance m, dot = 맞은 면 법선 · 광선 방향 })가 표지를 가리는지:
+ * PART_RAY_NEAR 넘고 카메라(cameraDistance)보다 가까우며 광선이 들어가는 면(dot < 0)이면 true — 하나라도 있으면 표지는 모델 뒤(흐리게).
+ * 표지 점이 매스 안이면(FaceArch 몸체 · 눈) 그 매스를 빠져나가는 면(dot > 0)은 세지 않는다 — 양면 재질이라도
+ */
+export function hitHidesPart({ distance, dot }, cameraDistance) {
+  return distance > PART_RAY_NEAR && distance < cameraDistance && dot < 0;
 }
 
 /**

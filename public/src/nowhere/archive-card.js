@@ -42,13 +42,15 @@ export function createArchiveCard({ camera, canvas, quality, getBoxes, isSuspend
   const info = el('dl', 'nw-archive-info');
   const note = el('p', 'nw-archive-note');
   note.hidden = true;
+  const body = el('div', 'nw-archive-body');   // 스크롤은 내용만 — 버튼은 화면 높이가 모자라도(가로 휴대폰) 카드 아래에 보인다
   const actions = el('div', 'nw-archive-actions');
   const detailBtn = el('button', 'nw-btn nw-archive-detail', '자세히 보기');
   detailBtn.type = 'button';
   const closeBtn = el('button', 'nw-btn nw-archive-close', '닫기');
   closeBtn.type = 'button';
   actions.append(detailBtn, closeBtn);
-  card.append(kicker, title, info, note, actions);
+  body.append(kicker, title, info, note);
+  card.append(body, actions);
   document.body.append(card);
 
   /** 그 건물 카드를 띄운다(다른 건물 카드가 떠 있으면 바꾼다). 기록을 못 받은 건물은 아무것도 하지 않는다 */
@@ -199,22 +201,37 @@ export function createArchiveCard({ camera, canvas, quality, getBoxes, isSuspend
   );
 
   // Esc: 카드가 떠 있으면 카드만 닫는다 — 조작 안내 · 모달이 받은 Esc(defaultPrevented)와 감상(stopImmediatePropagation)은 그쪽 몫,
-  // 마우스 고정 중(또는 막 푼 직후)의 Esc 는 브라우저 고정 해제 몫. 막지 않으면 camera.js 가 같은 Esc 로 보행을 끈다
+  // 마우스 고정 중(또는 막 푼 직후)의 Esc 는 브라우저 고정 해제 몫. 막지 않으면 camera.js 가 같은 Esc 로 보행을 끈다.
+  // 카드를 닫은 Esc 를 누르고 있는 동안의 자동 반복(e.repeat)도 막는다(손을 떼면 풀린다)
   let lastUnlockAt = -1e9;
+  let escHeld = false;
   document.addEventListener('pointerlockchange', () => {
     if (document.pointerLockElement !== canvas) lastUnlockAt = performance.now();
   });
   window.addEventListener(
     'keydown',
     (e) => {
-      if (e.key !== 'Escape' || !openId || e.defaultPrevented || isSuspended()) return;
+      if (e.key !== 'Escape') return;
+      if (e.repeat && escHeld) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
+      escHeld = false;
+      if (!openId || e.defaultPrevented || isSuspended()) return;
       if (document.pointerLockElement === canvas || performance.now() - lastUnlockAt < UNLOCK_GRACE_MS) return;
       e.preventDefault();
       e.stopImmediatePropagation();
-      if (!e.repeat) hide();
+      if (!e.repeat) {
+        hide();
+        escHeld = true;
+      }
     },
     true,
   );
+  window.addEventListener('keyup', (e) => {
+    if (e.key === 'Escape') escHeld = false;
+  });
 
   return {
     show,

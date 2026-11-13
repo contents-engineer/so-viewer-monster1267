@@ -293,3 +293,147 @@ test('(m) 문서: README 기능 표에 건물 기록 카드 · 건물 감상, �
   assert.match(readme, /감상 모드 네 묶음/);
   assert.doesNotMatch(readme, /제품 감상 네 묶음/);
 });
+
+// ── Task 3: 부위 표지 · 부위 패널(건물 감상) ──
+test('(n) 부위 표지 이름: 부위 title 의 \' — \' 뒤, 없으면 title 전체(두 월드 anchors 그대로)', async () => {
+  const { partLabel } = await import('../public/src/nowhere/products.js');
+  assert.equal(partLabel('FaceArch — 둥근 삼각 매스'), '둥근 삼각 매스');
+  assert.equal(partLabel('HAUS NOWHERE — 크라운(11–14F)'), '크라운(11–14F)');
+  assert.equal(partLabel('포디움 1–5F'), '포디움 1–5F');
+  assert.equal(partLabel('FaceArch 두 면의 눈'), 'FaceArch 두 면의 눈');
+  assert.equal(partLabel('전정 — 흰 자갈 화단과 꽃'), '흰 자갈 화단과 꽃');
+  assert.equal(partLabel('A — B — C'), 'C', '마지막 \' — \' 뒤');
+  assert.equal(partLabel('크라운—정상'), '크라운—정상', '띄어 쓰지 않은 대시는 나누지 않는다');
+  const want = {
+    nowhere: { haus: ['포디움 1–5F', '타워 6–11F', '크라운 11–14F'], facearch: ['FaceArch 둥근 삼각 매스', 'FaceArch 두 면의 눈', 'FaceArch 필로티 다리'] },
+    'nowhere-ds2': { haus: ['포디움(1–5F)', '타워(6–11F)', '크라운(11–14F)'], facearch: ['둥근 삼각 매스', '두 면의 눈', '필로티 다리'] },
+  };
+  for (const [ver, L] of layouts) {
+    for (const id of BUILDING_IDS) {
+      const labels = buildingParts(L, id, records[id].title).map((p) => partLabel(p.title));
+      assert.deepEqual([...labels].sort(), [...want[ver][id]].sort(), `${ver} ${id}`);
+    }
+  }
+});
+
+test('(o) 부위 표지 가림: 표지 점 → 카메라 광선이 PART_RAY_NEAR 넘고 카메라보다 가까이에서 들어가는 면(법선 · 광선 < 0)에 맞으면 흐리게, 매스 안에서 빠져나가는 면은 세지 않는다', async () => {
+  const { hitHidesPart, PART_RAY_NEAR } = await import('../public/src/nowhere/products.js');
+  assert.equal(PART_RAY_NEAR, 2, 'm — 표지가 붙은 외피 · FaceArch 눈 점 앞 1.3 m 의 얇은 막은 세지 않는다');
+  const hides = (hits, cam = 100) => hits.some((h) => hitHidesPart(h, cam));
+  assert.equal(hides([]), false, '맞은 곳 없음');
+  assert.equal(hides([{ distance: 30, dot: -0.8 }]), true, '모델 앞면을 뚫고 카메라로 — 뒤에 있다');
+  assert.equal(hides([{ distance: 30, dot: 0.8 }]), false, '매스 안 표지(FaceArch 몸체 · 눈)가 빠져나가는 면');
+  assert.equal(hides([{ distance: 30, dot: 0.8 }, { distance: 50, dot: -0.5 }]), true, '빠져나간 뒤 다른 매스에 들어가면 뒤');
+  assert.equal(hides([{ distance: 120, dot: -1 }]), false, '카메라 너머는 세지 않는다');
+  assert.equal(hides([{ distance: 1.3, dot: -0.93 }, { distance: 1.7, dot: 0.96 }]), false, 'FaceArch 눈: 점 앞 얇은 막(1.3 m 들어가 1.7 m 나옴)만 맞으면 앞');
+  assert.equal(hides([{ distance: PART_RAY_NEAR, dot: -1 }]), false);
+  assert.equal(hides([{ distance: PART_RAY_NEAR + 0.01, dot: -1 }]), true);
+  assert.equal(hides([{ distance: 30, dot: 0 }]), false, '스치는 면은 세지 않는다');
+});
+
+test('(p) 감상 무대 부위 표지: collection.parts(item) → 모델 자식 점(local) · DOM 버튼(.nw-showcase-part, 짧은 이름) 매 프레임 투영 · 가림 .is-behind · 누르면 부위 패널(kicker · title · rows · lore · ‹ 건물 정보) · getState().part', () => {
+  const sc = read('showcase.js');
+  assert.match(sc, /import \{[^}]*partLabel[^}]*hitHidesPart[^}]*\} from '\.\/products\.js';/);
+  assert.match(sc, /typeof list\.parts === 'function' \? list\.parts\(item\)/);
+  assert.match(sc, /'nw-showcase-part'/);
+  assert.match(sc, /partLabel\(part\.title\)/);
+  // 표지 점은 모델 자식(setModel 이 경계 상자 가운데를 원점으로 옮기면 따라간다) — 경계 상자를 잰 뒤에 붙인다
+  const setModel = fnBody(sc, 'function setModel(obj, lvl, reframe)');
+  assert.match(setModel, /setFromObject\(obj\)[\s\S]*obj\.add\(m\.anchor\)/);
+  assert.match(sc, /anchor\.position\.fromArray\(part\.local\)/);
+  // 투영: 무대 카메라(setViewOffset 포함) → 캔버스 자리, 화면 밖 · 카메라 뒤는 숨김
+  assert.match(sc, /\.project\(camera\)/);
+  assert.match(sc, /getBoundingClientRect\(\)/);
+  // 가림: 표지 점 → 카메라 광선(메시 로컬), 삼각형 묶음 경계 상자로 거른 뒤 삼각형 — 맞은 면 법선 · 광선 방향 → hitHidesPart, 하나 찾으면 멈춘다. 흐리게(누를 수 있음)
+  const behind = fnBody(sc, 'function isBehind(p)');
+  assert.match(behind, /localRay\.copy\(worldRay\)\.applyMatrix4\(inv\)/);
+  assert.match(behind, /localRay\.intersectsBox\(geo\.boundingBox\)/);
+  assert.match(behind, /for \(const c of chunksOf\(geo\)\) \{\s*if \(!localRay\.intersectsBox\(c\.box\)\) continue;/);
+  assert.match(behind, /localRay\.intersectTriangle\(va, vb, vc, false, hitP\)/);
+  assert.match(behind, /hitHidesPart\(\{ distance: [^,]+, dot \}, far\)/);
+  assert.match(fnBody(sc, 'function chunksOf(geo)'), /chunkCache\.set\(geo, /);
+  assert.match(sc, /const PART_CHUNK = \d+;/);
+  assert.match(sc, /classList\.toggle\('is-behind'/);
+  // 부위 패널: kicker · title · rows · lore · ‹ 건물 정보, 다시 누르거나 버튼 · 다른 건물이면 건물 정보
+  assert.match(sc, /'nw-showcase-lore'/);
+  assert.match(sc, /'‹ 건물 정보'/);
+  const fillPart = fnBody(sc, 'function fillPart(part)');
+  for (const re of [/kicker\.textContent = part\.kicker/, /title\.textContent = part\.title/, /part\.rows\.flatMap/, /lore\.textContent = part\.lore/, /note\.hidden = true/, /partBack\.hidden = false/]) assert.match(fillPart, re);
+  const fillInfo = fnBody(sc, 'function fillInfo(item)');
+  assert.match(fillInfo, /lore\.hidden = true/);
+  assert.match(fillInfo, /partBack\.hidden = true/);
+  assert.match(sc, /selectPart\(partId === part\.id \? null : part\.id\)/);
+  assert.match(sc, /partBack\.addEventListener\('click', \(\) => \{\s*partBack\.blur\(\);\s*selectPart\(null\);/);
+  // 다른 건물(항목)로 넘기면 부위 선택을 비운다(show → setParts)
+  const show = fnBody(sc, 'async function show(id)');
+  assert.match(show, /fillInfo\(item\);\s*setParts\(item\);/);
+  assert.match(fnBody(sc, 'function setParts(item)'), /partId = null;/);
+  assert.match(sc, /part: partId,/);
+  assert.doesNotMatch(sc, /part: null/);
+});
+
+test('(q) main 연결: 건물 목록에 parts(item) = buildingParts(world.layout, item.id, item.name)', () => {
+  const main = read('main.js');
+  assert.match(main, /import \{[^}]*buildingParts[^}]*\} from '\.\/archive\.js';/);
+  const arch = fnBody(main, 'async function openArchive(id)');
+  assert.match(arch, /parts: \(item\) => buildingParts\(world\.layout, item\.id, item\.name\)/);
+});
+
+test('(r) 화면: 부위 표지(점 · 짧은 이름, 흐리게 · 고른 표지) · 부위 설명 문단 · ‹ 건물 정보, 카드 버튼은 높이가 모자라도 보인다(스크롤은 내용만)', () => {
+  const css = read('nowhere.css');
+  assert.match(css, /\n\.nw-showcase-part \{[^}]*position: absolute;[^}]*pointer-events: auto;/);
+  assert.match(css, /\n\.nw-showcase-part\.is-behind \{[^}]*opacity: /);
+  assert.match(css, /\n\.nw-showcase-part\.is-active \{/);
+  assert.match(css, /\n\.nw-showcase-part\[hidden\]|\.nw-showcase-part\[hidden\]/);
+  assert.match(css, /\n\.nw-showcase-lore \{/);
+  assert.match(css, /\.nw-showcase-lore\[hidden\]/);
+  assert.match(css, /\.nw-showcase-part-back\[hidden\]/);
+  // 감상 패널(부위 설명이 붙으면 길어진다): 낮은 화면에서는 패널 안에서 스크롤 — 위 줄과 겹치지 않게
+  assert.match(css, /\n\.nw-showcase-panel \{[^}]*max-height: calc\(100vh - \d+px\);[^}]*overflow-y: auto;/);
+  // 카드: 내용(.nw-archive-body)만 스크롤, 버튼(.nw-archive-actions)은 카드 아래에 늘 보인다(가로 휴대폰 844 × 390 포함)
+  const card = css.match(/\n\.nw-archive-card \{([^}]*)\}/)[1];
+  assert.match(card, /display: flex;/);
+  assert.match(card, /flex-direction: column;/);
+  assert.doesNotMatch(card, /overflow-y: auto/);
+  assert.match(css, /\n\.nw-archive-body \{[^}]*overflow-y: auto;[^}]*min-height: 0;/);
+  assert.match(css, /\n\.nw-archive-actions \{[^}]*flex: none;/);
+  const src = read('archive-card.js');
+  assert.match(src, /body\.append\(kicker, title, info, note\);\s*card\.append\(body, actions\);/);
+});
+
+test('(s) 카드를 닫은 Esc 를 누르고 있으면 자동 반복(e.repeat)은 막는다 — camera.js 로 가서 보행을 끄지 않게, 손을 떼면 풀린다', () => {
+  const src = read('archive-card.js');
+  const esc = src.match(/window\.addEventListener\(\s*'keydown',[\s\S]*?\n    true,?\s*\n  \);/)[0];
+  assert.match(esc, /if \(e\.repeat && escHeld\) \{\s*e\.preventDefault\(\);\s*e\.stopImmediatePropagation\(\);\s*return;\s*\}/);
+  assert.ok(esc.indexOf('e.repeat && escHeld') < esc.indexOf('!openId'), '카드가 닫힌 뒤의 반복도 받는다');
+  assert.match(esc, /hide\(\);\s*escHeld = true;/);
+  assert.match(src, /window\.addEventListener\('keyup', \(e\) => \{\s*if \(e\.key === 'Escape'\) escHeld = false;/);
+});
+
+test('(t) 문서: README 에 건물 부위 표지 줄', () => {
+  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+  assert.match(readme, /\| 건물 부위 표지 \|[^\n]*‹ 건물 정보[^\n]*\|/);
+  assert.match(readme, /<건물 이름> · PART/);
+});
+
+test('(u) 아래 패널 배치(휴대폰 · 세로 태블릿)의 건물 감상: 투영 가운데를 위 막대 · 경로와 아래 정보 패널 사이 빈 곳 가운데로 올린다(부위 표지가 패널에 가리지 않게) — 제품 감상 · 옆 패널 배치는 그대로', async () => {
+  const { stageLift, stageView, STAGE_BOTTOM } = await import('../public/src/nowhere/products.js');
+  const lift = (STAGE_BOTTOM.bottom - STAGE_BOTTOM.top) / 2;
+  assert.ok(lift > 0);
+  for (const [w, h] of [[390, 844], [720, 900], [820, 1180], [1024, 1366]]) {
+    assert.equal(stageView(w, h).shift, 0, `${w}×${h} 아래 패널`);
+    assert.equal(stageLift(w, h), lift, `${w}×${h}`);
+  }
+  for (const [w, h] of [[1600, 900], [1180, 820], [844, 390], [1080, 1920]]) assert.equal(stageLift(w, h), 0, `${w}×${h} 옆 패널`);
+  // 아래 몫 = 휴대폰 패널 아래 여백(nowhere.css bottom) + 건물 정보 패널 높이(390 × 844 에서 238 px)
+  const css = read('nowhere.css');
+  const bottom = Number(css.match(/\.nw-showcase-panel \{\s*top: auto;\s*right: 8px;\s*bottom: (\d+)px;/)[1]);
+  assert.ok(STAGE_BOTTOM.bottom - bottom >= 238, '건물 정보 패널 높이만큼은 비운다');
+  // 무대: 부위 표지가 있는 목록(건물)만 올리고, 올린 만큼 시야각을 넓혀 보이는 크기는 그대로(거리 맞춤 stageFraming 은 FOV 그대로)
+  const sc = read('showcase.js');
+  const view = fnBody(sc, 'function applyView()');
+  assert.match(view, /const lift = list\?\.parts \? stageLift\(w, h\) : 0;/);
+  assert.match(view, /camera\.setViewOffset\(fullW, fullH, 2 \* v\.shift, 2 \* lift, w, h\)/);
+  assert.match(view, /camera\.fov = lift > 0 \?[^;]*fullH\)? \/ h[^;]*: FOV;/);
+  assert.match(sc, /stageFraming\(radius, FOV, applyView\(\)\)/);
+});

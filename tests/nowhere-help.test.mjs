@@ -168,3 +168,11 @@ test('(i) 감상 모드 안내(제품 · 건물): 제품 고르기(클릭 · 탭
   const esc = CONTROL_SECTIONS.find((s) => s.id === 'common').rows.find((r) => r.keys.includes('Esc'));
   assert.match(esc.desc, /건물 기록 카드 닫기/);
 });
+
+test('(j) 감상 모드 안내: 건물 감상 부위 표지 줄(누르면 부위 기록 · ‹ 건물 정보 · 가린 표지는 흐리게)', () => {
+  const sc = CONTROL_SECTIONS.find((s) => s.id === 'showcase');
+  const row = sc.rows.find((r) => /부위 표지/.test(r.desc));
+  assert.ok(row, '부위 표지 줄 없음');
+  assert.deepEqual(row.keys, ['클릭', '탭']);
+  for (const re of [/^건물 감상/, /포디움 · 타워 · 크라운/, /몸체 · 눈 · 필로티 다리/, /「‹ 건물 정보」/, /다른 건물/, /흐리게/]) assert.match(row.desc, re);
+});
