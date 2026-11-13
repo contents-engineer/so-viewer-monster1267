@@ -642,8 +642,13 @@ body[data-mode="walk"] .nw-dock-camera {
 /* 1440 px 이상: 네 묶음을 한 줄 네 칸으로(가장 긴 공통 칸을 넓게). 감상 모드가 7줄로 늘어 위 배치(카메라 · 보행 아래 두 칸)로는 1600 × 900 에서
    감상 모드 넷째 줄부터 · 메모가 첫 화면 밖이었다 — 이 배치면 넷 모두 끝까지 첫 화면에 들어온다 */
 @media (min-width: 1440px) {
+  /* 제목 아래 · 패널 아래 여백을 줄여 1600 × 900 에서 감상 모드 칸(가장 긴 칸)이 패널 안에 들어가게 */
   .nw-help-panel {
     width: min(1560px, 100%);
+    padding-bottom: 10px;
+  }
+  .nw-help-head {
+    margin-bottom: 8px;
   }
   .nw-help-grid {
     grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.1fr);
@@ -1779,12 +1784,17 @@ body.is-showcase .nw-hub {
 .nw-archive-actions {
   flex: none;
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 14px;
 }
 .nw-archive-detail {
   color: var(--nw-accent);
   border-color: var(--nw-accent);
+}
+/* 「이 자리 그대로 <반대 월드>로」: 자세히 보기 · 닫기 아래 한 줄 전체(카드 폭에 세 버튼이 한 줄로 들어가지 않는다) */
+.nw-archive-same {
+  flex: 1 0 100%;
 }
 /* 휴대폰 · 세로 태블릿(감상 정보 패널과 같은 조건 — products.js STAGE_PANEL): 카드를 아래로 */
 @media (max-width: 720px), (orientation: portrait) and (max-width: 1024px) {
@@ -1812,6 +1822,12 @@ body.is-showcase .nw-hub {
   .nw-archive-actions .nw-btn {
     min-width: 44px;
     min-height: 44px;
+  }
+}
+/* 낮은 화면(가로 휴대폰): 세 버튼을 한 줄로 — 「이 자리 그대로 …」는 남은 폭에서 두 줄 글자. 버튼 두 줄이 카드 내용(제목)을 밀어내지 않게 */
+@media (max-height: 500px) {
+  .nw-archive-same {
+    flex: 1 1 0;
   }
 }
 

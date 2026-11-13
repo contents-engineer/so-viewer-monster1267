@@ -171,11 +171,9 @@ test('(h) main.js · CSS: 방식 연결(보행 동기화 · 실내 · 가이드 
   assert.match(main, /modes\?\.syncWalk\(active\)/);
   assert.match(main, /modes\?\.refresh\(\)/);
   assert.match(main, /startGuide: \(\) => startScenario\('chooseBuilding'\)/);
-  assert.match(main, /nextParams\.set\('mode', /);
-  assert.match(main, /nextParams\.delete\('cam'\)/);
-  // 월드 전환은 새 월드의 인트로를 보여 준 뒤 지금 방식으로 이어 간다 — 인트로를 막는 값(noIntro · weather · time)을 넘기지 않는다
-  assert.doesNotMatch(main, /nextParams\.set\('noIntro'/);
-  for (const k of ['noIntro', 'weather', 'time']) assert.match(main, new RegExp(`nextParams\\.delete\\('${k}'\\)`), `월드 전환이 ${k} 를 지우지 않음`);
+  // 월드 전환은 새 월드의 인트로를 보여 준 뒤 지금 방식으로 이어 간다 — 주소는 entry.js worldSwitchUrl(지울 값 · 경로 규칙: tests/nowhere-entry.test.mjs (l))
+  assert.match(main, /window\.location\.href = worldSwitchUrl\(\{ pathname: window\.location\.pathname, search: window\.location\.search, targetVer, mode: modes\.get\(\) \}\);/);
+  assert.doesNotMatch(main, /\.set\('noIntro'/);
   assert.doesNotMatch(main, /nw-btn-(intro|buildings|walk)/);
   const css = readPub('src/nowhere/nowhere.css');
   assert.match(css, /body\[data-mode="guide"\] \.nw-dock-camera/);

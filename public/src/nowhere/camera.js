@@ -7,7 +7,7 @@ import { walkSpeed, stepBody, STEP_UP, MAX_CLIMB } from './walk.js';
 import { createPathFollower, turnToward, wrapAngle, FACE_DIST, TURN_RATE } from './walk-path.js';
 
 const EYE_HEIGHT = 1.7;        // 보행 시점 눈높이(지면 기준)
-const ORBIT_CLEARANCE = 1.2;   // 궤도·전환·인트로 카메라가 지면 위로 유지할 최소 여유고
+export const ORBIT_CLEARANCE = 1.2;   // 궤도·전환·인트로 카메라가 지면 위로 유지할 최소 여유고(main.js 같은 자리 진입도 같은 값)
 const FACE_TIME = 0.6;         // 스팟 도착 뒤 볼거리를 정면으로 돌리는 시간(s)
 // 스팟 자동 걷기를 끊는 키(이동 · 시선 · 점프)
 const AUTO_WALK_STOP_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space']);

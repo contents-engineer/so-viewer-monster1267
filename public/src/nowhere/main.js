@@ -5,7 +5,7 @@ import { createWorld, updateMoverActors, updateLegacyDrones } from './world.js';
 import { createPostPipeline } from './post.js';
 import { createWeatherController, getPresets, parseTimeParam, TIME_QUICK, weatherNamesFor, resolveWeather } from './weather.js';
 import { createRainSystem } from './rain.js';
-import { createCameraController } from './camera.js';
+import { createCameraController, ORBIT_CLEARANCE } from './camera.js';
 import { createHelpOverlay, createWalkHud } from './help.js';
 import { createModal } from './modal.js';
 import { createScenarioRunner, CANCEL } from './scenario.js';
@@ -17,8 +17,8 @@ import { createPerfHud } from './perf-hud.js';
 import { createFade } from './fade.js';
 import { createSpotMarkers } from './spot-markers.js';
 import { exteriorSpots, interiorSpots } from './walk-spots.js';
-import { planWalkPath } from './walk-path.js';
-import { resolveEntry } from './entry.js';
+import { planWalkPath, walkPredicates, nearestFreePoint } from './walk-path.js';
+import { resolveEntry, parsePose, sameSpotUrl, worldSwitchUrl, shiftLook, sameSpotLook, snapPose, liftPose, SAME_SPOT_FADE_MS, SAME_SPOT_SNAP_M, WORLD_IDS } from './entry.js';
 import { showWorldSelect, SELECT_FADE_MS } from './world-select.js';
 import { createCinema, INTRO_TITLES } from './cinema.js';
 import { showModeMenu } from './mode-menu.js';
@@ -42,6 +42,7 @@ async function boot() {
   const params = new URLSearchParams(window.location.search);
   // 시작 결정: 일반 주소(/)는 월드 선택 화면부터 — 고르기 전에는 렌더러 · 월드를 만들지 않는다(이미지 두 장만 받음)
   const entry = resolveEntry(params, window.__NW_DEFAULT_WORLD);
+  const pose = parsePose(params);   // 같은 자리 주소(at · look — 반대 월드 건물 카드에서 넘어옴): 방식을 적용한 뒤 그 자리로(runEntry)
   const worldVer = entry.select ? await showWorldSelect() : entry.world;
   document.body.dataset.worldVer = worldVer;
 
@@ -299,6 +300,9 @@ async function boot() {
   // 인트로 · 방식 고르기 · 비행 · 컷 이동 · 실내 전환 · 둘러보기 · 감상 · 모달 · 조작 안내 동안은 열 수 없다(버튼 흐리게 · L 무시).
   // 조작 안내 · 모달 · 감상보다 뒤, 건물 카드보다 앞에 만든다 — Esc 캡처 처리기가 그쪽 Esc 다음 · 카드 Esc 앞(둘 다 떠 있으면 목록부터 닫는다)
   const hubWorldLabel = document.querySelector(`.nw-world-switch [data-world-ver="${worldVer}"]`)?.textContent.trim() || worldLabel;
+  // 같은 자리, 다른 세계: 반대 월드(이름도 위 막대 월드 버튼 글자 — 성수 2041 · DS2 산악)
+  const otherWorldVer = WORLD_IDS.find((id) => id !== worldVer);
+  const otherWorldLabel = document.querySelector(`.nw-world-switch [data-world-ver="${otherWorldVer}"]`)?.textContent.trim() || '';
   const hub = createHubPanel({
     load: async () => {
       const [innerLayout, catalog] = await Promise.all([
@@ -322,7 +326,8 @@ async function boot() {
     },
     onGo: (item) => runGoPlan(item, { interior, open: openIndexItem }).catch((err) => console.error('[nowhere] 목록 항목 열기 실패', err)),
   });
-  // 건물 아카이브(외관): 건물 이름표 「기록 보기」 · 자유 시점 건물 클릭 · 건물 스팟 도착 → 오른쪽 카드, 「자세히 보기」 → 건물 감상.
+  // 건물 아카이브(외관): 건물 이름표 「기록 보기」 · 자유 시점 건물 클릭 · 건물 스팟 도착 → 오른쪽 카드, 「자세히 보기」 → 건물 감상,
+  // 「이 자리 그대로 <반대 월드>로」 → 반대 월드의 같은 자리 · 시선 · 방식(goSameSpot).
   // 인트로 · 방식 고르기 · 투어 · 실내 · 감상 · 조작 안내 · 모달 · 컷 이동 · 비행 동안은 이름표를 숨기고 클릭 · Esc 를 받지 않는다.
   // 조작 안내 · 모달 · 감상보다 뒤에 만든다 — 카드의 Esc 캡처 처리기가 그쪽 Esc 다음에 온다
   const archive = createArchiveCard({
@@ -333,6 +338,8 @@ async function boot() {
     isSuspended: () => cinema.isActive() || camCtrl.isIntroActive() || document.body.classList.contains('is-choosing') || scenario.isRunning() || interior.isActive() || interior.isBusy() || showcase.isActive() || showcase.isBusy() || help.isOpen() || modal.isOpen() || spotCutting || camCtrl.isFlying(),
     isWalking: () => camCtrl.isWalkMode(),
     onDetail: (id) => openArchive(id),
+    sameSpotWorld: otherWorldLabel,
+    onSameSpot: () => goSameSpot(),
   });
   // 성능 표시: P 키로 켜고 끈다. 키보드 없는 기기(아이패드 등)는 주소에 ?stats=1
   // 텍스처 추정은 외관 · 실내 장면을 함께 센다(실내에 있어도 외관 텍스처는 GPU 에 남아 있음 — 메모리 한도 판단용)
@@ -507,6 +514,20 @@ async function boot() {
     } finally {
       document.body.classList.remove('is-choosing');   // 방식 고르기가 이미 풀었으면 그대로, ?mode= 로 건너뛴 경우는 여기서 푼다(적용이 던져도 HUD 가 숨은 채 남지 않게)
     }
+    // 같은 자리 주소: 방식을 적용한 뒤 그 자리 · 시선으로. 시선 방향(위아래 각 포함)은 지면 높이가 달라도 그대로.
+    // 보행: 이 월드 장애물 안이면 SAME_SPOT_SNAP_M 안 가장 가까운 빈 자리로(시선 목표도 같이 옮김 — 없으면 그 자리), 지면 + 눈높이로 선 뒤 눈높이 차만큼 옮긴 목표로 다시 겨눈다.
+    // 그 밖(자유 시점 — 가이드 투어는 주소에서 자유 시점으로 바뀐다): 이 월드 지면 + ORBIT_CLEARANCE 아래면 올리고 시선 목표도 같은 만큼(camCtrl.update 의 clampAboveGround 와 같은 높이)
+    if (pose) {
+      if (camCtrl.isWalkMode()) {
+        const { isFree } = walkPredicates(camCtrl.getWalkContext());
+        const p = snapPose(pose, nearestFreePoint(pose.at[0], pose.at[2], isFree, SAME_SPOT_SNAP_M));
+        camCtrl.placeWalk(p.at[0], p.at[2], p.look);   // 이 월드 지면 + 눈높이로 선다
+        camCtrl.placeWalk(p.at[0], p.at[2], shiftLook(p.look, p.at[1], camera.position.y));   // 눈높이 차만큼 옮긴 목표로 다시 겨눈다
+      } else {
+        const p = liftPose(pose, camCtrl.getWalkContext().groundHeightAt(pose.at[0], pose.at[2]) + ORBIT_CLEARANCE);
+        camCtrl.placeAt(p.at, p.look);
+      }
+    }
   }
 
   function startScenario(stepId) {
@@ -544,7 +565,8 @@ async function boot() {
     });
   });
 
-  // 월드 전환: 다른 월드를 새 월드의 인트로부터 다시 열고, 인트로가 끝나면 지금 방식 그대로 이어 간다(?ver=…&mode=… — 선택 화면 · 방식 고르기 없음)
+  // 월드 전환: 다른 월드를 새 월드의 인트로부터 다시 열고, 인트로가 끝나면 지금 방식 그대로 이어 간다(?ver=…&mode=… — 선택 화면 · 방식 고르기 없음).
+  // 주소는 entry.js worldSwitchUrl — 인트로를 막는 값(noIntro · cam · weather · time · at · look)은 지운다. 새 월드는 기본 기상 · 시각으로 인트로부터
   document.querySelectorAll('.nw-world-switch [data-world-ver]').forEach((btn) => {
     const isCurrent = btn.dataset.worldVer === worldVer;
     btn.classList.toggle('is-active', isCurrent);
@@ -552,19 +574,33 @@ async function boot() {
     btn.addEventListener('click', () => {
       const targetVer = btn.dataset.worldVer;
       if (targetVer === worldVer) return;
-      const nextParams = new URLSearchParams(window.location.search);
-      nextParams.set('ver', targetVer);
-      nextParams.set('mode', modes.get() || 'free');
-      // 인트로를 막는 값(noIntro · cam · weather · time — resolveEntry 의 바로가기 조건)은 지운다. 새 월드는 기본 기상 · 시각으로 인트로부터
-      nextParams.delete('noIntro');
-      nextParams.delete('cam');
-      nextParams.delete('weather');
-      nextParams.delete('time');
-      const basePath = window.location.pathname.includes('nowhere-mountain') && targetVer === 'seongsu'
-        ? '/nowhere'
-        : window.location.pathname.replace(/\.html$/, '');
-      window.location.href = `${basePath}?${nextParams.toString()}`;
+      window.location.href = worldSwitchUrl({ pathname: window.location.pathname, search: window.location.search, targetVer, mode: modes.get() });
     });
+  });
+
+  // ── 같은 자리, 다른 세계(건물 카드 「이 자리 그대로 <반대 월드>로」): 어둡게(SAME_SPOT_FADE_MS, 가운데 '<지금> → <반대>') → 반대 월드 페이지에
+  // 지금 방식(가이드 투어면 자유 시점) · 카메라 위치(at) · 시선 목표(look — 보행이면 시선 방향으로 SAME_SPOT_LOOK_M 앞 점, entry.js sameSpotLook) — 인트로 없이(sameSpotUrl).
+  // 떠나기 전에 지금 주소를 이 월드의 같은 자리 주소로 바꿔 둔다 — 뒤로 가기로 돌아오면(bfcache 가 없어도) 인트로가 아니라 이 자리 ──
+  let sameSpotGoing = false;
+  async function goSameSpot() {
+    if (sameSpotGoing) return;
+    sameSpotGoing = true;
+    camCtrl.cancelWalkTo();
+    camCtrl.clearInput();      // 어두워지는 동안 누르던 이동 키로 걷지 않게
+    camCtrl.releasePointer();
+    await fade.fadeTo(true, `${hubWorldLabel} → ${otherWorldLabel}`, SAME_SPOT_FADE_MS);
+    // 다 어두워진 뒤 마지막 화면 그대로 적는다
+    const at = camera.position.toArray();
+    const look = sameSpotLook(at, camCtrl.controls.target.toArray(), camCtrl.isWalkMode());
+    const here = { pathname: window.location.pathname, search: window.location.search, mode: modes.get(), at, look };
+    history.replaceState(history.state, '', sameSpotUrl({ ...here, targetVer: worldVer }));
+    window.location.href = sameSpotUrl({ ...here, targetVer: otherWorldVer });
+  }
+  // 뒤로 가기로 이 페이지가 그대로 돌아오면(bfcache) 어두운 화면을 걷는다
+  window.addEventListener('pageshow', (e) => {
+    if (!e.persisted || !sameSpotGoing) return;
+    sameSpotGoing = false;
+    fade.fadeTo(false, '', SAME_SPOT_FADE_MS);
   });
 
   // Esc: 모달 · 조작 안내 · 방식 고르기가 먼저 받고(캡처 단계), 남은 Esc 는 인트로를 건너뛰거나 비행 중인 투어를 끝낸다

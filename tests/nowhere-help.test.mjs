@@ -211,3 +211,17 @@ test('(m) 감상 모드 안내: 첫 줄(실내)에 네 층 전시물 — 클릭 
   assert.match(arrows, /‹ 이전 · 다음 ›/);
   assert.match(sc.note, /전시물은 층 · 설명/);
 });
+
+test('(n) 감상 모드 안내: 건물 카드 줄에 「이 자리 그대로 …」 → 다른 월드 한 구절(짧게 — 1600 × 900 에서 감상 모드 칸이 한 줄만 늘어 메모까지 첫 화면) — 7줄 · 줄 수 그대로', () => {
+  const sc = CONTROL_SECTIONS.find((s) => s.id === 'showcase');
+  assert.equal(sc.rows.length, 7);
+  const building = sc.rows.find((r) => /기록 보기/.test(r.desc));
+  assert.match(building.desc, /「자세히 보기」 → 건물 감상, 「이 자리 그대로 …」 → 다른 월드, 「닫기」/);
+});
+
+test('(o) 1440 px 이상 배치: 제목 아래 여백 · 패널 아래 여백을 줄여 건물 카드 줄 한 구절로 늘어난 한 줄을 되찾는다(1600 × 900 패널 넘침 22 → 2 px)', () => {
+  const css = readFileSync(new URL('../public/src/nowhere/nowhere.css', import.meta.url), 'utf8');
+  const wide = css.match(/@media \(min-width: 1440px\) \{([\s\S]*?)\n\}/)[1];
+  assert.match(wide, /\.nw-help-panel \{\s*width: min\(1560px, 100%\);\s*padding-bottom: 10px;\s*\}/);
+  assert.match(wide, /\.nw-help-head \{\s*margin-bottom: 8px;\s*\}/);
+});
