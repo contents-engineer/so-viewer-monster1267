@@ -29,6 +29,7 @@ import { productCollection } from './products.js';
 import { buildingCollection, buildingParts, cardBuildingForSpot } from './archive.js';
 import { createArchiveCard } from './archive-card.js';
 import { exhibitCollection, cloneExhibit } from './exhibits.js';
+import { createExhibitTags } from './exhibit-tags.js';
 
 async function boot() {
   const canvas = document.getElementById('nw-canvas');
@@ -242,6 +243,22 @@ async function boot() {
     onOpen: (id) => openShowcase(id),
     isSuspended: () => spotCutting || modal.isOpen() || help.isOpen() || interior.isBusy() || interior.isTouring() || showcase.isActive() || showcase.isBusy(),
   });
+  // 실내 전시물(inner-layout exhibits — 네 층): 8 m 안 이름표 「<이름> · 자세히 보기」 · 자유 시점 클릭 · 보행 마우스 고정 중 조준점 클릭 → 전시물 감상.
+  // 리테일 진열 다음에 만든다 — 두 캔버스 캡처 click 처리기는 등록 순서대로 돌므로 제품 · 받침대를 맞힌 클릭은 리테일이 먼저 받아 막는다(제품이 먼저).
+  // 실내 밖 · 층 둘러보기 · 층 이동 · 감상 · 조작 안내 · 모달 · 컷 이동 동안은 이름표를 숨기고 클릭을 받지 않는다
+  const exhibitTags = createExhibitTags({
+    camera,
+    canvas,
+    getFloor: () => {
+      const def = interior.currentFloorDef();
+      const root = interior.currentRoot();
+      return def && root ? { def, root } : null;
+    },
+    isSuspended: () => !interior.isActive() || spotCutting || modal.isOpen() || help.isOpen() || interior.isBusy() || interior.isTouring() || showcase.isActive() || showcase.isBusy(),
+    isWalking: () => camCtrl.isWalkMode(),
+    isSpotAimed: () => markers.isAimed(),
+    onOpen: (id) => openExhibit(id),
+  });
   const interior = createInterior({
     renderer,
     camera,
@@ -255,7 +272,10 @@ async function boot() {
     isHelpOpen: () => help.isOpen(),
     fade,
     retail,
-    onFloorChange: (def) => markers.setSpots(def ? interiorSpots(def, retail.catalog()) : exteriorSpotList),
+    onFloorChange: (def) => {
+      markers.setSpots(def ? interiorSpots(def, retail.catalog()) : exteriorSpotList);
+      exhibitTags.setFloor(def);   // 이 층 전시물 이름표(외관이면 없음)
+    },
     onChange: (inside) => {
       if (inside) archive.hide();      // 실내에 들어가면 외관 건물 카드를 닫는다(들어가는 동안은 화면이 어둡다)
       else modes?.refresh();           // 나오면 보행 여부에 맞춰 직접 걷기 · 이전 방식으로
@@ -645,6 +665,7 @@ async function boot() {
     markers.update(dt);
     retail.update();
     if (!studio) archive.update();   // 건물 이름표 자리 · 카드 거리(감상 중에는 외관 카메라가 멈춰 있다 — 이름표 · 카드는 CSS 로 숨김)
+    if (!studio) exhibitTags.update();   // 실내 전시물 이름표(감상 중에는 CSS 로 숨김)
 
     renderer.info.reset();
     if (studio) {
@@ -676,6 +697,7 @@ async function boot() {
     archive,
     openArchive,
     openExhibit,
+    exhibitTags,
     cinema,
     interior,
     scenario,

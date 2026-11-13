@@ -1145,13 +1145,15 @@ body.is-cinema .nw-spots,
 body.is-cinema .nw-perf,
 body.is-cinema .nw-archive-tags,
 body.is-cinema .nw-archive-card,
+body.is-cinema .nw-exhibit-tags,
 body.is-choosing .nw-topbar,
 body.is-choosing .nw-dock,
 body.is-choosing .nw-walk-hud,
 body.is-choosing .nw-spots,
 body.is-choosing .nw-perf,
 body.is-choosing .nw-archive-tags,
-body.is-choosing .nw-archive-card {
+body.is-choosing .nw-archive-card,
+body.is-choosing .nw-exhibit-tags {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -1507,7 +1509,7 @@ body.is-choosing .nw-archive-card {
     border-radius: 22px;
   }
 }
-/* 감상 중에는 외관 · 실내 UI(상단 바 · 하단 독 · 실내 HUD · 자막 · 보행 안내 · 이동 스팟 · 이름표 · 건물 카드)를 숨긴다 — 조작 안내 · 모달 · 성능 표시는 그대로 */
+/* 감상 중에는 외관 · 실내 UI(상단 바 · 하단 독 · 실내 HUD · 자막 · 보행 안내 · 이동 스팟 · 제품 · 전시물 · 건물 이름표 · 건물 카드)를 숨긴다 — 조작 안내 · 모달 · 성능 표시는 그대로 */
 body.is-showcase .nw-topbar,
 body.is-showcase .nw-dock,
 body.is-showcase .nw-interior-hud,
@@ -1515,6 +1517,7 @@ body.is-showcase .nw-interior-caption,
 body.is-showcase .nw-walk-hud,
 body.is-showcase .nw-spots,
 body.is-showcase .nw-retail-tags,
+body.is-showcase .nw-exhibit-tags,
 body.is-showcase .nw-archive-tags,
 body.is-showcase .nw-archive-card {
   display: none;
@@ -1569,6 +1572,65 @@ body.is-showcase .nw-archive-card {
   font-size: 10.5px;
   letter-spacing: 0.06em;
   color: var(--nw-accent);
+}
+
+/* ── 실내 전시물 이름표(exhibit-tags.js): 전시물 8 m 안 그 위 0.6 m — 「<이름> · 자세히 보기」 한 줄(누르면 전시물 감상). 리테일 이름표와 같은 모양 ── */
+.nw-exhibit-tags {
+  position: fixed;
+  inset: 0;
+  z-index: 17;
+  overflow: hidden;
+  pointer-events: none;
+}
+.nw-exhibit-tags[hidden],
+.nw-exhibit-tag[hidden] {
+  display: none;
+}
+.nw-exhibit-tag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  /* transform translate(x, y) 가 가리키는 점 = 이름표 아래 가운데. 가로는 화면 가장자리 8px 안으로 밀어 넣는다(--sx = 이름표 화면 x — 건물 이름표와 같은 방식) */
+  translate: clamp(calc(8px - var(--sx, 50vw)), -50%, calc(100vw - 8px - var(--sx, 50vw) - 100%)) -100%;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  background: var(--nw-bg-panel-strong);
+  border: 1px solid var(--nw-line-struct);
+  border-top: 2px solid var(--nw-accent);
+  border-radius: 2px;
+  color: var(--nw-text);
+  font-family: var(--nw-font-sans);
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+  animation: nw-spot-in 0.2s ease;
+}
+.nw-exhibit-tag:hover {
+  border-color: var(--nw-accent);
+}
+.nw-exhibit-tag-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.nw-exhibit-tag-sep {
+  white-space: pre;
+  color: var(--nw-text-dim);
+}
+.nw-exhibit-tag-more {
+  font-family: var(--nw-font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--nw-accent);
+}
+/* 휴대폰 · 터치 화면: 손가락 크기(44 px) — 데스크톱 모습은 그대로 */
+@media (max-width: 720px), (pointer: coarse) {
+  .nw-exhibit-tag {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 
 /* ── 건물 아카이브(archive-card.js — 외관): 건물 위 이름표 「<이름> · 기록 보기」 · 오른쪽 기록 카드(감상 정보 패널과 같은 모양 · 자리, 모달 아님) ── */

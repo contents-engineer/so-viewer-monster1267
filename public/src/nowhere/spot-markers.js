@@ -145,5 +145,6 @@ export function createSpotMarkers({ camera, canvas, camCtrl, onPick, isSuspended
     for (const e of entries) e.btn.classList.toggle('is-aimed', e.spot.id === aimedId);
   }
 
-  return { setSpots, update, element: root };
+  // 마우스 고정 중 조준점이 스팟 위인지 — 그 클릭은 스팟 몫(전시물 고르기 exhibit-tags.js 가 비킨다)
+  return { setSpots, update, isAimed: () => aimedId !== null, element: root };
 }

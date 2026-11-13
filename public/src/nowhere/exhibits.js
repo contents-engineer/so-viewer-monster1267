@@ -2,11 +2,14 @@
 // inner-layout.json 각 층 exhibits(id · title · desc · pos — 층 좌표) → 감상 항목 · 감상 목록(showcase.open 의 collection),
 // 전시물 → 층 GLB EX_* 노드 대응(EXHIBIT_NODES — 스펙 §2 표), 층 루트에서 그 노드들을 복제한 묶음(감상 무대 모델 — 다시 받지 않는다).
 // 넓게 흩어진 묶음(EXHIBIT_PACK — 버섯 몬스터 한 줄 · 지하 카페 격자)은 감상 무대에서만 모은다(층의 배치는 그대로).
+// 고르기 판정(exhibit-tags.js 가 쓴다): 이름표 자리(exhibitTagAnchors — 전시물 노드 경계 상자 윗면 가운데 위, 노드가 없으면 exhibitTagAnchor — pos 위) · 보이기(exhibitTagVisible),
+// 광선이 맞은 물체 → 전시물(exhibitAt).
 // 문구는 inner-layout 값 그대로 쓴다(지어내지 않는다). 엘리베이터(EX_elevator_*)는 전시물이 아니다.
 import { breadcrumb } from './products.js';
 
 export const EXHIBIT_TAG_RANGE = 8;     // m — 카메라에서 수평으로 이 안이면 전시물 이름표
 export const EXHIBIT_TAG_LIFT = 0.6;    // m — 이름표는 전시물 pos 위 이만큼
+export const EXHIBIT_TAG_CEIL_GAP = 0.3; // m — 이름표는 층 천장(floorDef.ceiling)에서 이만큼 아래를 넘지 않는다(카메라 천장 여유와 같은 값)
 export const EXHIBIT_PICK_RANGE = 15;   // m — 클릭으로 고를 수 있는 거리
 export const CLICK_SLOP = 5;            // px — 이보다 많이 끌었으면 둘러보기 드래그(클릭 아님, retail-display · archive 와 같은 값)
 export const EXHIBIT_HINT = '드래그 · 한 손가락 회전 · 휠 · 두 손가락 확대 · ← → 다른 전시물 · Esc 나가기';
@@ -41,6 +44,78 @@ export function exhibitNodeMatch(exhibitId, nodeName) {
   const rule = EXHIBIT_NODES[exhibitId];
   if (!rule || !nodeName) return false;
   return (rule.exact || []).includes(nodeName) || (rule.prefix || []).some((p) => nodeName.startsWith(p));
+}
+
+/** 노드가 없을 때의 전시물 이름표 자리: pos(층 좌표) 위 EXHIBIT_TAG_LIFT */
+export function exhibitTagAnchor({ pos: [x, y, z] }) {
+  return [x, y + EXHIBIT_TAG_LIFT, z];
+}
+
+/**
+ * 그 층 전시물마다 이름표 자리(층 루트 좌표) { id: [x, y, z] } — 전시물 노드(exhibitNodeMatch, 맞는 노드는 자식째)의 층 루트 좌표 경계 상자
+ * 윗면 가운데 위 EXHIBIT_TAG_LIFT(층 루트 변환이 있으면 그 역을 곱한다 — cloneExhibit 과 같은 셈). 노드가 없거나 층 루트가 없으면 pos 위(exhibitTagAnchor).
+ * 메시 geometry 경계 상자를 그 메시 → 층 루트 행렬로 옮겨 합친다(three 의 Box3.expandByObject 와 같은 방식). 무대 모으기(EXHIBIT_PACK)는 쓰지 않는다 — 층 배치 그대로
+ */
+export function exhibitTagAnchors(THREE, root, floorDef) {
+  const out = {};
+  const exhibits = floorDef?.exhibits || [];
+  if (!exhibits.length) return out;
+  // 천장 아래로 누른다 — 13F 거대한 손(높이 4 m)은 윗면 + 0.6 m 가 천장(4.2 m)보다 높다
+  const yMax = typeof floorDef.ceiling === 'number' ? floorDef.ceiling - EXHIBIT_TAG_CEIL_GAP : Infinity;
+  let toFloor = null;
+  if (root) {
+    root.updateMatrixWorld(true);
+    toFloor = root.matrixWorld.clone().invert();
+  }
+  const m = new THREE.Matrix4();
+  const part = new THREE.Box3();
+  for (const e of exhibits) {
+    const box = new THREE.Box3();
+    for (const n of root ? exhibitNodes(root, e.id) : []) {
+      n.traverse((o) => {
+        const g = o.isMesh ? o.geometry : null;
+        if (!g) return;
+        if (!g.boundingBox) g.computeBoundingBox();
+        box.union(part.copy(g.boundingBox).applyMatrix4(m.multiplyMatrices(toFloor, o.matrixWorld)));
+      });
+    }
+    const a = box.isEmpty() ? exhibitTagAnchor(e) : [(box.min.x + box.max.x) / 2, box.max.y + EXHIBIT_TAG_LIFT, (box.min.z + box.max.z) / 2];
+    a[1] = Math.min(a[1], yMax);
+    out[e.id] = a;
+  }
+  return out;
+}
+
+/** 전시물 이름표를 보일지: 눈(eye)과 이름표 자리(anchor)의 수평 거리 EXHIBIT_TAG_RANGE 안(높이 차는 보지 않는다) · 화면 안(NDC x · y −1…1, −1 < z < 1 — 카메라 뒤 · far 밖 제외) */
+export function exhibitTagVisible({ eye, anchor, ndc: [x, y, z] }) {
+  return Math.hypot(anchor[0] - eye[0], anchor[2] - eye[2]) <= EXHIBIT_TAG_RANGE && Math.abs(x) <= 1 && Math.abs(y) <= 1 && z > -1 && z < 1;
+}
+
+// 층 루트 아래 그 전시물 노드(맞는 노드는 그 아래를 더 찾지 않는다 — 자식은 노드와 함께 다룬다). 층 노드 순서 그대로
+function exhibitNodes(root, exhibitId) {
+  const out = [];
+  const visit = (parent) => {
+    for (const n of parent.children) {
+      if (exhibitNodeMatch(exhibitId, n.name)) out.push(n);
+      else visit(n);
+    }
+  };
+  visit(root);
+  return out;
+}
+
+/**
+ * 광선이 맞은 물체(object)에서 부모로 올라가며 그 층(floorDef) 전시물 노드를 찾는다 — 맞는 가장 바깥 노드의 전시물 id(cloneExhibit 이 복제하는 단위,
+ * 여러 재질 노드 아래 메시처럼 이름이 메시 이름인 자식도 그 전시물). 다른 층 전시물 이름 · 엘리베이터 · 벽 · 진열이면 null
+ */
+export function exhibitAt(object, floorDef) {
+  const ids = (floorDef?.exhibits || []).map((e) => e.id);
+  let found = null;
+  for (let n = object; n; n = n.parent) {
+    const id = ids.find((x) => exhibitNodeMatch(x, n.name));
+    if (id) found = id;
+  }
+  return found;
 }
 
 /** 그 층 전시물 → 감상 항목(파일 순서): 이름 = title, 경로 SUPREME ORIGIN > Retail > HAUS 성수 <층> > title, 행 층(층 label) · 설명(desc — 비면 그 행 없음) */
@@ -85,18 +160,11 @@ export function cloneExhibit(THREE, root, exhibitId) {
   const group = new THREE.Group();
   group.name = `NW_Exhibit_${exhibitId}`;
   const m = new THREE.Matrix4();
-  const visit = (parent) => {
-    for (const n of parent.children) {
-      if (!exhibitNodeMatch(exhibitId, n.name)) {
-        visit(n);
-        continue;
-      }
-      const c = n.clone(true);
-      m.multiplyMatrices(toFloor, n.matrixWorld).decompose(c.position, c.quaternion, c.scale);
-      group.add(c);
-    }
-  };
-  visit(root);
+  for (const n of exhibitNodes(root, exhibitId)) {
+    const c = n.clone(true);
+    m.multiplyMatrices(toFloor, n.matrixWorld).decompose(c.position, c.quaternion, c.scale);
+    group.add(c);
+  }
   if (!group.children.length) return null;
   if (EXHIBIT_PACK[exhibitId]) packClusters(THREE, group, EXHIBIT_PACK[exhibitId]);
   return group;

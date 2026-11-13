@@ -195,3 +195,18 @@ test('(l) 조작 안내 배치: 1440 px 이상은 네 묶음을 한 줄 네 칸(
   assert.ok(css.indexOf('@media (min-width: 1440px)') > css.indexOf(".nw-help-section[data-section='showcase'] {"));
   assert.deepEqual(CONTROL_SECTIONS.map((s) => s.id), ['common', 'camera', 'walk', 'showcase'], '네 칸 순서 = 묶음 순서');
 });
+
+test('(m) 감상 모드 안내: 첫 줄(실내)에 네 층 전시물 — 클릭 · 탭(마우스 고정 중에는 조준점), 이름표 「자세히 보기」(전시물 8 m 안), 겹치면 제품이 먼저. 이전 · 다음 · 메모에도 전시물, 돌려 보기 · 확대는 대상 없이 — 7줄 · 줄 수 그대로(1600 × 900 첫 화면)', () => {
+  const sc = CONTROL_SECTIONS.find((s) => s.id === 'showcase');
+  assert.equal(sc.rows.length, 7, '1600 × 900 첫 화면 배치(l) — 줄을 늘리지 않고 첫 줄에 더한다');
+  const first = sc.rows[0];
+  assert.deepEqual(first.keys, ['클릭', '탭']);
+  assert.match(first.desc, /^실내 1F 제품 진열과 네 층 전시물 — /);
+  for (const re of [/클릭 · 탭\(마우스 고정 중에는 조준점\)/, /이름표 「자세히 보기」\(제품 4 m · 전시물 8 m 안\)/, /◇ 제품 스팟/, /감상 모드\(겹치면 제품이 먼저\)/]) assert.match(first.desc, re);
+  assert.match(sc.rows.find((r) => r.keys.includes('드래그')).desc, /^감상 모드: 돌려 보기 — /);
+  assert.match(sc.rows.find((r) => r.keys.includes('휠')).desc, /보는 대상 크기에 맞춘/);
+  const arrows = sc.rows.find((r) => r.keys.includes('←')).desc;
+  assert.match(arrows, /전시물은 같은 층 순서/);
+  assert.match(arrows, /‹ 이전 · 다음 ›/);
+  assert.match(sc.note, /전시물은 층 · 설명/);
+});
