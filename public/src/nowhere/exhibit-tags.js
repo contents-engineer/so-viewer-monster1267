@@ -104,6 +104,7 @@ export function createExhibitTags({ camera, canvas, getFloor, isSuspended = () =
       down.x = e.clientX;
       down.y = e.clientY;
       down.suspended = isSuspended();
+      down.touch = e.pointerType === 'touch';   // 터치에는 마우스 고정이 없다 — 보행 중 탭도 고른다
     },
     true,
   );
@@ -118,7 +119,7 @@ export function createExhibitTags({ camera, canvas, getFloor, isSuspended = () =
         if (isSpotAimed()) return;   // 조준점이 ◇ 이동 스팟 위 — 스팟으로 걸어가기(spot-markers.js)
         ndc.set(0, 0);
       } else {
-        if (isWalking()) return;   // 보행 중 고정 전 클릭은 마우스 고정(camera.js)
+        if (isWalking() && !down.touch) return;   // 보행 중 고정 전 마우스 클릭은 마우스 고정(camera.js) — 터치 탭은 고른다
         if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > CLICK_SLOP) return;
         const r = canvas.getBoundingClientRect();
         ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);

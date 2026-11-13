@@ -625,7 +625,7 @@ test('(m) 이름표 · 고르기 모듈(exhibit-tags.js): <title> · 자세히 �
   assert.match(c, /const locked = document\.pointerLockElement === canvas;/);
   assert.match(c, /if \(locked\) \{\s*if \(isSpotAimed\(\)\) return;[^\n]*\n\s*ndc\.set\(0, 0\);/);
   assert.match(c, /if \(isWalking\(\)\) return;/);
-  assert.ok(c.indexOf('if (isWalking()) return;') < c.indexOf('> CLICK_SLOP) return'), '보행(고정 전) 클릭은 끌기 검사 전에 돌려보낸다');
+  assert.ok(c.indexOf('if (isWalking() && !down.touch) return;') < c.indexOf('> CLICK_SLOP) return'), '보행(고정 전) 클릭은 끌기 검사 전에 돌려보낸다');
   assert.match(c, /> CLICK_SLOP\) return;/);
   assert.match(c, /raycaster\.setFromCamera\(ndc, camera\);/);
   assert.match(c, /const hit = raycaster\.intersectObject\(floor\.root, true\)\[0\];/);

@@ -294,3 +294,9 @@ test('(e) 이름표: 층 전시물마다 <title> · 자세히 보기 버튼 — 
   s.tags.update();
   assert.equal(root.hidden, true, 'getFloor 가 아직 1F 면 13F 이름표를 그 층 루트로 재지 않는다');
 });
+
+test('(t) 터치 보행: 끌지 않은 탭은 전시물을 고른다(터치에는 마우스 고정이 없다) — 마우스 클릭은 그대로 마우스 고정 몫', () => {
+  const src = readFileSync(new URL('../public/src/nowhere/exhibit-tags.js', import.meta.url), 'utf8');
+  assert.match(src, /down\.touch = e\.pointerType === 'touch'/);
+  assert.match(src, /if \(isWalking\(\) && !down\.touch\) return;/);
+});

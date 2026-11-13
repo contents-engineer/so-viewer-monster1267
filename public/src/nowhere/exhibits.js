@@ -8,7 +8,7 @@
 import { breadcrumb } from './products.js';
 
 export const EXHIBIT_TAG_RANGE = 8;     // m — 카메라에서 수평으로 이 안이면 전시물 이름표
-export const EXHIBIT_TAG_LIFT = 0.6;    // m — 이름표는 전시물 pos 위 이만큼
+export const EXHIBIT_TAG_LIFT = 0.6;    // m — 이름표는 전시물 노드 경계 상자 윗면(노드가 없으면 pos) 위 이만큼
 export const EXHIBIT_TAG_CEIL_GAP = 0.3; // m — 이름표는 층 천장(floorDef.ceiling)에서 이만큼 아래를 넘지 않는다(카메라 천장 여유와 같은 값)
 export const EXHIBIT_PICK_RANGE = 15;   // m — 클릭으로 고를 수 있는 거리
 export const CLICK_SLOP = 5;            // px — 이보다 많이 끌었으면 둘러보기 드래그(클릭 아님, retail-display · archive 와 같은 값)
