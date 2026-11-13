@@ -25,6 +25,7 @@ import { showModeMenu } from './mode-menu.js';
 import { createModeController } from './modes.js';
 import { createRetailDisplay } from './retail-display.js';
 import { createShowcase, studioEnvironment } from './showcase.js';
+import { productCollection } from './products.js';
 
 async function boot() {
   const canvas = document.getElementById('nw-canvas');
@@ -263,7 +264,6 @@ async function boot() {
     canvas,
     quality,
     fade,
-    getLite: (product) => retail.liteSource(product),
     isBlocked: () => help.isOpen() || modal.isOpen(),
     onHelp: () => help.toggle(),
     onClose: () => restoreFromShowcase(),
@@ -351,7 +351,11 @@ async function boot() {
       if (showcaseReturn.walking) camCtrl.setWalkMode(false);   // 보행 키 · 마우스 고정 · 스팟 · 보행 안내를 멈춘다(나올 때 다시 켠다)
       camCtrl.controls.enabled = false;                          // 무대 드래그 · 휠이 실내 카메라를 돌리지 않게
       interior.showCaption('');
-      opened = await showcase.open({ catalog, floorId, productId });
+      // 그 층 진열 목록 — 가벼운 모델은 진열이 받아 둔 -lite 원본(무대가 clone 해서 쓴다)
+      opened = await showcase.open({
+        ...productCollection(catalog, floorId, productId),
+        loadLite: (item) => retail.liteSource(item.product),
+      });
     } catch (err) {
       console.error('[nowhere] 제품 감상 열기 실패', err);
     }
@@ -643,7 +647,7 @@ async function boot() {
         introActive: camCtrl.isIntroActive(),
         interior: interior.isActive(),
         floor: interior.currentFloor(),
-        showcase: showcase.isActive() ? showcase.getState().productId : null,
+        showcase: showcase.isActive() ? showcase.getState().itemId : null,
         scenarioStep: scenario.current(),
         fps: currentFps,
         calls: renderer.info.render.calls,

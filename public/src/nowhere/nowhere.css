@@ -1235,7 +1235,7 @@ body.is-choosing .nw-perf {
   }
 }
 
-/* ── 제품 감상 모드(showcase.js): 스튜디오 무대 위 — 왼쪽 위 < BACK · 경로, 오른쪽 위 조작 안내, 오른쪽 정보 패널, 아래 이전 · 다음 · 조작 안내 한 줄 ── */
+/* ── 감상 모드(showcase.js — 제품 · 건물): 스튜디오 무대 위 — 왼쪽 위 < BACK · 경로, 오른쪽 위 조작 안내, 오른쪽 정보 패널, 아래 이전 · 다음 · 조작 안내 한 줄 ── */
 .nw-showcase {
   position: fixed;
   inset: 0;
@@ -1243,6 +1243,7 @@ body.is-choosing .nw-perf {
   pointer-events: none;
 }
 .nw-showcase[hidden],
+.nw-showcase-note[hidden],
 .nw-showcase-status[hidden],
 .nw-showcase-pager[hidden] {
   display: none;
@@ -1325,6 +1326,13 @@ body.is-choosing .nw-perf {
 .nw-showcase-info dd {
   margin: 0;
   color: var(--nw-text);
+  word-break: keep-all;
+}
+.nw-showcase-note {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--nw-text-dim);
   word-break: keep-all;
 }
 .nw-showcase-status {

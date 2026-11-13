@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import {
   validateCatalog, findProduct, floorDisplays, displayFront, productSpots, sizeText, infoRows, floorCrumb, breadcrumb,
-  stepProduct, resolveShowcaseKey, showcaseKeyGate, stageFraming,
+  stepProduct, stepItem, productCollection, withoutProducts, resolveShowcaseKey, showcaseKeyGate, stageFraming,
   PRODUCTS_URL, PLINTH, COVER, GLOW, PRODUCT_CENTER_Y, SPOT_FRONT, LABEL_RANGE, PICK_RANGE, AUTO_ROTATE_DELAY,
 } from '../public/src/nowhere/products.js';
 import { interiorSpots } from '../public/src/nowhere/walk-spots.js';
@@ -288,7 +288,7 @@ test('(k) 감상 열기 실패 복구: showcase.open 은 던지거나 못 보이
   }
   const main = read('main.js').match(/async function openShowcase\(productId\) \{[\s\S]*?\n  \}\n/);
   assert.ok(main, 'openShowcase 를 찾지 못함');
-  assert.match(main[0], /let opened = false;\s*try \{[\s\S]*camCtrl\.setWalkMode\(false\)[\s\S]*opened = await showcase\.open\(\{ catalog, floorId, productId \}\);\s*\} catch \(err\) \{[\s\S]*?\}\s*if \(!opened\) restoreFromShowcase\(\);/);
+  assert.match(main[0], /let opened = false;\s*try \{[\s\S]*camCtrl\.setWalkMode\(false\)[\s\S]*opened = await showcase\.open\(\{\s*\.\.\.productCollection\(catalog, floorId, productId\),\s*loadLite: \(item\) => retail\.liteSource\(item\.product\),?\s*\}\);\s*\} catch \(err\) \{[\s\S]*?\}\s*if \(!opened\) restoreFromShowcase\(\);/);
 });
 
 test('(l) 휴대폰 · 터치 감상 화면 < BACK · 조작 안내 44 px, 조작 안내 넷째 묶음(제품 감상)은 카메라 · 보행 아래 두 칸', () => {
@@ -347,4 +347,68 @@ test('(l) 진열용(lite) 모델을 못 불러온 제품은 진열에서 뺀다 
   assert.match(src, /catalog: \(\) => withoutProducts\(catalog, failed\)/, 'catalog() 는 실패한 제품을 뺀 목록');
   assert.match(src, /ds\.filter\(\(_, i\) => sources\[i\]\)\.map\(\(d\) => \{\s*const btn/, '이름표는 불러온 제품만');
   assert.match(src, /if \(failed\.has\(best\.product\.id\)\) return;/, '못 불러온 받침대 클릭은 열지 않는다');
+});
+
+test('(m) 감상 목록 이전 · 다음(stepItem): items 순서로 돌고(끝 → 처음), 없는 id 는 null — stepProduct 는 그 층 진열 목록으로 이것을 쓴다', () => {
+  const items = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+  assert.equal(stepItem(items, 'a', 1), 'b');
+  assert.equal(stepItem(items, 'c', 1), 'a');
+  assert.equal(stepItem(items, 'a', -1), 'c');
+  assert.equal(stepItem(items, 'b', -1), 'a');
+  assert.equal(stepItem(items, 'ghost', 1), null);
+  assert.equal(stepItem([], 'a', 1), null);
+  assert.equal(stepItem([{ id: 'solo' }], 'solo', 1), 'solo');
+  const src = readFileSync(new URL('src/nowhere/products.js', PUB), 'utf8');
+  assert.match(src, /export function stepProduct\([^)]*\) \{\s*return stepItem\(/);
+});
+
+test('(n) 제품 감상 목록(productCollection): 그 층 진열 순서 · 항목 문구는 지금과 같다(kicker = 분류 대문자, 경로, 정보 행, 고해상도 = glb), 안내 한 줄 그대로', () => {
+  const c = productCollection(catalog, '1', 'folding-tarx');
+  assert.equal(c.kind, 'product');
+  assert.equal(c.startId, 'folding-tarx');
+  assert.equal(c.hint, '드래그 · 한 손가락 회전 · 휠 · 두 손가락 확대 · ← → 다른 제품 · Esc 나가기');
+  assert.deepEqual(c.items.map((i) => i.id), floorDisplays(catalog, '1').map((d) => d.product.id));
+  const kant = findProduct(catalog, 'kant');
+  assert.deepEqual(c.items[0], {
+    id: 'kant',
+    name: 'Kant',
+    kicker: 'EYEWEAR',
+    crumbs: ['SUPREME ORIGIN', 'Retail', 'HAUS 성수 1F', 'Kant'],
+    rows: infoRows(kant),
+    note: '',
+    hiUrl: 'assets/products/kant.glb',
+    product: kant,
+  });
+  assert.equal('loadLite' in c, false, 'lite 는 main.js 가 진열의 것(retail.liteSource)으로 붙인다');
+  // 이전 · 다음은 지금과 같은 순서
+  for (const id of ['kant', 'folding-tarx', 'veggie-oat']) {
+    for (const dir of [1, -1]) assert.equal(stepItem(c.items, id, dir), stepProduct(catalog, '1', id, dir), `${id} ${dir}`);
+  }
+  // 진열용 모델을 못 불러온 제품은 목록에도 없다 · 진열이 없는 층은 빈 목록
+  assert.deepEqual(productCollection(withoutProducts(catalog, new Set(['folding-tarx'])), '1', 'kant').items.map((i) => i.id), ['kant', 'veggie-oat']);
+  assert.deepEqual(productCollection(catalog, '12', 'kant').items, []);
+});
+
+test('(o) 감상 무대 공통화: open(collection) · 목록에서 찾기 · lite 는 loadLite 또는 무대 로더(주소별 캐시, 실패는 지운다) · 고해상도는 hiUrl 있고 휴대폰 아닐 때 · 정보는 항목 값 · kind 별 이름 · main 연결', () => {
+  const sc = readFileSync(new URL('src/nowhere/showcase.js', PUB), 'utf8');
+  assert.match(sc, /async function open\(collection\) \{/);
+  assert.doesNotMatch(sc, /findProduct|floorDisplays|infoRows|breadcrumb|stepProduct|getLite/, '무대는 제품 목록 함수를 직접 쓰지 않는다');
+  assert.match(sc, /stepItem\(list\.items, itemId, dir\)/);
+  assert.match(sc, /list\.loadLite \? list\.loadLite\(item\)/);
+  assert.match(sc, /\.catch\(\(err\) => \{\s*cache\.delete\(url\);/, '실패한 주소는 캐시에서 지운다(다시 시도)');
+  assert.match(sc, /wantHi && item\.hiUrl/);
+  assert.match(sc, /'nw-showcase-note'/);
+  assert.match(sc, /note\.hidden = !item\.note/);
+  assert.match(sc, /kicker\.textContent = item\.kicker/);
+  assert.match(sc, /count\.textContent = `\$\{list\.items\.indexOf\(item\) \+ 1\} \/ \$\{list\.items\.length\}`/);
+  assert.match(sc, /hint\.textContent = list\.hint/);
+  assert.match(sc, /product: \{ label: '제품 감상'/);
+  assert.match(sc, /building: \{ label: '건물 감상'/);
+  assert.match(sc, /productId: list\?\.kind === 'product' \? itemId : null/);
+  const css = readFileSync(new URL('src/nowhere/nowhere.css', PUB), 'utf8');
+  assert.match(css, /\.nw-showcase-note\[hidden\]/);
+  assert.match(css, /\n\.nw-showcase-note \{/);
+  const main = readFileSync(new URL('src/nowhere/main.js', PUB), 'utf8');
+  assert.doesNotMatch(main, /getLite:/);
+  assert.match(main, /showcase: showcase\.isActive\(\) \? showcase\.getState\(\)\.itemId : null/);
 });

@@ -1,6 +1,6 @@
 // HAUS NOWHERE — 리테일 제품 목록(순수, three · DOM 없음 — 테스트: tests/nowhere-products.test.mjs).
 // assets/products/products.json 검증 · 층별 진열 · 제품 스팟(받침대 앞 1.2 m) · 정보 문구(크기 · 재질 · 빈 필드 숨김) ·
-// 경로 문구 · 이전 · 다음 순서 · 감상 키 · 감상 무대 카메라 거리. 제품 · 진열을 늘릴 때는 GLB 를 넣고 products.json 만 고친다.
+// 경로 문구 · 이전 · 다음 순서 · 제품 감상 목록 · 감상 키 · 감상 무대 카메라 거리. 제품 · 진열을 늘릴 때는 GLB 를 넣고 products.json 만 고친다.
 // 좌표는 실내 층 Three.js(x, y 위, z). yaw 는 도(°) — 0 이면 제품 정면(모델 +z)이 +z 를 본다.
 
 export const PRODUCTS_URL = 'assets/products/products.json';
@@ -125,12 +125,40 @@ export function breadcrumb(floorId, name) {
   return [...BREADCRUMB_ROOT, floorCrumb(floorId), name];
 }
 
+/** 감상 목록 items([{ id }]) 순서로 dir(+1 다음 · −1 이전) 만큼 — 끝에서 처음으로 돈다. 목록에 없으면 null */
+export function stepItem(items, currentId, dir) {
+  const i = items.findIndex((it) => it.id === currentId);
+  if (i < 0) return null;
+  return items[(i + dir + items.length * 2) % items.length].id;
+}
+
 /** 같은 층 진열 순서로 dir(+1 다음 · −1 이전) 만큼 — 끝에서 처음으로 돈다. 진열에 없으면 null */
 export function stepProduct(catalog, floorId, currentId, dir) {
-  const ids = floorDisplays(catalog, floorId).map((d) => d.product.id);
-  const i = ids.indexOf(currentId);
-  if (i < 0) return null;
-  return ids[(i + dir + ids.length * 2) % ids.length];
+  return stepItem(floorDisplays(catalog, floorId).map((d) => d.product), currentId, dir);
+}
+
+export const PRODUCT_HINT = '드래그 · 한 손가락 회전 · 휠 · 두 손가락 확대 · ← → 다른 제품 · Esc 나가기';
+
+/**
+ * 제품 감상 목록(showcase.open 의 collection): 그 층 진열 순서. 항목 = 감상 패널 문구(kicker = 분류 대문자 · 경로 · 정보 행) +
+ * 고해상도 주소(glb) + 원래 제품(product — main.js 가 진열의 lite 를 붙일 때 쓴다). lite 는 main.js 가 loadLite 로 붙인다
+ */
+export function productCollection(catalog, floorId, startId) {
+  return {
+    kind: 'product',
+    items: floorDisplays(catalog, floorId).map(({ product: p }) => ({
+      id: p.id,
+      name: p.name,
+      kicker: p.category.toUpperCase(),
+      crumbs: breadcrumb(floorId, p.name),
+      rows: infoRows(p),
+      note: '',
+      hiUrl: p.glb,
+      product: p,
+    })),
+    startId,
+    hint: PRODUCT_HINT,
+  };
 }
 
 /** 감상 모드 키: Esc → 'close', ← → 'prev', → → 'next', 그 밖은 null */

@@ -1,14 +1,16 @@
-// HAUS NOWHERE — 제품 감상 모드: 실내 대신 따로 띄운 스튜디오 무대(어두운 청회색 배경 · 그라데이션 바닥 원판 · RoomEnvironment 반사 ·
-// 키 · 필 · 림 조명 3개)에 제품 하나를 원점에 세우고 돌려 보고 확대한다. 감상 중에는 main.js 가 외관 · 실내 · 후처리 대신 render() 만 부른다.
-// 조작: 드래그 · 한 손가락 회전, 휠 · 두 손가락 확대(제품 크기 기준 최소 · 최대 거리), 4 초 동안 입력이 없으면 천천히 자동 회전,
-// ← / → · 이전 · 다음 버튼 = 같은 층 진열 순서, Esc · < BACK = 나가기(onClose — main.js 가 연 자리 · 시선 · 보행 여부를 되돌린다).
-// 데스크톱 · 태블릿은 -lite 로 먼저 보여 주고 <id>.glb 를 받아 바꾼다. 휴대폰은 -lite 만. 키는 창 캡처 단계에서 먼저 받는다(조작 안내 · 모달이 열려 있으면 그쪽 몫).
+// HAUS NOWHERE — 감상 모드(제품 · 건물): 실내 · 외관 대신 따로 띄운 스튜디오 무대(어두운 청회색 배경 · 그라데이션 바닥 원판 · RoomEnvironment 반사 ·
+// 키 · 필 · 림 조명 3개)에 감상 목록(collection — products.js productCollection · archive.js buildingCollection)의 항목 하나를 원점에 세우고
+// 돌려 보고 확대한다. 감상 중에는 main.js 가 외관 · 실내 · 후처리 대신 render() 만 부른다.
+// 조작: 드래그 · 한 손가락 회전, 휠 · 두 손가락 확대(항목 크기 기준 최소 · 최대 거리), 4 초 동안 입력이 없으면 천천히 자동 회전,
+// ← / → · 이전 · 다음 버튼 = 목록 순서, Esc · < BACK = 나가기(onClose — main.js 가 연 자리 · 시선 · 보행 여부를 되돌린다).
+// 모델: 가벼운 것(collection.loadLite 또는 item.liteUrl)을 먼저 보여 주고, item.hiUrl 이 있으면 데스크톱 · 태블릿은 받아 바꾼다(휴대폰은 가벼운 것만).
+// 키는 창 캡처 단계에서 먼저 받는다(조작 안내 · 모달이 열려 있으면 그쪽 몫).
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { findProduct, floorDisplays, infoRows, breadcrumb, stepProduct, showcaseKeyGate, stageFraming, stageView, AUTO_ROTATE_DELAY } from './products.js';
+import { stepItem, showcaseKeyGate, stageFraming, stageView, AUTO_ROTATE_DELAY } from './products.js';
 
 export const SHOWCASE_FADE_MS = 200;   // 실내 ↔ 감상 무대 화면 전환(어둡게 · 밝게 각각)
 const FOV = 30;
@@ -17,7 +19,12 @@ const EXPOSURE = 1.0;                 // 감상 무대 노출(외관 기상 노�
 const AUTO_ROTATE_SPEED = 2;          // OrbitControls 단위(60 / 2 = 30 초에 한 바퀴)
 const START_AZIMUTH = 28;             // ° — 처음 시선: 정면에서 오른쪽으로
 const START_ELEVATION = 14;           // ° — 처음 시선: 조금 위에서
-const DISC_SCALE = 4.5;               // 바닥 원판 지름 = 제품 경계 구 반지름 × 이 값
+const DISC_SCALE = 4.5;               // 바닥 원판 지름 = 항목 경계 구 반지름 × 이 값
+// 감상 종류별 이름(화면 aria-label · 오류 문구)
+const KINDS = {
+  product: { label: '제품 감상', noun: '제품' },
+  building: { label: '건물 감상', noun: '건물' },
+};
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -61,10 +68,11 @@ function makeFloorDisc() {
 }
 
 /**
- * getLite(product) → Promise<Object3D | null>(진열이 받아 둔 -lite 원본 — clone 해서 쓴다).
+ * open(collection) — collection = { kind: 'product' | 'building', items: [{ id, name, kicker, crumbs, rows: [{ label, value }], note, liteUrl?, hiUrl? }],
+ *   startId, loadLite?(item) → Promise<Object3D | null>(원본 — clone 해서 쓴다. 없으면 무대 로더가 item.liteUrl 을 받는다), hint }.
  * isBlocked() → 조작 안내 · 모달이 열려 있으면 감상 키를 처리하지 않는다. onHelp → '조작 안내' 버튼. onClose → 나간 뒤(화면이 어두운 동안) 부른다.
  */
-export function createShowcase({ renderer, canvas, quality, fade, getLite, isBlocked = () => false, onHelp = null, onClose = null }) {
+export function createShowcase({ renderer, canvas, quality, fade, isBlocked = () => false, onHelp = null, onClose = null }) {
   const scene = new THREE.Scene();
   scene.name = 'NW_Showcase';
   scene.background = new THREE.Color(BG);
@@ -104,13 +112,13 @@ export function createShowcase({ renderer, canvas, quality, fade, getLite, isBlo
   const loader = new GLTFLoader();
   loader.setMeshoptDecoder(MeshoptDecoder);
   const wantHi = quality.device !== 'phone';
-  const hiCache = new Map();   // productId → Promise<Object3D | null>
+  const cache = new Map();   // 주소 → Promise<Object3D | null>(무대 로더가 받은 원본 — 실패한 주소는 지워 다음에 다시 받는다)
 
   // 화면: 왼쪽 위 < BACK · 경로, 오른쪽 위 조작 안내, 오른쪽 정보 패널, 아래 이전 · 다음 · 조작 안내 한 줄
   const root = el('div', 'nw-showcase');
   root.hidden = true;
   root.setAttribute('role', 'dialog');
-  root.setAttribute('aria-label', '제품 감상');
+  root.setAttribute('aria-label', KINDS.product.label);
   const top = el('div', 'nw-showcase-top');
   const back = el('button', 'nw-btn nw-showcase-back', '< BACK');
   back.type = 'button';
@@ -124,10 +132,12 @@ export function createShowcase({ renderer, canvas, quality, fade, getLite, isBlo
   const kicker = el('div', 'nw-showcase-kicker');
   const title = el('h2', 'nw-showcase-name');
   const info = el('dl', 'nw-showcase-info');
+  const note = el('p', 'nw-showcase-note');
+  note.hidden = true;
   const status = el('div', 'nw-showcase-status', '고해상도 불러오는 중…');
   status.hidden = true;
   status.setAttribute('aria-live', 'polite');
-  panel.append(kicker, title, info, status);
+  panel.append(kicker, title, info, note, status);
   const pager = el('div', 'nw-showcase-pager');
   const prevBtn = el('button', 'nw-btn nw-showcase-prev', '‹ 이전');
   prevBtn.type = 'button';
@@ -135,33 +145,35 @@ export function createShowcase({ renderer, canvas, quality, fade, getLite, isBlo
   const nextBtn = el('button', 'nw-btn nw-showcase-next', '다음 ›');
   nextBtn.type = 'button';
   pager.append(prevBtn, count, nextBtn);
-  const hint = el('div', 'nw-showcase-hint', '드래그 · 한 손가락 회전 · 휠 · 두 손가락 확대 · ← → 다른 제품 · Esc 나가기');
+  const hint = el('div', 'nw-showcase-hint');
   root.append(top, panel, pager, hint);
   document.body.append(root);
 
   let active = false;
   let busy = false;
-  let catalog = null;
-  let floorId = null;
-  let productId = null;
+  let list = null;    // 지금 감상 목록(collection)
+  let itemId = null;
   let level = null;   // 'lite' | 'hi'
   let model = null;
-  let token = 0;      // 제품을 바꾸거나 나가면 늘린다 — 늦게 도착한 고해상도는 버린다
+  let token = 0;      // 항목을 바꾸거나 나가면 늘린다 — 늦게 도착한 고해상도는 버린다
 
-  function fillInfo(p) {
-    const parts = breadcrumb(floorId, p.name);
+  const kindOf = () => KINDS[list?.kind] || KINDS.product;
+
+  function fillInfo(item) {
+    const path = item.crumbs;
     crumbs.replaceChildren(
-      ...parts.flatMap((t, i) => {
-        const s = el('span', i === parts.length - 1 ? 'nw-showcase-crumb is-current' : 'nw-showcase-crumb', t);
+      ...path.flatMap((t, i) => {
+        const s = el('span', i === path.length - 1 ? 'nw-showcase-crumb is-current' : 'nw-showcase-crumb', t);
         return i ? [el('span', 'nw-showcase-sep', '>'), s] : [s];
       }),
     );
-    kicker.textContent = p.category.toUpperCase();
-    title.textContent = p.name;
-    info.replaceChildren(...infoRows(p).flatMap((r) => [el('dt', null, r.label), el('dd', null, r.value)]));
-    const ids = floorDisplays(catalog, floorId).map((d) => d.product.id);
-    count.textContent = `${ids.indexOf(p.id) + 1} / ${ids.length}`;
-    pager.hidden = ids.length < 2;
+    kicker.textContent = item.kicker;
+    title.textContent = item.name;
+    info.replaceChildren(...item.rows.flatMap((r) => [el('dt', null, r.label), el('dd', null, r.value)]));
+    note.textContent = item.note || '';
+    note.hidden = !item.note;
+    count.textContent = `${list.items.indexOf(item) + 1} / ${list.items.length}`;
+    pager.hidden = list.items.length < 2;
   }
 
   // 화면 크기에 맞춰 투영을 정한다 — 옆 정보 패널 배치면 패널 왼쪽 빈 곳 가운데가 투영 가운데(stageView: 화면은 그대로 두고 더 넓은 가상 화면의
@@ -179,7 +191,7 @@ export function createShowcase({ renderer, canvas, quality, fade, getLite, isBlo
     return v.freeWidth / h;
   }
 
-  // 제품 경계 상자에 맞춰 카메라 거리 · 확대 한계 · 바닥 원판을 정하고 처음 시선으로
+  // 항목 경계 상자에 맞춰 카메라 거리 · 확대 한계 · 바닥 원판을 정하고 처음 시선으로
   function frame(box) {
     const size = box.getSize(new THREE.Vector3());
     const radius = size.length() / 2;
@@ -208,41 +220,51 @@ export function createShowcase({ renderer, canvas, quality, fade, getLite, isBlo
     stage.add(obj);
     model = obj;
     level = lvl;
-    status.hidden = lvl === 'hi' || !wantHi;
     if (reframe) frame(box);
   }
 
-  function loadHi(product) {
-    if (!hiCache.has(product.id)) {
-      hiCache.set(
-        product.id,
+  // 무대 로더: 주소별로 한 번 받는다. 실패하면 캐시에서 지워 다음에 다시 받는다(태블릿 일시 실패 뒤 다시 보면 다시 시도)
+  function loadUrl(url, what) {
+    if (!cache.has(url)) {
+      cache.set(
+        url,
         loader
-          .loadAsync(product.glb)
+          .loadAsync(url)
           .then((g) => g.scene)
           .catch((err) => {
-            console.error(`[nowhere] 제품 고해상도 ${product.id} 불러오기 실패`, err);
+            cache.delete(url);
+            console.error(`[nowhere] ${what} 불러오기 실패`, err);
             return null;
           }),
       );
     }
-    return hiCache.get(product.id);
+    return cache.get(url);
   }
 
-  /** 제품 하나를 무대에: -lite 먼저(진열이 받아 둔 것), 데스크톱 · 태블릿은 고해상도로 바꾼다. 못 보이면 false */
+  // 가벼운 모델 원본(clone 해서 쓴다): 목록의 loadLite(제품 — 진열이 받아 둔 -lite), 없으면 item.liteUrl 을 무대 로더로
+  function liteOf(item) {
+    if (!list.loadLite && !item.liteUrl) return null;
+    return list.loadLite ? list.loadLite(item) : loadUrl(item.liteUrl, `${kindOf().noun} 모델 ${item.id}`);
+  }
+
+  /** 항목 하나를 무대에: 가벼운 모델 먼저, hiUrl 이 있으면 데스크톱 · 태블릿은 고해상도로 바꾼다. 못 보이면 false */
   async function show(id) {
-    const product = findProduct(catalog, id);
-    if (!product) return false;
+    const item = list?.items.find((it) => it.id === id);
+    if (!item) return false;
     const my = ++token;
-    const lite = await getLite(product);
-    if (my !== token) return true;   // 그사이 다른 제품으로 넘어갔다
+    const lite = await liteOf(item);
+    if (my !== token) return true;   // 그사이 다른 항목으로 넘어갔다
     if (!lite) return false;
-    productId = id;
-    fillInfo(product);
+    itemId = id;
+    fillInfo(item);
     setModel(lite.clone(true), 'lite', true);
-    if (wantHi) {
-      loadHi(product).then((hi) => {
-        if (hi && my === token) setModel(hi, 'hi', false);   // 거리 · 시선은 그대로(같은 실제 크기)
-        else if (!hi && my === token) status.hidden = true;
+    const upgrade = wantHi && item.hiUrl;
+    status.hidden = !upgrade;   // '고해상도 불러오는 중…' 은 교체를 기다릴 때만
+    if (upgrade) {
+      loadUrl(item.hiUrl, `${kindOf().noun} 고해상도 ${id}`).then((hi) => {
+        if (my !== token) return;
+        if (hi) setModel(hi, 'hi', false);   // 거리 · 시선은 그대로(같은 실제 크기)
+        status.hidden = true;
       });
     }
     return true;
@@ -250,21 +272,23 @@ export function createShowcase({ renderer, canvas, quality, fade, getLite, isBlo
 
   function step(dir) {
     if (!active) return;
-    const next = stepProduct(catalog, floorId, productId, dir);
-    if (next && next !== productId) show(next);
+    const next = stepItem(list.items, itemId, dir);
+    if (next && next !== itemId) show(next);
   }
 
-  /** 감상 모드 열기 — 화면을 어둡게 한 뒤 무대로 바꾸고 밝힌다. 열었으면 true.
-   *  보이지 못하거나(제품 · lite 없음) 도중에 던지면 무대 상태를 되돌리고 화면을 다시 밝힌 뒤 false(검은 화면에 멈추지 않게 — main.js 가 실내를 되돌린다) */
-  async function open({ catalog: cat, floorId: floor, productId: id }) {
+  /** 감상 모드 열기(collection — 맨 위 createShowcase 설명) — 화면을 어둡게 한 뒤 무대로 바꾸고 밝힌다. 열었으면 true.
+   *  보이지 못하거나(항목 · 가벼운 모델 없음) 도중에 던지면 무대 상태를 되돌리고 화면을 다시 밝힌 뒤 false(검은 화면에 멈추지 않게 — main.js 가 연 자리를 되돌린다) */
+  async function open(collection) {
     if (active || busy) return false;
     busy = true;
+    const id = collection?.startId;
     try {
       await fade.fadeTo(true, '', SHOWCASE_FADE_MS);
-      catalog = cat;
-      floorId = floor;
+      list = collection;
+      root.setAttribute('aria-label', kindOf().label);
+      hint.textContent = list.hint || '';
       scene.environment = studioEnvironment(renderer);
-      if (!(await show(id))) throw new Error('제품 · 가벼운 모델 없음');
+      if (!(await show(id))) throw new Error(`${kindOf().noun} · 가벼운 모델 없음`);
       active = true;
       controls.enabled = true;
       root.hidden = false;
@@ -272,7 +296,7 @@ export function createShowcase({ renderer, canvas, quality, fade, getLite, isBlo
       await fade.fadeTo(false, '', SHOWCASE_FADE_MS);
       return true;
     } catch (err) {
-      console.error(`[nowhere] 제품 감상 ${id} 열기 실패`, err);
+      console.error(`[nowhere] ${KINDS[collection?.kind]?.label || '감상'} ${id} 열기 실패`, err);
       active = false;
       token++;   // 받는 중인 고해상도는 버린다
       controls.enabled = false;
@@ -380,12 +404,15 @@ export function createShowcase({ renderer, canvas, quality, fade, getLite, isBlo
     isBusy: () => busy,
     getState: () => ({
       active,
-      productId,
+      kind: list?.kind ?? null,
+      itemId,
+      productId: list?.kind === 'product' ? itemId : null,
       level,
       autoRotate: controls.autoRotate,
       distance: camera.position.distanceTo(controls.target),
       minDistance: controls.minDistance,
       maxDistance: controls.maxDistance,
+      part: null,   // 고른 부위 id(부위 표지가 없으면 늘 null)
     }),
     scene,
     camera,
