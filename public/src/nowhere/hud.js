@@ -19,6 +19,8 @@ export const HUD_BUILDINGS = [
   { id: 'facearch', name: 'FaceArch' },
 ];
 export const DIR_NAMES_8 = ['북', '북동', '동', '남동', '남', '남서', '서', '북서'];
+export const HUD_PHONE_SHORT_SIDE_PX = 600;                 // 휴대폰 판정의 화면 짧은 변(CSS px) 경계 — 이보다 작은 휴대폰만 안내 문구(펼친 폴더블은 이보다 커서 HUD 를 쓴다)
+export const HUD_UNSUPPORTED_NOTICE = '현장 정보는 PC · 태블릿에서만 지원합니다';   // 휴대폰에서 kicker 자리에 보이는 안내
 export const INTERIOR_PLACE = 'HAUS 성수';                  // 실내 줄 앞 이름(감상 경로 · 목록 자리와 같은 말)
 
 const MINUS = '−';
@@ -73,6 +75,14 @@ export function hudLine({ worldVer, floorLabel = null, pos, heading, hour, weath
   const place = worldVer === 'ds2' ? `X ${signedInt(pos.x)} · Z ${signedInt(pos.z)}` : formatLatLon(latLonAt(pos.x, pos.z));
   const sky = [clockText(hour), weatherLabel].filter(Boolean).join(' ');
   return `${place} · 고도 ${signedInt(pos.y)} m · ${dir} · ${sky}`;
+}
+
+/**
+ * 이 기기에서 HUD 를 쓰는가(순수): quality.js 의 기기 구분이 'phone' 이고 화면 짧은 변이 HUD_PHONE_SHORT_SIDE_PX 보다 작을 때만 못 쓴다.
+ * 안드로이드 UA 의 Mobile 만으로 휴대폰이라 보면 펼친 폴더블(짧은 변 600 넘음)까지 막히므로 화면 크기도 본다
+ */
+export function hudSupported({ device = 'desktop', screenWidth = Infinity, screenHeight = Infinity } = {}) {
+  return !(device === 'phone' && Math.min(screenWidth, screenHeight) < HUD_PHONE_SHORT_SIDE_PX);
 }
 
 const wrap180 = (a) => ((((a + 180) % 360) + 360) % 360) - 180;
@@ -137,10 +147,19 @@ const pct = (x) => `${Math.round(x * 1000) / 10}%`;
  * mount = 띠를 붙일 곳(main.js 는 위 막대 — 휴대폰은 위 막대 세로 줄의 마지막 칸으로 흘러 브랜드 · 버튼 줄 높이가 바뀌어도 겹치지 않는다),
  * buildings = [{ name, x, z }](띠 ◆ — 줄마다 한 건물), getView() → { x, y, z, dx, dz }(카메라 자리 · 시선 방향),
  * getFloorLabel() → 실내 층 이름 | null(외관), getHour() → 시각, getWeatherLabel() → 독 기상 글자.
+ * supported = false(hudSupported — 휴대폰)이면 안내 문구만 보이고 아무것도 만들지 않는다.
  * update(now) 를 매 프레임 불러도 HUD_UPDATE_MS 마다 한 번만 계산하고, 글자 · 자리가 바뀐 것만 DOM 에 쓴다.
  */
-export function createHud({ kickerEl, mount = document.body, worldVer, buildings = [], getView, getFloorLabel = () => null, getHour = () => 14, getWeatherLabel = () => '' }) {
+export function createHud({ kickerEl, mount = document.body, worldVer, buildings = [], getView, getFloorLabel = () => null, getHour = () => 14, getWeatherLabel = () => '', supported = true }) {
   const original = kickerEl ? kickerEl.textContent : '';
+  if (!supported) {
+    // 휴대폰: 띠 · 좌표 줄 없이 kicker 자리에 안내 문구만(원래 문구는 되돌리지 않는다 — 켤 방법이 없다)
+    if (kickerEl) {
+      kickerEl.textContent = HUD_UNSUPPORTED_NOTICE;
+      kickerEl.classList.add('is-live');
+    }
+    return { update() {}, toggle() {}, setOn() {}, isOn: () => false, supported: false, element: null };
+  }
 
   const band = el('div', 'nw-compass');
   band.setAttribute('aria-hidden', 'true');   // 같은 정보(방위)는 kicker 글자에 있다
@@ -246,5 +265,5 @@ export function createHud({ kickerEl, mount = document.body, worldVer, buildings
     update();
   }
 
-  return { update, toggle: () => setOn(!on), setOn, isOn: () => on, element: band };
+  return { update, toggle: () => setOn(!on), setOn, isOn: () => on, supported: true, element: band };
 }

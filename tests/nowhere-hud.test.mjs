@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   HUD_ORIGIN, M_PER_DEG_LAT, HUD_UPDATE_MS, COMPASS_SPAN_DEG, COMPASS_TICK_DEG, COMPASS_WIDTH_PX, COMPASS_WIDTH_PHONE_PX,
-  HUD_BUILDINGS, DIR_NAMES_8, INTERIOR_PLACE,
+  HUD_BUILDINGS, DIR_NAMES_8, INTERIOR_PLACE, HUD_PHONE_SHORT_SIDE_PX, HUD_UNSUPPORTED_NOTICE, hudSupported,
   latLonAt, formatLatLon, signedInt, bearingDeg, headingInt, dirName8, hudLine,
   compassX, compassMarker, compassTicks, compassStripWidthPct, compassShiftPct, hudKeyAction, createHud,
 } from '../public/src/nowhere/hud.js';
@@ -343,6 +343,41 @@ test('(k2) 위 막대 · 띠 아래 끝 재기(ResizeObserver — 크기가 바�
   }
 });
 
+test('(k2) 휴대폰: 기기 구분 phone + 화면 짧은 변 600 미만만 안내 문구 — 펼친 폴더블 · 태블릿 · 데스크톱은 HUD', () => {
+  assert.equal(HUD_PHONE_SHORT_SIDE_PX, 600);
+  assert.equal(HUD_UNSUPPORTED_NOTICE, '현장 정보는 PC · 태블릿에서만 지원합니다');
+  assert.equal(hudSupported({ device: 'phone', screenWidth: 390, screenHeight: 844 }), false, '일반 휴대폰 세로');
+  assert.equal(hudSupported({ device: 'phone', screenWidth: 932, screenHeight: 430 }), false, '일반 휴대폰 가로(짧은 변 430)');
+  assert.equal(hudSupported({ device: 'phone', screenWidth: 344, screenHeight: 882 }), false, '폴더블 접힘 커버');
+  assert.equal(hudSupported({ device: 'phone', screenWidth: 540, screenHeight: 720 }), false, '짧은 변 540(Surface Duo 한 화면)은 휴대폰 크기');
+  assert.equal(hudSupported({ device: 'phone', screenWidth: 673, screenHeight: 841 }), true, 'UA 가 Mobile 이어도 펼친 폴더블은 쓴다');
+  assert.equal(hudSupported({ device: 'phone', screenWidth: 600, screenHeight: 900 }), true, '경계 600 은 쓴다');
+  assert.equal(hudSupported({ device: 'tablet', screenWidth: 744, screenHeight: 1133 }), true);
+  assert.equal(hudSupported({ device: 'desktop', screenWidth: 360, screenHeight: 360 }), true, '데스크톱 판정은 창 크기와 상관없이 쓴다');
+  assert.equal(hudSupported(), true);
+
+  const dom = fakeDom();
+  globalThis.document = dom.document;
+  try {
+    const kicker = dom.node('div');
+    kicker.textContent = '37.544°N 127.056°E · SEONGSU 2041';
+    const hud = createHud({ kickerEl: kicker, worldVer: 'seongsu', supported: false, getView: () => assert.fail('휴대폰은 시선을 읽지 않는다') });
+    assert.equal(kicker.textContent, HUD_UNSUPPORTED_NOTICE);
+    assert.equal(kicker.classList.contains('is-live'), true, '대문자 바꿈 없음');
+    assert.equal(hud.supported, false);
+    assert.equal(hud.isOn(), false);
+    assert.equal(hud.element, null);
+    assert.equal(dom.document.body.children.length, 0, '띠를 만들지 않는다');
+    hud.update(1000);
+    hud.toggle();
+    hud.setOn(true);
+    assert.equal(kicker.textContent, HUD_UNSUPPORTED_NOTICE, '켜려 해도 안내 그대로');
+    assert.equal(createHud({ kickerEl: dom.node('div'), worldVer: 'seongsu', getView: () => ({ x: 0, y: 0, z: 0, dx: 0, dz: -1 }) }).supported, true);
+  } finally {
+    delete globalThis.document;
+  }
+});
+
 test('(l) 연결: main.js 가 HUD 를 만들고(브랜드 kicker · 월드 · 건물 자리 · 시선 · 실내 층 · 시각 · 독 기상 글자) 매 프레임 update, H 키는 hudKeyAction(입력 칸 · 막힘)', () => {
   const main = readSrc('main.js');
   assert.match(main, /import \{[^}]*createHud[^}]*\} from '\.\/hud\.js'/);
@@ -355,6 +390,7 @@ test('(l) 연결: main.js 가 HUD 를 만들고(브랜드 kicker · 월드 · �
   assert.match(main, /querySelectorAll\('\[data-weather\]'\)\][\s\S]{0,80}textContent/);
   // 원래 kicker 문구는 월드에 맞게 바꾼 뒤에 HUD 가 읽는다(DS2 문구 복원)
   assert.ok(main.indexOf("brandKickerEl.textContent = 'HIGHLAND BASIN") < main.indexOf('createHud('));
+  assert.match(make[0], /supported: hudSupported\(\{ device, screenWidth: Math\.min\(screen\.width, innerWidth\), screenHeight: Math\.min\(screen\.height, innerHeight\) \}\)/);
   assert.match(main, /hud\.update\(/);
   assert.match(main, /hudKeyAction\(\{[\s\S]*?typing[\s\S]*?blocked: hudBlocked\(\)/);
   const blocked = main.match(/const hudBlocked = \(\) =>[^\n]*/);

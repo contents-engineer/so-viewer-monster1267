@@ -32,7 +32,7 @@ import { exhibitCollection, cloneExhibit } from './exhibits.js';
 import { createExhibitTags } from './exhibit-tags.js';
 import { createHubPanel } from './hub-panel.js';
 import { hubIndex, runGoPlan } from './hub-index.js';
-import { createHud, hudKeyAction, HUD_BUILDINGS } from './hud.js';
+import { createHud, hudKeyAction, hudSupported, HUD_BUILDINGS } from './hud.js';
 import { createPhotoMode, parseFovParam } from './photo.js';
 import { createKiosk, parseKioskParams, kioskFloorOrder, kioskSwitchUrl } from './kiosk.js';
 
@@ -421,6 +421,7 @@ async function boot() {
     kickerEl: brandKickerEl,
     mount: document.querySelector('.nw-topbar') || document.body,
     worldVer,
+    supported: hudSupported({ device, screenWidth: Math.min(screen.width, innerWidth), screenHeight: Math.min(screen.height, innerHeight) }),   // 휴대폰은 안내 문구만(PC · 태블릿 지원 — ?tier=mobile 시험은 창 크기로도 봄)
     buildings: HUD_BUILDINGS.filter((b) => world.layout.buildings?.[b.id]).map((b) => {
       const [x, , z] = world.layout.buildings[b.id].pos;
       return { name: b.name, x, z };
