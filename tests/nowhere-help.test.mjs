@@ -5,7 +5,7 @@ import { CONTROL_SECTIONS, createWalkHud, WALK_HINT_DOCK_MS } from '../public/sr
 
 const allKeys = () => CONTROL_SECTIONS.flatMap((s) => s.rows.flatMap((r) => r.keys));
 
-test('(a) 조작 안내는 공통·카메라 시점·보행 시점·제품 감상 네 묶음이고 행마다 키와 설명이 있다', () => {
+test('(a) 조작 안내는 공통·카메라 시점·보행 시점·감상 모드 네 묶음이고 행마다 키와 설명이 있다', () => {
   assert.deepEqual(CONTROL_SECTIONS.map((s) => s.id), ['common', 'camera', 'walk', 'showcase']);
   for (const s of CONTROL_SECTIONS) {
     assert.ok(s.title && s.rows.length > 0);
@@ -146,13 +146,25 @@ test('(h) 자유 시점 마우스 · 터치 조작이 모두 실려 있다(Orbit
   assert.match(camSrc, /canvas\.addEventListener\('wheel', onAutoWalkInterrupt/);
 });
 
-test('(i) 제품 감상 안내: 고르기(클릭 · 탭 · 조준점 · 이름표 · 제품 스팟) · 회전 · 자동 회전 · 확대 · 이전 · 다음 · 나가기', () => {
+test('(i) 감상 모드 안내(제품 · 건물): 제품 고르기(클릭 · 탭 · 조준점 · 이름표 · 제품 스팟) · 건물 카드(이름표 · 자유 시점 클릭 · 건물 스팟) · 자세히 보기 · 회전 · 자동 회전 · 확대 · 이전 · 다음 · 나가기', () => {
   const sc = CONTROL_SECTIONS.find((s) => s.id === 'showcase');
-  assert.ok(sc, '제품 감상 묶음 없음');
-  assert.equal(sc.title, '제품 감상');
+  assert.ok(sc, '감상 모드 묶음 없음');
+  assert.equal(sc.title, '감상 모드');
+  assert.equal(sc.kicker, 'VIEW MODE');
   const descs = sc.rows.map((r) => r.desc).join('\n');
   for (const re of [/자세히 보기/, /제품 스팟/, /조준점/, /자동 회전/, /확대 · 축소/, /이전 · 다음/, /< BACK/, /보행 그대로/]) assert.match(descs, re);
   const keys = new Set(sc.rows.flatMap((r) => r.keys));
   for (const k of ['클릭', '탭', '드래그', '한 손가락', '휠', '두 손가락', '←', '→', 'Esc']) assert.ok(keys.has(k), `감상 안내에 '${k}' 없음`);
   assert.match(sc.note, /고해상도/);
+  // 제품 줄은 그대로(첫 줄), 건물 줄: 이름표 「기록 보기」 · 자유 시점 건물 클릭 · 건물 스팟 도착 → 카드, 「자세히 보기」 → 건물 감상
+  assert.match(sc.rows[0].desc, /^실내 1F 제품 진열/);
+  const building = sc.rows.find((r) => /기록 보기/.test(r.desc));
+  assert.ok(building, '건물 카드 줄 없음');
+  for (const re of [/「기록 보기」/, /자유 시점/, /스팟에 도착/, /정문/, /「자세히 보기」/, /건물 감상/]) assert.match(building.desc, re);
+  const arrows = sc.rows.find((r) => r.keys.includes('←'));
+  assert.match(arrows.desc, /같은 층 진열 순서/);
+  assert.match(arrows.desc, /두 건물 순서/);
+  // 카드는 Esc 로 카드만 닫는다(보행 해제보다 먼저) — 공통 Esc 줄에도
+  const esc = CONTROL_SECTIONS.find((s) => s.id === 'common').rows.find((r) => r.keys.includes('Esc'));
+  assert.match(esc.desc, /건물 기록 카드 닫기/);
 });

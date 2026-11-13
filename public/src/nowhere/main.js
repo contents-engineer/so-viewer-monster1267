@@ -26,6 +26,8 @@ import { createModeController } from './modes.js';
 import { createRetailDisplay } from './retail-display.js';
 import { createShowcase, studioEnvironment } from './showcase.js';
 import { productCollection } from './products.js';
+import { buildingCollection, cardBuildingForSpot } from './archive.js';
+import { createArchiveCard } from './archive-card.js';
 
 async function boot() {
   const canvas = document.getElementById('nw-canvas');
@@ -254,11 +256,12 @@ async function boot() {
     retail,
     onFloorChange: (def) => markers.setSpots(def ? interiorSpots(def, retail.catalog()) : exteriorSpotList),
     onChange: (inside) => {
-      if (!inside) modes?.refresh();   // 나오면 보행 여부에 맞춰 직접 걷기 · 이전 방식으로
+      if (inside) archive.hide();      // 실내에 들어가면 외관 건물 카드를 닫는다(들어가는 동안은 화면이 어둡다)
+      else modes?.refresh();           // 나오면 보행 여부에 맞춰 직접 걷기 · 이전 방식으로
     },
   });
-  // 제품 감상 모드: 따로 띄운 스튜디오 무대 — 감상 중에는 이 장면만 그린다(animate). 나가면 연 자리 · 시선 · 보행 여부로 되돌린다
-  let showcaseReturn = null;   // { pos, target, walking }
+  // 감상 모드(제품 · 건물): 따로 띄운 스튜디오 무대 — 감상 중에는 이 장면만 그린다(animate). 나가면 연 자리 · 시선 · 보행 여부로 되돌린다(실내 · 외관)
+  let showcaseReturn = null;   // { pos, target, walking } — 감상을 여닫는 동안만 있다
   const showcase = createShowcase({
     renderer,
     canvas,
@@ -267,6 +270,18 @@ async function boot() {
     isBlocked: () => help.isOpen() || modal.isOpen(),
     onHelp: () => help.toggle(),
     onClose: () => restoreFromShowcase(),
+  });
+  // 건물 아카이브(외관): 건물 이름표 「기록 보기」 · 자유 시점 건물 클릭 · 건물 스팟 도착 → 오른쪽 카드, 「자세히 보기」 → 건물 감상.
+  // 인트로 · 방식 고르기 · 투어 · 실내 · 감상 · 조작 안내 · 모달 · 컷 이동 · 비행 동안은 이름표를 숨기고 클릭 · Esc 를 받지 않는다.
+  // 조작 안내 · 모달 · 감상보다 뒤에 만든다 — 카드의 Esc 캡처 처리기가 그쪽 Esc 다음에 온다
+  const archive = createArchiveCard({
+    camera,
+    canvas,
+    quality,
+    getBoxes: () => world.buildingBoxes,
+    isSuspended: () => cinema.isActive() || camCtrl.isIntroActive() || document.body.classList.contains('is-choosing') || scenario.isRunning() || interior.isActive() || interior.isBusy() || showcase.isActive() || showcase.isBusy() || help.isOpen() || modal.isOpen() || spotCutting || camCtrl.isFlying(),
+    isWalking: () => camCtrl.isWalkMode(),
+    onDetail: (id) => openArchive(id),
   });
   // 성능 표시: P 키로 켜고 끈다. 키보드 없는 기기(아이패드 등)는 주소에 ?stats=1
   // 텍스처 추정은 외관 · 실내 장면을 함께 센다(실내에 있어도 외관 텍스처는 GPU 에 남아 있음 — 메모리 한도 판단용)
@@ -327,6 +342,8 @@ async function boot() {
         .then((c) => {
           if (c === 'yes' && !interior.isActive()) interior.enter('haus');
         });
+    } else if (!interior.isActive() && cardBuildingForSpot(spot)) {
+      archive.show(cardBuildingForSpot(spot));   // 외관 건물 스팟(정문 제외)에 도착하면 그 건물 카드
     } else if ((spot.kind === 'elevator' || spot.kind === 'exit') && interior.isActive() && !modal.isOpen()) {
       // 영역 안에서 질문을 닫고 다시 도착한 경우 — 다음 프레임 interior.update 가 질문을 다시 띄우도록 장전.
       // 컷 이동 도착은 밝아지는 사이 트리거가 이미 질문을 띄웠으므로(모달 열림) 다시 장전하지 않는다(두 번 묻지 않게)
@@ -338,36 +355,50 @@ async function boot() {
     }
   }
 
-  // ── 제품 감상 모드: 연 자리(위치 · 시선 · 보행 여부)를 적어 두고 보행 · 실내 카메라를 멈춘 뒤 무대를 연다 ──
-  async function openShowcase(productId) {
-    const catalog = retail.catalog();
-    const floorId = interior.currentFloor();
-    if (!catalog || !floorId || showcase.isActive() || showcase.isBusy() || interior.isBusy()) return;   // spotCutting 은 막지 않는다 — 컷 이동 도착(cutToSpot → arriveAt)도 여기로 온다
+  // ── 감상 모드 열기(제품 · 건물 공통): 연 자리(위치 · 시선 · 보행 여부)를 적어 두고 보행 · 카메라를 멈춘 뒤 무대를 연다 ──
+  async function openStage(collection) {
     showcaseReturn = { pos: camera.position.toArray(), target: camCtrl.controls.target.toArray(), walking: camCtrl.isWalkMode() };
     let opened = false;
     try {
       camCtrl.cancelWalkTo();
       camCtrl.clearInput();
       if (showcaseReturn.walking) camCtrl.setWalkMode(false);   // 보행 키 · 마우스 고정 · 스팟 · 보행 안내를 멈춘다(나올 때 다시 켠다)
-      camCtrl.controls.enabled = false;                          // 무대 드래그 · 휠이 실내 카메라를 돌리지 않게
+      camCtrl.controls.enabled = false;                          // 무대 드래그 · 휠이 뒤 카메라를 돌리지 않게
       interior.showCaption('');
-      // 그 층 진열 목록 — 가벼운 모델은 진열이 받아 둔 -lite 원본(무대가 clone 해서 쓴다)
-      opened = await showcase.open({
-        ...productCollection(catalog, floorId, productId),
-        loadLite: (item) => retail.liteSource(item.product),
-      });
+      archive.hide();
+      opened = await showcase.open(collection);
     } catch (err) {
-      console.error('[nowhere] 제품 감상 열기 실패', err);
+      console.error('[nowhere] 감상 열기 실패', err);
     }
-    if (!opened) restoreFromShowcase();   // 못 열었으면(던진 경우 포함) 보행 · 실내 카메라를 연 자리 그대로 되돌린다
+    if (!opened) restoreFromShowcase();   // 못 열었으면(던진 경우 포함) 보행 · 카메라를 연 자리 그대로 되돌린다
   }
 
-  // 감상 모드를 나온 뒤(화면이 어두운 동안): 연 자리 · 시선 그대로, 보행 중이었으면 보행으로
+  // 제품 감상: 실내 진열(클릭 · 이름표 · 제품 스팟) → 그 층 진열 목록
+  async function openShowcase(productId) {
+    const catalog = retail.catalog();
+    const floorId = interior.currentFloor();
+    if (!catalog || !floorId || showcase.isActive() || showcase.isBusy() || interior.isBusy()) return;   // spotCutting 은 막지 않는다 — 컷 이동 도착(cutToSpot → arriveAt)도 여기로 온다
+    // 그 층 진열 목록 — 가벼운 모델은 진열이 받아 둔 -lite 원본(무대가 clone 해서 쓴다)
+    await openStage({
+      ...productCollection(catalog, floorId, productId),
+      loadLite: (item) => retail.liteSource(item.product),
+    });
+  }
+
+  // 건물 감상: 외관 아카이브 카드 「자세히 보기」 → 두 건물 목록(HAUS → FaceArch), 모델은 월드가 받은 같은 주소(quality.heroUrls — 브라우저 캐시)
+  async function openArchive(id) {
+    if (interior.isActive() || interior.isBusy() || showcase.isActive() || showcase.isBusy()) return;
+    const collection = buildingCollection(archive.records(), quality.heroUrls, id);
+    if (!collection.items.some((it) => it.id === id)) return;
+    await openStage(collection);
+  }
+
+  // 감상 모드를 나온 뒤(화면이 어두운 동안): 연 자리 · 시선 그대로, 보행 중이었으면 보행으로(실내 · 외관)
   function restoreFromShowcase() {
     const r = showcaseReturn;
     showcaseReturn = null;
     camCtrl.controls.enabled = true;
-    if (!r || !interior.isActive()) return;
+    if (!r) return;
     camCtrl.placeAt(r.pos, r.target);
     if (r.walking) {
       camCtrl.setWalkMode(true);
@@ -406,6 +437,7 @@ async function boot() {
     // 실내 · 인트로 중에는 시작하지 않는다(인트로는 시나리오 밖 시작 흐름이 돌리고, 끝나면 방식 고르기로 이어진다)
     if (interior.isActive() || camCtrl.isIntroActive()) return;
     modal.close();
+    archive.hide();   // 투어를 시작하면 외관 건물 카드를 닫는다
     camCtrl.stopFlight();
     // 시나리오가 시작되면 보행 시점은 해제한다(가이드 투어는 궤도 카메라로 비행)
     if (camCtrl.isWalkMode()) camCtrl.setWalkMode(false);
@@ -425,8 +457,9 @@ async function boot() {
     camCtrl,
     startGuide: () => startScenario('chooseBuilding'),
     endGuide: endScenario,
-    // 실내 출입 · 층 이동 · 둘러보기가 보행을 켰다 껐다 하는 동안은 방식을 바꾸지 않는다(나오면 interior onChange → refresh)
-    isSuspended: () => interior.isActive() || interior.isBusy(),
+    // 실내 출입 · 층 이동 · 둘러보기가 보행을 켰다 껐다 하는 동안은 방식을 바꾸지 않는다(나오면 interior onChange → refresh).
+    // 감상을 여닫는 동안(연 자리가 적혀 있는 동안)도 — 외관에서 보행 중 감상을 열면 보행을 껐다 나올 때 다시 켠다(방식은 직접 걷기 그대로)
+    isSuspended: () => interior.isActive() || interior.isBusy() || showcaseReturn !== null,
   });
   document.querySelectorAll('#nw-mode-seg [data-mode]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -592,6 +625,7 @@ async function boot() {
     }
     markers.update(dt);
     retail.update();
+    if (!studio) archive.update();   // 건물 이름표 자리 · 카드 거리(감상 중에는 외관 카메라가 멈춰 있다 — 이름표 · 카드는 CSS 로 숨김)
 
     renderer.info.reset();
     if (studio) {
@@ -620,6 +654,8 @@ async function boot() {
     retail,
     showcase,
     openShowcase,
+    archive,
+    openArchive,
     cinema,
     interior,
     scenario,
@@ -648,6 +684,7 @@ async function boot() {
         interior: interior.isActive(),
         floor: interior.currentFloor(),
         showcase: showcase.isActive() ? showcase.getState().itemId : null,
+        archiveCard: archive.currentId(),
         scenarioStep: scenario.current(),
         fps: currentFps,
         calls: renderer.info.render.calls,

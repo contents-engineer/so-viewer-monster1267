@@ -469,12 +469,15 @@ export async function createWorld({
   const hausCfg = layout.buildings?.haus || { pos: [0, 0, 0], rotY: 0 };
   hausRoot.position.fromArray(hausCfg.pos);
   hausRoot.rotation.y = THREE.MathUtils.degToRad(hausCfg.rotY || 0);
+  // 건물 월드 경계 상자(아카이브 이름표 자리 · 자유 시점 건물 클릭) — 배치 직후, processRoot 가 메시를 합치기 전에 잰다
+  const buildingBoxes = { haus: new THREE.Box3().setFromObject(hausRoot) };
   processRoot(hausRoot, 'building_haus', 'building');
 
   const facearchRoot = loadedMap.facearch.gltf.scene;
   const faceCfg = layout.buildings?.facearch || { pos: [105, 0, -15], rotY: 27 };
   facearchRoot.position.fromArray(faceCfg.pos);
   facearchRoot.rotation.y = THREE.MathUtils.degToRad(faceCfg.rotY || 0);
+  buildingBoxes.facearch = new THREE.Box3().setFromObject(facearchRoot);
   processRoot(facearchRoot, 'building_facearch', 'building');
 
   if (shadowsOn) {
@@ -668,6 +671,7 @@ export async function createWorld({
     meshesBySurface,
     layerGroups,
     buildings: { haus: hausRoot, facearch: facearchRoot },
+    buildingBoxes,   // { haus, facearch }: THREE.Box3(월드) — 배치 직후 잰 것
     uniforms,
     sky,
     lights: { hemiLight, sunLight },

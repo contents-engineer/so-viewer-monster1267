@@ -274,7 +274,7 @@ test('(j2) openShowcase 가드는 spotCutting 을 보지 않는다(컷 이동 �
   assert.match(arrive[0], /spot\.kind === 'product' && interior\.isActive\(\)\) \{\s*openShowcase\(spot\.product\)/);
 });
 
-test('(k) 감상 열기 실패 복구: showcase.open 은 던지거나 못 보이면 무대 상태를 되돌리고 화면을 다시 밝혀 false, main openShowcase 는 던져도 보행 · 실내 카메라를 되돌린다', () => {
+test('(k) 감상 열기 실패 복구: showcase.open 은 던지거나 못 보이면 무대 상태를 되돌리고 화면을 다시 밝혀 false, main openShowcase(→ 공통 openStage)는 던져도 보행 · 카메라를 되돌린다', () => {
   const read = (f) => readFileSync(new URL(`../public/src/nowhere/${f}`, import.meta.url), 'utf8');
   const open = read('showcase.js').match(/async function open\([^)]*\) \{[\s\S]*?\n  \}\n/);
   assert.ok(open, 'showcase open() 을 찾지 못함');
@@ -288,7 +288,11 @@ test('(k) 감상 열기 실패 복구: showcase.open 은 던지거나 못 보이
   }
   const main = read('main.js').match(/async function openShowcase\(productId\) \{[\s\S]*?\n  \}\n/);
   assert.ok(main, 'openShowcase 를 찾지 못함');
-  assert.match(main[0], /let opened = false;\s*try \{[\s\S]*camCtrl\.setWalkMode\(false\)[\s\S]*opened = await showcase\.open\(\{\s*\.\.\.productCollection\(catalog, floorId, productId\),\s*loadLite: \(item\) => retail\.liteSource\(item\.product\),?\s*\}\);\s*\} catch \(err\) \{[\s\S]*?\}\s*if \(!opened\) restoreFromShowcase\(\);/);
+  assert.match(main[0], /await openStage\(\{\s*\.\.\.productCollection\(catalog, floorId, productId\),\s*loadLite: \(item\) => retail\.liteSource\(item\.product\),?\s*\}\);/);
+  // 연 자리 기록 · 보행 끄기 · 못 열면 되돌리기는 제품 · 건물 공통(openStage)
+  const stage = read('main.js').match(/async function openStage\(collection\) \{[\s\S]*?\n  \}\n/);
+  assert.ok(stage, 'openStage 를 찾지 못함');
+  assert.match(stage[0], /let opened = false;\s*try \{[\s\S]*camCtrl\.setWalkMode\(false\)[\s\S]*opened = await showcase\.open\(collection\);\s*\} catch \(err\) \{[\s\S]*?\}\s*if \(!opened\) restoreFromShowcase\(\);/);
 });
 
 test('(l) 휴대폰 · 터치 감상 화면 < BACK · 조작 안내 44 px, 조작 안내 넷째 묶음(제품 감상)은 카메라 · 보행 아래 두 칸', () => {

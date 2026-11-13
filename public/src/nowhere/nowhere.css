@@ -572,7 +572,7 @@ body[data-mode="walk"] .nw-dock-camera {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
 }
-/* 넷째 묶음(제품 감상)이 가장 긴 공통 아래로 밀려 화면 밖에 나가지 않게: 공통은 왼쪽 한 칸을 두 줄로, 제품 감상은 카메라 · 보행 아래 두 칸 */
+/* 넷째 묶음(감상 모드)이 가장 긴 공통 아래로 밀려 화면 밖에 나가지 않게: 공통은 왼쪽 한 칸을 두 줄로, 감상 모드는 카메라 · 보행 아래 두 칸 */
 .nw-help-section[data-section='common'] {
   grid-row: span 2;
 }
@@ -1129,11 +1129,15 @@ body.is-cinema .nw-dock,
 body.is-cinema .nw-walk-hud,
 body.is-cinema .nw-spots,
 body.is-cinema .nw-perf,
+body.is-cinema .nw-archive-tags,
+body.is-cinema .nw-archive-card,
 body.is-choosing .nw-topbar,
 body.is-choosing .nw-dock,
 body.is-choosing .nw-walk-hud,
 body.is-choosing .nw-spots,
-body.is-choosing .nw-perf {
+body.is-choosing .nw-perf,
+body.is-choosing .nw-archive-tags,
+body.is-choosing .nw-archive-card {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -1416,14 +1420,16 @@ body.is-choosing .nw-perf {
     min-height: 44px;
   }
 }
-/* 감상 중에는 외관 · 실내 UI(상단 바 · 하단 독 · 실내 HUD · 자막 · 보행 안내 · 이동 스팟 · 이름표)를 숨긴다 — 조작 안내 · 모달 · 성능 표시는 그대로 */
+/* 감상 중에는 외관 · 실내 UI(상단 바 · 하단 독 · 실내 HUD · 자막 · 보행 안내 · 이동 스팟 · 이름표 · 건물 카드)를 숨긴다 — 조작 안내 · 모달 · 성능 표시는 그대로 */
 body.is-showcase .nw-topbar,
 body.is-showcase .nw-dock,
 body.is-showcase .nw-interior-hud,
 body.is-showcase .nw-interior-caption,
 body.is-showcase .nw-walk-hud,
 body.is-showcase .nw-spots,
-body.is-showcase .nw-retail-tags {
+body.is-showcase .nw-retail-tags,
+body.is-showcase .nw-archive-tags,
+body.is-showcase .nw-archive-card {
   display: none;
 }
 
@@ -1476,4 +1482,145 @@ body.is-showcase .nw-retail-tags {
   font-size: 10.5px;
   letter-spacing: 0.06em;
   color: var(--nw-accent);
+}
+
+/* ── 건물 아카이브(archive-card.js — 외관): 건물 위 이름표 「<이름> · 기록 보기」 · 오른쪽 기록 카드(감상 정보 패널과 같은 모양 · 자리, 모달 아님) ── */
+.nw-archive-tags {
+  position: fixed;
+  inset: 0;
+  z-index: 17;
+  overflow: hidden;
+  pointer-events: none;
+}
+.nw-archive-tags[hidden],
+.nw-archive-tag[hidden],
+.nw-archive-card[hidden],
+.nw-archive-note[hidden] {
+  display: none;
+}
+.nw-archive-tag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  /* transform translate(x, y) 가 가리키는 점 = 이름표 아래 가운데. 가로는 화면 가장자리 8px 안으로 밀어 넣는다(--sx = 이름표 화면 x — 이동 스팟 이름과 같은 방식) */
+  translate: clamp(calc(8px - var(--sx, 50vw)), -50%, calc(100vw - 8px - var(--sx, 50vw) - 100%)) -100%;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  background: var(--nw-bg-panel-strong);
+  border: 1px solid var(--nw-line-struct);
+  border-top: 2px solid var(--nw-accent);
+  border-radius: 2px;
+  color: var(--nw-text);
+  font-family: var(--nw-font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+  animation: nw-spot-in 0.2s ease;
+}
+.nw-archive-tag:hover {
+  border-color: var(--nw-accent);
+}
+.nw-archive-tag-sep {
+  white-space: pre;
+  color: var(--nw-text-dim);
+}
+.nw-archive-tag-more {
+  font-family: var(--nw-font-mono);
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  color: var(--nw-accent);
+}
+.nw-archive-card {
+  position: fixed;
+  z-index: 21;
+  top: 50%;
+  right: 22px;
+  transform: translateY(-50%);
+  width: min(300px, calc(100vw - 44px));
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+  padding: 16px 18px;
+  background: var(--nw-bg-panel);
+  border: 1px solid var(--nw-line-struct);
+  border-top: 2px solid var(--nw-accent);
+  border-radius: 3px;
+  backdrop-filter: blur(8px);
+}
+.nw-archive-kicker {
+  font-family: var(--nw-font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  color: var(--nw-accent);
+}
+.nw-archive-name {
+  margin: 4px 0 12px;
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--nw-text);
+}
+.nw-archive-info {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.nw-archive-info dt {
+  color: var(--nw-text-dim);
+}
+.nw-archive-info dd {
+  margin: 0;
+  color: var(--nw-text);
+  word-break: keep-all;
+}
+.nw-archive-note {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--nw-text-dim);
+  word-break: keep-all;
+}
+.nw-archive-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+.nw-archive-detail {
+  color: var(--nw-accent);
+  border-color: var(--nw-accent);
+}
+/* 휴대폰 · 세로 태블릿(감상 정보 패널과 같은 조건 — products.js STAGE_PANEL): 카드를 아래로 */
+@media (max-width: 720px), (orientation: portrait) and (max-width: 1024px) {
+  .nw-archive-card {
+    top: auto;
+    right: 8px;
+    bottom: 8px;
+    left: 8px;
+    width: auto;
+    max-height: 60vh;
+    transform: none;
+    padding: 10px 12px;
+  }
+  .nw-archive-name {
+    margin: 2px 0 6px;
+    font-size: 17px;
+  }
+  .nw-archive-actions {
+    margin-top: 10px;
+  }
+}
+/* 휴대폰 · 터치 화면: 이름표 · 카드 버튼도 손가락 크기(44 px) — 데스크톱 모습은 그대로 */
+@media (max-width: 720px), (pointer: coarse) {
+  .nw-archive-tag,
+  .nw-archive-actions .nw-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }

@@ -72,6 +72,11 @@ export function cardBuildingForSpot(spot) {
   return spot?.building && spot.kind === 'view' ? spot.building : null;
 }
 
+/** 건물 이름표 자리(월드): 경계 상자({ min, max } — 월드) 윗면 가운데 + BUILDING_TAG_LIFT. 카드를 닫는 거리(CARD_KEEP_RANGE)도 이 점에서 잰다 */
+export function tagAnchor({ min, max }) {
+  return [(min.x + max.x) / 2, max.y + BUILDING_TAG_LIFT, (min.z + max.z) / 2];
+}
+
 /** 건물 이름표를 보일지: 카메라 거리 BUILDING_TAG_RANGE 안 · 화면 안(NDC x · y −1…1, z 는 −1 < z < 1 — 카메라 뒤 · far 밖 제외) */
 export function tagVisible({ distance, ndc: [x, y, z] }) {
   return distance <= BUILDING_TAG_RANGE && Math.abs(x) <= 1 && Math.abs(y) <= 1 && z > -1 && z < 1;
