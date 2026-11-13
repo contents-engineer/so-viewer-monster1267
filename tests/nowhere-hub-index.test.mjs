@@ -155,11 +155,21 @@ test('(h) 스팟 표지 연결: 버튼 data-category(spotCategory) · 아이콘 
   assert.equal(new Set(Object.values(tokens).map((h) => h.toUpperCase())).size, 4, '네 카테고리 색은 서로 다르다');
   const icon = css.match(/\n\.nw-spot-icon \{([^}]*)\}/)[1];
   assert.match(icon, /border: 1\.5px solid var\(--nw-cat\);/, '먼 단계 ◇ 테두리는 카테고리 색');
+  assert.match(icon, /box-shadow: 0 0 0 1px rgba\(9, 15, 26, 0\.5\), /, '먼 단계 ◇ 는 얇은 어두운 테두리(흰 장면 위에서도 보이게)');
+  const aimed = css.match(/\n\.nw-spot\.is-aimed \.nw-spot-icon,\n\.nw-spot:hover \.nw-spot-icon \{([^}]*)\}/)[1];
+  assert.match(aimed, /box-shadow: 0 0 0 1px rgba\(9, 15, 26, 0\.5\), /, '조준 · 올림에서도 어두운 테두리 그대로');
   const nearIcon = css.match(/\n\.nw-spot\.is-near \.nw-spot-icon \{([^}]*)\}/)[1];
   assert.match(nearIcon, /background: var\(--nw-bg-panel-strong\);/, '가까운 단계 동그라미 바탕은 어두운 패널');
-  const glyph = css.match(/\n\.nw-spot\.is-near \.nw-spot-icon::after \{([^}]*)\}/)[1];
+  // 글자: 늘 있되 먼 단계에서는 투명 — 가까운 단계가 되면 마름모가 다 돌고 커진 뒤에 나타난다(돌아가는 작은 마름모 안에서 튀지 않게)
+  const glyph = css.match(/\n\.nw-spot-icon::after \{([^}]*)\}/)[1];
   assert.match(glyph, /content: attr\(data-glyph\);/);
   assert.match(glyph, /color: var\(--nw-cat\);/);
+  assert.match(glyph, /opacity: 0;/);
+  const nearGlyph = css.match(/\n\.nw-spot\.is-near \.nw-spot-icon::after \{([^}]*)\}/)[1];
+  assert.match(nearGlyph, /opacity: 1;/);
+  const delay = Number(nearGlyph.match(/transition: opacity [\d.]+s ease ([\d.]+)s;/)[1]);
+  const turn = Number(icon.match(/transform ([\d.]+)s ease/)[1]);
+  assert.ok(delay >= turn * 0.5 && delay <= turn, `글자는 마름모가 반 넘게 돈 뒤에(지연 ${delay}s, 돌기 ${turn}s)`);
 
   // 동그라미 바탕(--nw-bg-panel-strong, 반투명)이 가장 밝은 장면(흰색) 위에 놓여도 글자 대비 4.5:1 이상
   const bg = root.match(/--nw-bg-panel-strong: rgba\((\d+), (\d+), (\d+), ([\d.]+)\);/).slice(1).map(Number);

@@ -1,6 +1,6 @@
 // HAUS NOWHERE — 카테고리 표지 · 아카이브 목록(순수, three · DOM 없음 — 테스트: tests/nowhere-hub-index.test.mjs).
 // 보행 이동 스팟 → 카테고리(spotCategory — spot-markers.js 의 표지 색 · 글자), 지금 있는 출처(건물 기록 · inner-layout exhibits · products.json 진열) →
-// 목록 묶음(hubIndex — 새 데이터 파일 없음, 문구는 출처 값 그대로), 목록 항목 → 지금 상태에서 할 일(goPlan — 실행은 main.js).
+// 목록 묶음(hubIndex — 새 데이터 파일 없음, 문구는 출처 값 그대로), 목록 항목 → 지금 상태에서 할 일(goPlan) · 그 순서대로 실행(runGoPlan — 실내 · 감상 함수는 main.js 가 넘긴다).
 import { BUILDING_IDS } from './archive.js';
 import { floorDisplays, floorCrumb } from './products.js';
 
@@ -52,4 +52,21 @@ export function hubIndex({ records, worldLabel, innerLayout, catalog }) {
 export function goPlan(it, { interiorActive, floorId }) {
   if (it.category === 'architecture') return ['open'];
   return [...(interiorActive ? [] : ['enter']), ...(floorId === it.floor && interiorActive ? [] : ['floor']), 'open'];
+}
+
+/**
+ * 목록 항목으로 간다 — goPlan 순서대로 실행. interior = { isActive, currentFloor, enter, goToFloor }(interior.js), open(item) = 그 감상 열기(main.js).
+ * 들어가면 기본 층(inner-layout defaultFloor)에 서므로 그 층이 목적 층이면 층 이동을 건너뛴다. 들어가기 · 층 이동이 false(전환 중 · 실패 후 닫기)면 거기서 멈추고 false
+ */
+export async function runGoPlan(it, { interior, open }) {
+  for (const step of goPlan(it, { interiorActive: interior.isActive(), floorId: interior.currentFloor() })) {
+    if (step === 'enter') {
+      if (!(await interior.enter('haus'))) return false;
+    } else if (step === 'floor') {
+      if (interior.currentFloor() !== it.floor && !(await interior.goToFloor(it.floor))) return false;
+    } else {
+      await open(it);
+    }
+  }
+  return true;
 }

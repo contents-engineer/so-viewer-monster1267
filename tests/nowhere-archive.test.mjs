@@ -259,7 +259,8 @@ test('(k) main 연결: 카드 만들기 · 멈춤 조건 · 감상 아닐 때 up
   const arch = fnBody(main, 'async function openArchive(id)');
   assert.match(arch, /buildingCollection\(archive\.records\(\), quality\.heroUrls, id\)/);
   assert.match(arch, /await openStage\(/);
-  assert.match(arch, /interior\.isActive\(\) \|\| interior\.isBusy\(\) \|\| showcase\.isActive\(\) \|\| showcase\.isBusy\(\)/);
+  // 실내에서도 연다(아카이브 목록 — 나가면 실내 그 자리). 외관 카드는 실내에서 뜨지 않으므로(멈춤 조건 interior.isActive()) 카드 동작은 그대로
+  assert.match(arch, /if \(interior\.isBusy\(\) \|\| showcase\.isActive\(\) \|\| showcase\.isBusy\(\)\) return;/);
   // 되돌리기: 실내 전용 조건 없이 — 외관도 연 자리 · 시선 · 보행 그대로
   const restore = fnBody(main, 'function restoreFromShowcase()');
   assert.doesNotMatch(restore, /interior\.isActive\(\)/);

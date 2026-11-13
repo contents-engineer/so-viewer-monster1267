@@ -30,6 +30,8 @@ import { buildingCollection, buildingParts, cardBuildingForSpot } from './archiv
 import { createArchiveCard } from './archive-card.js';
 import { exhibitCollection, cloneExhibit } from './exhibits.js';
 import { createExhibitTags } from './exhibit-tags.js';
+import { createHubPanel } from './hub-panel.js';
+import { hubIndex, runGoPlan } from './hub-index.js';
 
 async function boot() {
   const canvas = document.getElementById('nw-canvas');
@@ -292,6 +294,34 @@ async function boot() {
     onHelp: () => help.toggle(),
     onClose: () => restoreFromShowcase(),
   });
+  // 아카이브 목록(위 막대 「목록」 · L): 건물 기록 · inner-layout 전시물 · 진열 제품(hubIndex) → 고르면 그 감상으로(runGoPlan — 실내 들어가기 · 층 이동 포함).
+  // 출처는 처음 열 때 받는다(건물 기록은 부팅 때 받음, inner-layout · products.json 은 받았으면 그대로). 건축 자리의 월드 이름은 위 막대 월드 버튼 글자.
+  // 인트로 · 방식 고르기 · 비행 · 컷 이동 · 실내 전환 · 둘러보기 · 감상 · 모달 · 조작 안내 동안은 열 수 없다(버튼 흐리게 · L 무시).
+  // 조작 안내 · 모달 · 감상보다 뒤, 건물 카드보다 앞에 만든다 — Esc 캡처 처리기가 그쪽 Esc 다음 · 카드 Esc 앞(둘 다 떠 있으면 목록부터 닫는다)
+  const hubWorldLabel = document.querySelector(`.nw-world-switch [data-world-ver="${worldVer}"]`)?.textContent.trim() || worldLabel;
+  const hub = createHubPanel({
+    load: async () => {
+      const [innerLayout, catalog] = await Promise.all([
+        interior.loadLayout().catch((err) => {
+          console.error('[nowhere] 목록: inner-layout 불러오기 실패', err);
+          return null;
+        }),
+        retail.loadCatalog().then(() => retail.catalog()).catch((err) => {
+          console.error('[nowhere] 목록: products.json 불러오기 실패', err);
+          return null;
+        }),
+      ]);
+      return hubIndex({ records: archive.records(), worldLabel: hubWorldLabel, innerLayout, catalog });
+    },
+    isBlocked: () => cinema.isActive() || camCtrl.isIntroActive() || document.body.classList.contains('is-choosing') || camCtrl.isFlying() || spotCutting || interior.isBusy() || interior.isTouring() || showcase.isActive() || showcase.isBusy() || modal.isOpen() || help.isOpen(),
+    // 열 때: 마우스 고정 풀기 · 스팟 걷기 멈춤 · 누르던 이동 키 비우기(떠 있는 동안 목록이 키를 받으므로 계속 걷지 않게)
+    onOpen: () => {
+      camCtrl.releasePointer();
+      camCtrl.cancelWalkTo();
+      camCtrl.clearInput();
+    },
+    onGo: (item) => runGoPlan(item, { interior, open: openIndexItem }).catch((err) => console.error('[nowhere] 목록 항목 열기 실패', err)),
+  });
   // 건물 아카이브(외관): 건물 이름표 「기록 보기」 · 자유 시점 건물 클릭 · 건물 스팟 도착 → 오른쪽 카드, 「자세히 보기」 → 건물 감상.
   // 인트로 · 방식 고르기 · 투어 · 실내 · 감상 · 조작 안내 · 모달 · 컷 이동 · 비행 동안은 이름표를 숨기고 클릭 · Esc 를 받지 않는다.
   // 조작 안내 · 모달 · 감상보다 뒤에 만든다 — 카드의 Esc 캡처 처리기가 그쪽 Esc 다음에 온다
@@ -406,10 +436,10 @@ async function boot() {
     });
   }
 
-  // 건물 감상: 외관 아카이브 카드 「자세히 보기」 → 두 건물 목록(HAUS → FaceArch), 모델은 월드가 받은 같은 주소(quality.heroUrls — 브라우저 캐시).
-  // 부위 표지는 이 월드 layout anchors(건물 로컬 좌표 — 모델 루트와 같은 좌표계)
+  // 건물 감상: 외관 아카이브 카드 「자세히 보기」 · 아카이브 목록(실내에서도 — 나가면 실내 그 자리) → 두 건물 목록(HAUS → FaceArch),
+  // 모델은 월드가 받은 같은 주소(quality.heroUrls — 브라우저 캐시). 부위 표지는 이 월드 layout anchors(건물 로컬 좌표 — 모델 루트와 같은 좌표계)
   async function openArchive(id) {
-    if (interior.isActive() || interior.isBusy() || showcase.isActive() || showcase.isBusy()) return;
+    if (interior.isBusy() || showcase.isActive() || showcase.isBusy()) return;
     const collection = buildingCollection(archive.records(), quality.heroUrls, id);
     if (!collection.items.some((it) => it.id === id)) return;
     await openStage({
@@ -430,6 +460,13 @@ async function boot() {
       ...collection,
       loadLite: async (item) => cloneExhibit(THREE, root, item.id),
     });
+  }
+
+  // 아카이브 목록 항목 열기(runGoPlan 의 마지막 단계 — 그 층에 선 뒤): 건축 → 건물 감상, 전시물 → 전시물 감상, 제품 → 제품 감상
+  function openIndexItem(item) {
+    if (item.category === 'architecture') return openArchive(item.id);
+    if (item.category === 'exhibit') return openExhibit(item.id);
+    return openShowcase(item.id);
   }
 
   // 감상 모드를 나온 뒤(화면이 어두운 동안): 연 자리 · 시선 그대로, 보행 중이었으면 보행으로(실내 · 외관)
@@ -663,6 +700,7 @@ async function boot() {
       interior.update(dt);
     }
     markers.update(dt);
+    hub.update();   // 목록 버튼: 열 수 없으면 흐리게(감상 중에는 위 막대째 숨어 있다)
     retail.update();
     if (!studio) archive.update();   // 건물 이름표 자리 · 카드 거리(감상 중에는 외관 카메라가 멈춰 있다 — 이름표 · 카드는 CSS 로 숨김)
     if (!studio) exhibitTags.update();   // 실내 전시물 이름표(감상 중에는 CSS 로 숨김)
@@ -698,6 +736,7 @@ async function boot() {
     openArchive,
     openExhibit,
     exhibitTags,
+    hub,
     cinema,
     interior,
     scenario,

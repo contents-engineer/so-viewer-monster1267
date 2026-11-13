@@ -493,6 +493,8 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     enter,
     exit,
     goToFloor,
+    // 아카이브 목록(main.js): 들어가지 않고 inner-layout 만 받는다(받았으면 그대로 — 들어갈 때도 같은 값)
+    loadLayout,
     update,
     isActive: () => active,
     currentFloor: () => (active ? floorDef?.id ?? null : null),

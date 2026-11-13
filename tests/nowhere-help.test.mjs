@@ -15,7 +15,7 @@ test('(a) 조작 안내는 공통·카메라 시점·보행 시점·감상 모�
 
 test('(b) 코드에 바인딩된 단축키가 모두 안내에 실려 있고, 분석 모드 키(F · [ · ])는 없다', () => {
   const keys = new Set(allKeys());
-  for (const k of ['V', 'Esc', '?', 'P', 'W', 'A', 'S', 'D', 'Shift', 'Space', '↑', '↓', '←', '→', 'Q', 'E', '휠', '클릭', '1', '2', '3']) {
+  for (const k of ['V', 'Esc', '?', 'P', 'L', 'W', 'A', 'S', 'D', 'Shift', 'Space', '↑', '↓', '←', '→', 'Q', 'E', '휠', '클릭', '1', '2', '3']) {
     assert.ok(keys.has(k), `안내에 '${k}' 없음`);
   }
   for (const k of ['F', '[', ']']) assert.equal(keys.has(k), false, `안내에 분석 모드 키 '${k}' 가 남아 있음`);
@@ -28,6 +28,7 @@ test('(b) 코드에 바인딩된 단축키가 모두 안내에 실려 있고, �
   assert.match(cam, /requestPointerLock/);
   assert.match(walk, /ShiftLeft/);
   assert.match(look, /ArrowUp/);
+  assert.match(readFileSync(new URL('../public/src/nowhere/hub-panel.js', import.meta.url), 'utf8'), /code === 'KeyL'/);   // L = 아카이브 목록
   assert.equal(existsSync(new URL('../public/src/nowhere/analysis.js', import.meta.url)), false, 'analysis.js 가 남아 있음');
 });
 
