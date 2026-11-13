@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { PRODUCTS_URL, validateCatalog, floorDisplays, PLINTH, COVER, GLOW, PRODUCT_CENTER_Y, LABEL_RANGE, LABEL_LIFT, PICK_RANGE } from './products.js';
+import { PRODUCTS_URL, validateCatalog, floorDisplays, withoutProducts, PLINTH, COVER, GLOW, PRODUCT_CENTER_Y, LABEL_RANGE, LABEL_LIFT, PICK_RANGE } from './products.js';
 
 const CLICK_SLOP = 5;   // px — 이보다 많이 끌었으면 둘러보기 드래그(클릭 아님)
 const STONE = '#8E8981';
@@ -50,6 +50,7 @@ export function createRetailDisplay({ camera, canvas, getEnvMap = () => null, on
   const loader = new GLTFLoader();
   loader.setMeshoptDecoder(MeshoptDecoder);
   let catalog = null;
+  const failed = new Set();   // 진열용(lite) 모델을 못 불러온 제품 id
   let catalogPromise = null;
   const liteSources = new Map();   // productId → Promise<THREE.Object3D | null>(진열 · 감상이 clone 해서 쓴다)
   const shelves = new Map();       // floorId → { group, pickables, displays, tags }
@@ -105,6 +106,7 @@ export function createRetailDisplay({ camera, canvas, getEnvMap = () => null, on
         })
         .catch((err) => {
           console.error(`[nowhere] 제품 ${product.id} 불러오기 실패`, err);
+          failed.add(product.id);   // 진열에서 뺀다 — 이름표 · 이동 스팟 · 감상 이전/다음(catalog())
           return null;
         });
       liteSources.set(product.id, p);
@@ -149,7 +151,7 @@ export function createRetailDisplay({ camera, canvas, getEnvMap = () => null, on
       group.add(holder);
     });
 
-    const tags = ds.map((d) => {
+    const tags = ds.filter((_, i) => sources[i]).map((d) => {
       const btn = el('button', 'nw-retail-tag');
       btn.type = 'button';
       btn.hidden = true;
@@ -246,11 +248,12 @@ export function createRetailDisplay({ camera, canvas, getEnvMap = () => null, on
           best = d;
         }
       }
+      if (failed.has(best.product.id)) return;   // 빈 받침대(모델을 못 불러옴)는 열지 않는다
       e.stopImmediatePropagation();
       onOpen(best.product.id);
     },
     true,
   );
 
-  return { loadCatalog, catalog: () => catalog, liteSource, build, setFloor, update, element: root };
+  return { loadCatalog, catalog: () => withoutProducts(catalog, failed), liteSource, build, setFloor, update, element: root };
 }

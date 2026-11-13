@@ -330,3 +330,21 @@ test('(k) 감상 무대 화면: 정보 패널이 옆에 있는 배치(721 px 이
   assert.match(sc, /setViewOffset\(/);
   assert.match(sc, /stageFraming\(radius, FOV, applyView\(\)\)/);
 });
+
+test('(l) 진열용(lite) 모델을 못 불러온 제품은 진열에서 뺀다 — 이동 스팟 · 감상 이전/다음 · 이름표에 남지 않고, 그 받침대를 눌러도 열지 않는다', async () => {
+  const { withoutProducts } = await import('../public/src/nowhere/products.js');
+  const cat = validateCatalog(JSON.parse(readFileSync(new URL('assets/products/products.json', PUB), 'utf8')));
+  assert.equal(withoutProducts(cat, new Set()), cat, '뺄 것이 없으면 그대로(같은 객체)');
+  const cut = withoutProducts(cat, new Set(['folding-tarx']));
+  assert.deepEqual(floorDisplays(cut, '1').map((d) => d.product.id), ['kant', 'veggie-oat']);
+  assert.deepEqual(productSpots(cut, '1').map((s) => s.label), ['Kant', 'Veggie Oat']);
+  assert.equal(stepProduct(cut, '1', 'kant', 1), 'veggie-oat', '이전 · 다음이 빠진 제품을 건너뛴다');
+  assert.equal(findProduct(cut, 'folding-tarx')?.id, 'folding-tarx', '제품 정보는 남긴다(진열만 뺀다)');
+  assert.equal(cat.displays.length, 3, '원본 목록은 바꾸지 않는다');
+  assert.equal(withoutProducts(null, new Set(['kant'])), null);
+  const src = readFileSync(new URL('src/nowhere/retail-display.js', PUB), 'utf8');
+  assert.match(src, /failed\.add\(product\.id\)/, 'lite 실패를 기억한다');
+  assert.match(src, /catalog: \(\) => withoutProducts\(catalog, failed\)/, 'catalog() 는 실패한 제품을 뺀 목록');
+  assert.match(src, /ds\.filter\(\(_, i\) => sources\[i\]\)\.map\(\(d\) => \{\s*const btn/, '이름표는 불러온 제품만');
+  assert.match(src, /if \(failed\.has\(best\.product\.id\)\) return;/, '못 불러온 받침대 클릭은 열지 않는다');
+});

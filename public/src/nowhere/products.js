@@ -68,6 +68,12 @@ export function floorDisplays(catalog, floorId) {
     .map((d) => ({ product: findProduct(catalog, d.product), pos: [...d.pos], yaw: d.yaw }));
 }
 
+/** 진열에서 ids(Set) 제품을 뺀 목록(진열용 모델을 못 불러온 제품 — 스팟 · 감상 이전/다음에서 빠진다). 제품 정보는 남기고, 뺄 것이 없으면 그대로 */
+export function withoutProducts(catalog, ids) {
+  if (!catalog || !ids || !ids.size) return catalog;
+  return { ...catalog, displays: catalog.displays.filter((d) => !ids.has(d.product)) };
+}
+
 /** 진열 정면 방향(수평 단위 벡터 [x, z]) — yaw 0 이면 [0, 1](+z) */
 export function displayFront(yaw) {
   const r = (yaw * Math.PI) / 180;
