@@ -1,6 +1,6 @@
 // HAUS NOWHERE — 건물 아카이브(순수, three · DOM 없음 — 테스트: tests/nowhere-archive.test.mjs).
 // 외관 두 건물의 기록(assets/record.json · assets/facearch.json) → 아카이브 카드 · 건물 감상 목록(showcase.open 의 collection),
-// 월드 layout.json anchors(layer building) → 부위 표지(건물 로컬 좌표), 카드 트리거(보행 스팟 도착) · 건물 이름표 보이기 판정.
+// 월드 layout.json anchors(layer building) → 부위 표지(건물 로컬 좌표), 카드 트리거(보행 스팟 도착) · 건물 이름표 보이기 · 자유 시점 클릭 고르기 판정.
 // 문구는 기록 · anchors 값 그대로 쓴다(지어내지 않는다). 좌표는 Three.js(x, y 위, z), 건물 회전은 layout.buildings rotY(도).
 
 export const BUILDING_IDS = ['haus', 'facearch'];   // 감상 이전 · 다음 순서(끝에서 처음으로 돈다)
@@ -42,13 +42,17 @@ export function buildingItem(id, record, heroUrl) {
   };
 }
 
-/** 건물 감상 목록 — records · heroUrls 는 { haus, facearch }. BUILDING_IDS 순서, 기록 · 모델 주소가 둘 다 있는 건물만 */
+/**
+ * 건물 감상 목록 — records · heroUrls 는 { haus, facearch }. BUILDING_IDS 순서, 기록 · 모델 주소가 둘 다 있는 건물만.
+ * release: 무대 로더가 따로 받은 건물 원본(데스크톱은 텍스처만 수백 MB — 월드 것과 별개)을 나가면 푼다(감상 중 두 건물 사이 이동은 캐시 그대로)
+ */
 export function buildingCollection(records, heroUrls, startId) {
   return {
     kind: 'building',
     items: BUILDING_IDS.filter((id) => records?.[id] && heroUrls?.[id]).map((id) => buildingItem(id, records[id], heroUrls[id])),
     startId,
     hint: BUILDING_HINT,
+    release: true,
   };
 }
 
@@ -80,4 +84,22 @@ export function tagAnchor({ min, max }) {
 /** 건물 이름표를 보일지: 카메라 거리 BUILDING_TAG_RANGE 안 · 화면 안(NDC x · y −1…1, z 는 −1 < z < 1 — 카메라 뒤 · far 밖 제외) */
 export function tagVisible({ distance, ndc: [x, y, z] }) {
   return distance <= BUILDING_TAG_RANGE && Math.abs(x) <= 1 && Math.abs(y) <= 1 && z > -1 && z < 1;
+}
+
+/**
+ * 자유 시점 클릭으로 고를 건물 — 후보 [{ id, hasRecord, range(카메라 → 이름표 자리 m), inside(광선 시작점 = 카메라가 그 경계 상자 안),
+ * hit(광선이 경계 상자에 맞은 거리 m, 안 맞으면 null) }] 중 기록이 있고 CARD_KEEP_RANGE 안(카드가 바로 닫히지 않게)이고 상자 밖에서 맞은 가장 가까운 건물. 없으면 null.
+ * 상자 안에서 쏜 광선은 그 상자의 나가는 면에 맞아 늘 가장 가깝다 — 카메라가 FaceArch 상자 안(필로티 아래)이면 어디를 눌러도 FaceArch 가 되므로 건너뛴다
+ */
+export function pickBuilding(candidates) {
+  let best = null;
+  let bestD = Infinity;
+  for (const c of candidates) {
+    if (!c.hasRecord || c.inside || c.hit == null || c.range > CARD_KEEP_RANGE) continue;
+    if (c.hit < bestD) {
+      bestD = c.hit;
+      best = c.id;
+    }
+  }
+  return best;
 }

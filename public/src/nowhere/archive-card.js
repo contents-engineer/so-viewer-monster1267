@@ -2,11 +2,12 @@
 // 이름표: 건물마다 `<title> · 기록 보기` 버튼을 경계 상자 윗면 가운데 + BUILDING_TAG_LIFT 에(BUILDING_TAG_RANGE 안 · 화면 안), 누르면 카드.
 // 카드: 오른쪽 패널(감상 정보 패널과 같은 모양 · 자리, 휴대폰 · 세로 태블릿은 아래) — kicker · 제목 · facts · note · 「자세히 보기」(onDetail) · 「닫기」.
 //   모달이 아니다(카드가 떠 있어도 걷고 둘러본다). 다른 건물을 고르면 그 건물 카드로 바뀐다. 카드 건물에서 CARD_KEEP_RANGE 밖으로 멀어지면 닫는다.
-// 자유 시점 클릭: 끌지 않은(CLICK_SLOP) 캔버스 클릭의 광선이 건물 경계 상자에 맞으면 가까운 건물 카드 — 맞지 않으면 아무것도 하지 않는다(다른 클릭 처리기 그대로).
+// 자유 시점 클릭: 끌지 않은(CLICK_SLOP) 캔버스 클릭의 광선이 건물 경계 상자에 맞으면 가까운 건물 카드(카메라가 들어 있는 상자는 건너뛴다 — archive.js pickBuilding)
+//   — 맞지 않으면 아무것도 하지 않는다(다른 클릭 처리기 그대로).
 // Esc: 카드가 떠 있으면 카드만 닫고 막는다(조작 안내 · 모달 · 감상의 Esc 가 먼저 — 그쪽 캡처 처리기가 먼저 등록돼 있다).
 // 기록: archive.js BUILDING_RECORDS 두 파일을 한 번 받는다(못 받은 건물은 이름표 · 카드 없음). 문구는 기록 값 그대로(buildingItem).
 import * as THREE from 'three';
-import { BUILDING_IDS, BUILDING_RECORDS, CARD_KEEP_RANGE, CLICK_SLOP, buildingItem, tagAnchor, tagVisible } from './archive.js';
+import { BUILDING_IDS, BUILDING_RECORDS, CARD_KEEP_RANGE, CLICK_SLOP, buildingItem, pickBuilding, tagAnchor, tagVisible } from './archive.js';
 
 const UNLOCK_GRACE_MS = 300;   // 마우스 고정을 푼 Esc 직후의 Esc 는 카드를 닫지 않는다(camera.js 와 같은 값 — 브라우저가 고정 해제에 먼저 쓴다)
 
@@ -159,7 +160,7 @@ export function createArchiveCard({ camera, canvas, quality, getBoxes, isSuspend
     }
   }
 
-  // 자유 시점 건물 클릭 — 캡처 단계에서 끌기 시작점을 적고, 끌지 않은 클릭의 광선이 건물 경계 상자에 맞으면 가까운 건물 카드
+  // 자유 시점 건물 클릭 — 캡처 단계에서 끌기 시작점을 적고, 끌지 않은 클릭의 광선이 건물 경계 상자에 맞으면 가까운 건물 카드(pickBuilding)
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
   const hit = new THREE.Vector3();
@@ -183,18 +184,15 @@ export function createArchiveCard({ camera, canvas, quality, getBoxes, isSuspend
       const r = canvas.getBoundingClientRect();
       ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
       raycaster.setFromCamera(ndc, camera);
-      let best = null;
-      let bestD = Infinity;
-      for (const id of BUILDING_IDS) {
-        // 카드가 바로 닫히지 않게 CARD_KEEP_RANGE 안 건물만, 기록이 있는 건물만
-        if (!items[id] || !boxes[id] || !at[id] || camera.position.distanceTo(at[id]) > CARD_KEEP_RANGE) continue;
-        if (!raycaster.ray.intersectBox(boxes[id], hit)) continue;
-        const d = hit.distanceTo(raycaster.ray.origin);
-        if (d < bestD) {
-          bestD = d;
-          best = id;
-        }
-      }
+      const best = pickBuilding(
+        BUILDING_IDS.filter((id) => boxes[id] && at[id]).map((id) => ({
+          id,
+          hasRecord: Boolean(items[id]),
+          range: camera.position.distanceTo(at[id]),
+          inside: boxes[id].containsPoint(raycaster.ray.origin),
+          hit: raycaster.ray.intersectBox(boxes[id], hit) ? hit.distanceTo(raycaster.ray.origin) : null,
+        })),
+      );
       if (best) show(best);
     },
     true,

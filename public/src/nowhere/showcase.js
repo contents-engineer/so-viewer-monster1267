@@ -4,15 +4,17 @@
 // 조작: 드래그 · 한 손가락 회전, 휠 · 두 손가락 확대(항목 크기 기준 최소 · 최대 거리), 4 초 동안 입력이 없으면 천천히 자동 회전,
 // ← / → · 이전 · 다음 버튼 = 목록 순서, Esc · < BACK = 나가기(onClose — main.js 가 연 자리 · 시선 · 보행 여부를 되돌린다).
 // 모델: 가벼운 것(collection.loadLite 또는 item.liteUrl)을 먼저 보여 주고, item.hiUrl 이 있으면 데스크톱 · 태블릿은 받아 바꾼다(휴대폰은 가벼운 것만).
+// collection.release(건물 — 데스크톱 원본 텍스처만 수백 MB): 나가거나 못 열면 무대에서 모델을 빼고 이 목록이 무대 로더로 받은 원본을 푼다(releaseList).
 // 부위 표지(collection.parts — 건물 감상): 모델 자식 점(건물 로컬 좌표)을 매 프레임 투영한 작은 버튼(부위 이름). 모델 뒤면 흐리게(누를 수 있음),
-// 누르면 패널이 그 부위로(kicker · 제목 · 항목 · 설명 · ‹ 건물 정보), 다시 누르거나 ‹ 건물 정보 · 다른 건물이면 건물 정보로.
+// 누르면 패널이 그 부위로(kicker · 제목 · 항목 · 설명 · ‹ 건물 정보), 다시 누르거나 ‹ 건물 정보 · 다른 건물이면 건물 정보로. 가림 판정은 part-occlusion.js.
 // 키는 창 캡처 단계에서 먼저 받는다(조작 안내 · 모달이 열려 있으면 그쪽 몫).
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { stepItem, showcaseKeyGate, stageFraming, stageView, stageLift, partLabel, hitHidesPart, AUTO_ROTATE_DELAY } from './products.js';
+import { stepItem, showcaseKeyGate, stageFraming, stageView, stageLift, partLabel, AUTO_ROTATE_DELAY } from './products.js';
+import { createPartOcclusion } from './part-occlusion.js';
 
 export const SHOWCASE_FADE_MS = 200;   // 실내 ↔ 감상 무대 화면 전환(어둡게 · 밝게 각각)
 const FOV = 30;
@@ -23,7 +25,6 @@ const START_AZIMUTH = 28;             // ° — 처음 시선: 정면에서 오�
 const START_ELEVATION = 14;           // ° — 처음 시선: 조금 위에서
 const DISC_SCALE = 4.5;               // 바닥 원판 지름 = 항목 경계 구 반지름 × 이 값
 const PART_CHECK_MS = 120;            // ms — 부위 표지 가림을 이만큼마다 표지 하나씩 돌아가며 다시 잰다
-const PART_CHUNK = 128;               // 삼각형 — 가림 광선 가속: 메시 삼각형을 이만큼씩 묶은 경계 상자로 먼저 거른다
 // 감상 종류별 이름(화면 aria-label · 오류 문구)
 const KINDS = {
   product: { label: '제품 감상', noun: '제품' },
@@ -71,10 +72,30 @@ function makeFloorDisc() {
   return disc;
 }
 
+// 무대 로더가 받은 원본 하나를 푼다: geometry · 재질 · 텍스처 dispose(GPU), ImageBitmap 이면 close(디코드한 그림 — dispose 만으로는 남는다).
+// clone 은 geometry · 재질을 원본과 같이 쓰므로 원본만 훑으면 된다
+function disposeObject(root) {
+  const geos = new Set();
+  const mats = new Set();
+  const texs = new Set();
+  root.traverse((o) => {
+    if (o.geometry) geos.add(o.geometry);
+    for (const m of [o.material].flat()) if (m) mats.add(m);
+  });
+  for (const m of mats) for (const v of Object.values(m)) if (v?.isTexture) texs.add(v);
+  for (const g of geos) g.dispose();
+  for (const m of mats) m.dispose();
+  for (const t of texs) {
+    t.dispose();
+    if (globalThis.ImageBitmap && t.image instanceof ImageBitmap) t.image.close();
+  }
+}
+
 /**
  * open(collection) — collection = { kind: 'product' | 'building', items: [{ id, name, kicker, crumbs, rows: [{ label, value }], note, liteUrl?, hiUrl? }],
  *   startId, loadLite?(item) → Promise<Object3D | null>(원본 — clone 해서 쓴다. 없으면 무대 로더가 item.liteUrl 을 받는다), hint,
- *   parts?(item) → [{ id, title, local: [x, y, z](모델 루트 좌표), kicker, rows, lore }] }.
+ *   parts?(item) → [{ id, title, local: [x, y, z](모델 루트 좌표), kicker, rows, lore }],
+ *   release?: true → 나가거나 못 열면 이 목록이 무대 로더로 받은 원본을 풀고 캐시에서 지운다(다시 열면 다시 받는다) }.
  * isBlocked() → 조작 안내 · 모달이 열려 있으면 감상 키를 처리하지 않는다. onHelp → '조작 안내' 버튼. onClose → 나간 뒤(화면이 어두운 동안) 부른다.
  */
 export function createShowcase({ renderer, canvas, quality, fade, isBlocked = () => false, onHelp = null, onClose = null }) {
@@ -118,6 +139,7 @@ export function createShowcase({ renderer, canvas, quality, fade, isBlocked = ()
   loader.setMeshoptDecoder(MeshoptDecoder);
   const wantHi = quality.device !== 'phone';
   const cache = new Map();   // 주소 → Promise<Object3D | null>(무대 로더가 받은 원본 — 실패한 주소는 지워 다음에 다시 받는다)
+  const listUrls = new Set();   // 지금 목록을 연 뒤 무대 로더로 받은 주소(releaseList 가 푼다)
 
   // 화면: 왼쪽 위 < BACK · 경로, 오른쪽 위 조작 안내, 오른쪽 정보 패널, 아래 이전 · 다음 · 조작 안내 한 줄
   const root = el('div', 'nw-showcase');
@@ -303,6 +325,7 @@ export function createShowcase({ renderer, canvas, quality, fade, isBlocked = ()
 
   // 무대 로더: 주소별로 한 번 받는다. 실패하면 캐시에서 지워 다음에 다시 받는다(태블릿 일시 실패 뒤 다시 보면 다시 시도)
   function loadUrl(url, what) {
+    listUrls.add(url);
     if (!cache.has(url)) {
       cache.set(
         url,
@@ -323,6 +346,26 @@ export function createShowcase({ renderer, canvas, quality, fade, isBlocked = ()
   function liteOf(item) {
     if (!list.loadLite && !item.liteUrl) return null;
     return list.loadLite ? list.loadLite(item) : loadUrl(item.liteUrl, `${kindOf().noun} 모델 ${item.id}`);
+  }
+
+  // 목록이 release 면(건물) 나갈 때(화면이 어두운 동안) · 못 열었을 때: 무대에서 모델 · 부위 표지를 빼고, 이 목록이 무대 로더로 받은 원본을 풀고 캐시에서 지운다.
+  // 받는 중인 원본은 도착하면 푼다. 감상 중 항목 사이 이동은 캐시 그대로(두 건물을 오가도 다시 받지 않는다). 제품 목록은 그대로 둔다(진열 lite 는 진열 몫,
+  // 고해상도는 다음에 다시 쓴다)
+  function releaseList() {
+    if (!list?.release) return;
+    if (model) stage.remove(model);
+    model = null;
+    for (const m of marks) m.anchor.removeFromParent();
+    marks = [];
+    partId = null;
+    partsLayer.replaceChildren();
+    for (const url of listUrls) {
+      const loaded = cache.get(url);
+      cache.delete(url);
+      loaded?.then((obj) => obj && disposeObject(obj));
+    }
+    listUrls.clear();
+    renderer.renderLists.dispose();   // 무대 장면의 마지막 프레임 그리기 목록이 뺀 메시를 쥐고 있지 않게(목록은 다음 그리기에서 새로 만든다)
   }
 
   /** 항목 하나를 무대에: 가벼운 모델 먼저, hiUrl 이 있으면 데스크톱 · 태블릿은 고해상도로 바꾼다. 못 보이면 false */
@@ -364,6 +407,7 @@ export function createShowcase({ renderer, canvas, quality, fade, isBlocked = ()
     try {
       await fade.fadeTo(true, '', SHOWCASE_FADE_MS);
       list = collection;
+      listUrls.clear();
       root.setAttribute('aria-label', kindOf().label);
       hint.textContent = list.hint || '';
       scene.environment = studioEnvironment(renderer);
@@ -382,6 +426,7 @@ export function createShowcase({ renderer, canvas, quality, fade, isBlocked = ()
       controls.autoRotate = false;
       root.hidden = true;
       document.body.classList.remove('is-showcase');
+      releaseList();
       await fade.fadeTo(false, '', SHOWCASE_FADE_MS);
       return false;
     } finally {
@@ -402,6 +447,7 @@ export function createShowcase({ renderer, canvas, quality, fade, isBlocked = ()
       root.hidden = true;
       document.body.classList.remove('is-showcase');
       if (typeof onClose === 'function') onClose();
+      releaseList();
     } finally {
       await fade.fadeTo(false, '', SHOWCASE_FADE_MS);
       busy = false;
@@ -470,68 +516,9 @@ export function createShowcase({ renderer, canvas, quality, fade, isBlocked = ()
   }
 
   // 부위 표지: 매 프레임 표지 점을 무대 카메라(옆 패널 배치의 setViewOffset 포함)로 투영해 버튼을 옮기고, 화면 밖 · 카메라 뒤는 숨긴다.
-  // 가림은 PART_CHECK_MS 마다 표지 하나씩(새로 만든 직후는 셋 다) — 표지 점 → 카메라 광선이 모델에 먼저 들어가면 흐리게(hitHidesPart)
+  // 가림은 PART_CHECK_MS 마다 표지 하나씩(새로 만든 직후는 셋 다) — 표지 점 → 카메라 광선이 모델에 먼저 들어가면 흐리게(part-occlusion.js)
   const pv = new THREE.Vector3();
-  const toCam = new THREE.Vector3();
-  const worldRay = new THREE.Ray();
-  const localRay = new THREE.Ray();
-  const inv = new THREE.Matrix4();
-  const va = new THREE.Vector3();
-  const vb = new THREE.Vector3();
-  const vc = new THREE.Vector3();
-  const hitP = new THREE.Vector3();
-  const triN = new THREE.Vector3();
-  // 메시 geometry 마다 삼각형 PART_CHUNK 개씩 묶은 경계 상자(메시 로컬)를 한 번 만든다(clone 은 geometry 를 같이 쓴다) — 광선은 지나는 묶음의
-  // 삼각형만 잰다(FaceArch 눈 메시 하나가 12.7만 삼각형 — Raycaster 로 다 훑으면 광선 하나에 10–20 ms)
-  const chunkCache = new WeakMap();
-  function chunksOf(geo) {
-    let cs = chunkCache.get(geo);
-    if (!cs) {
-      const pos = geo.attributes.position;
-      const idx = geo.index;
-      const n = idx ? idx.count : pos.count;
-      cs = [];
-      for (let s = 0; s < n; s += PART_CHUNK * 3) {
-        const e = Math.min(n, s + PART_CHUNK * 3);
-        const box = new THREE.Box3();
-        for (let i = s; i < e; i++) box.expandByPoint(va.fromBufferAttribute(pos, idx ? idx.getX(i) : i));
-        cs.push({ box, s, e });
-      }
-      chunkCache.set(geo, cs);
-    }
-    return cs;
-  }
-  // 표지 점 p(월드) → 카메라 광선이 표지를 가리는 면에 맞는지 — 하나 찾으면 멈춘다. 면 방향은 메시 로컬 법선 · 광선(행렬이 뒤집혔으면 부호를 바꾼다)
-  function isBehind(p) {
-    toCam.subVectors(camera.position, p);
-    const far = toCam.length();
-    worldRay.set(p, toCam.divideScalar(far));
-    let hidden = false;
-    model.traverse((o) => {
-      if (hidden || !o.isMesh) return;
-      const geo = o.geometry;
-      inv.copy(o.matrixWorld).invert();
-      localRay.copy(worldRay).applyMatrix4(inv);
-      if (!geo.boundingBox) geo.computeBoundingBox();
-      if (!localRay.intersectsBox(geo.boundingBox)) return;
-      const pos = geo.attributes.position;
-      const idx = geo.index;
-      const flip = o.matrixWorld.determinant() < 0 ? -1 : 1;
-      for (const c of chunksOf(geo)) {
-        if (!localRay.intersectsBox(c.box)) continue;
-        for (let i = c.s; i < c.e && !hidden; i += 3) {
-          va.fromBufferAttribute(pos, idx ? idx.getX(i) : i);
-          vb.fromBufferAttribute(pos, idx ? idx.getX(i + 1) : i + 1);
-          vc.fromBufferAttribute(pos, idx ? idx.getX(i + 2) : i + 2);
-          if (!localRay.intersectTriangle(va, vb, vc, false, hitP)) continue;
-          const dot = flip * THREE.Triangle.getNormal(va, vb, vc, triN).dot(localRay.direction);
-          hidden = hitHidesPart({ distance: hitP.applyMatrix4(o.matrixWorld).distanceTo(p), dot }, far);
-        }
-        if (hidden) break;
-      }
-    });
-    return hidden;
-  }
+  const occlusion = createPartOcclusion(THREE);
   function updateParts() {
     if (!marks.length || !model) return;
     const now = performance.now();
@@ -545,7 +532,7 @@ export function createShowcase({ renderer, canvas, quality, fade, isBlocked = ()
     marks.forEach((m, i) => {
       m.anchor.getWorldPosition(pv);
       if (partsFresh || i === check) {
-        const behind = isBehind(pv);
+        const behind = occlusion.isBehind(model, pv, camera.position);
         if (behind !== m.behind) {
           m.behind = behind;
           m.btn.classList.toggle('is-behind', behind);

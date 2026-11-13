@@ -384,6 +384,7 @@ test('(n) 제품 감상 목록(productCollection): 그 층 진열 순서 · 항�
     product: kant,
   });
   assert.equal('loadLite' in c, false, 'lite 는 main.js 가 진열의 것(retail.liteSource)으로 붙인다');
+  assert.equal('release' in c, false, '나가도 풀지 않는다(진열 lite 는 진열 몫, 고해상도는 무대 캐시로 다시 쓴다)');
   // 이전 · 다음은 지금과 같은 순서
   for (const id of ['kant', 'folding-tarx', 'veggie-oat']) {
     for (const dir of [1, -1]) assert.equal(stepItem(c.items, id, dir), stepProduct(catalog, '1', id, dir), `${id} ${dir}`);

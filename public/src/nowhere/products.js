@@ -187,13 +187,13 @@ export function showcaseKeyGate({ active, busy, blocked, defaultPrevented, key, 
 // 감상 무대 오른쪽 정보 패널(nowhere.css .nw-showcase-panel — 폭 · 오른쪽 여백) + 제품과의 간격.
 // 폭 720 px 이하, 그리고 세로 화면 폭 1024 px 이하(세로 태블릿)는 패널이 아래로 내려간다(휴대폰 배치)
 export const STAGE_PANEL = { width: 300, right: 22, gap: 24, minViewport: 721, portraitMax: 1024 };
+// 정보 패널이 아래인 배치(휴대폰 · 세로 태블릿)인지 — stageView · stageLift 가 같이 쓴다
+const bottomPanel = (width, height) => width < STAGE_PANEL.minViewport || (height > width && width <= STAGE_PANEL.portraitMax);
 
 /**
  * 감상 무대 화면(width × height px)에서 제품을 둘 빈 곳. 옆 패널 배치면 패널 왼쪽 빈 폭 freeWidth 와, 투영 가운데를 왼쪽으로 옮길 shift px
  * (빈 곳 가운데 = 화면 가운데 − shift). 빈 폭은 화면의 절반 아래로 줄이지 않는다. 패널이 아래인 배치(휴대폰 · 세로 태블릿)는 { width, 0 }.
  */
-const bottomPanel = (width, height) => width < STAGE_PANEL.minViewport || (height > width && width <= STAGE_PANEL.portraitMax);
-
 export function stageView(width, height) {
   if (bottomPanel(width, height)) return { freeWidth: width, shift: 0 };
   const freeWidth = Math.max(width / 2, width - (STAGE_PANEL.width + STAGE_PANEL.right + STAGE_PANEL.gap));

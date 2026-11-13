@@ -176,3 +176,22 @@ test('(j) 감상 모드 안내: 건물 감상 부위 표지 줄(누르면 부위
   assert.deepEqual(row.keys, ['클릭', '탭']);
   for (const re of [/^건물 감상/, /포디움 · 타워 · 크라운/, /몸체 · 눈 · 필로티 다리/, /「‹ 건물 정보」/, /다른 건물/, /흐리게/]) assert.match(row.desc, re);
 });
+
+test('(k) 감상 모드 안내: 건물 기록 카드 자리는 배치에 따라(옆 패널 · 휴대폰 · 세로 태블릿은 아래) — 「오른쪽에」 로 못박지 않는다', () => {
+  const sc = CONTROL_SECTIONS.find((s) => s.id === 'showcase');
+  const building = sc.rows.find((r) => /기록 보기/.test(r.desc));
+  assert.doesNotMatch(building.desc, /오른쪽에 건물 기록 카드/);
+  assert.match(building.desc, /건물 기록 카드\([^)]*휴대폰 · 세로 태블릿은 아래[^)]*\)/);
+});
+
+test('(l) 조작 안내 배치: 1440 px 이상은 네 묶음을 한 줄 네 칸(공통 칸을 넓게) — 감상 모드 7줄 · 메모까지 1600 × 900 첫 화면에, 그 아래 폭은 리테일 배치(공통 두 줄 · 감상 모드 두 칸) 그대로', () => {
+  const css = readFileSync(new URL('../public/src/nowhere/nowhere.css', import.meta.url), 'utf8');
+  const wide = css.match(/@media \(min-width: 1440px\) \{([\s\S]*?)\n\}/);
+  assert.ok(wide, '1440 px 이상 배치 없음');
+  assert.match(wide[1], /\.nw-help-panel \{\s*width: min\(1560px, 100%\);/);
+  assert.match(wide[1], /\.nw-help-grid \{\s*grid-template-columns: minmax\(0, 1\.4fr\) minmax\(0, 1fr\) minmax\(0, 1fr\) minmax\(0, 1\.1fr\);/);
+  assert.match(wide[1], /\.nw-help-section\[data-section\] \{\s*grid-row: auto;\s*grid-column: auto;/);
+  // 기본 배치 규칙보다 뒤(같은 우선순위 — 뒤가 이긴다)
+  assert.ok(css.indexOf('@media (min-width: 1440px)') > css.indexOf(".nw-help-section[data-section='showcase'] {"));
+  assert.deepEqual(CONTROL_SECTIONS.map((s) => s.id), ['common', 'camera', 'walk', 'showcase'], '네 칸 순서 = 묶음 순서');
+});

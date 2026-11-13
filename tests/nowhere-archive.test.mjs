@@ -65,6 +65,7 @@ test('(c) 건물 목록: kind building · BUILDING_IDS 순서(기록 · 모델 �
   assert.equal(c.startId, 'facearch');
   assert.equal(c.hint, HINT);
   assert.equal('loadLite' in c, false, '무대 로더가 item.liteUrl 을 받는다');
+  assert.equal(c.release, true, '나가면 무대 로더가 받은 건물 원본을 푼다(수백 MB — 감상 중 두 건물 사이 이동은 캐시 그대로)');
   assert.equal(stepItem(c.items, 'haus', 1), 'facearch');
   assert.equal(stepItem(c.items, 'facearch', 1), 'haus');
   assert.equal(stepItem(c.items, 'haus', -1), 'facearch');
@@ -208,6 +209,8 @@ test('(j) 카드 모듈: 기록 두 파일을 한 번 받고, 이름표(<title> 
   assert.match(click[0], /> CLICK_SLOP\) return/);
   assert.match(click[0], /raycaster\.setFromCamera\(/);
   assert.match(click[0], /intersectBox\(/);
+  assert.match(click[0], /containsPoint\(raycaster\.ray\.origin\)/, '광선 시작점이 들어 있는 상자는 건너뛴다(v)');
+  assert.match(click[0], /const best = pickBuilding\(/);
   assert.doesNotMatch(click[0], /stopImmediatePropagation|preventDefault/, '건물 클릭은 다른 클릭 처리기를 막지 않는다');
   // Esc: 캡처 단계, 카드가 떠 있고 조작 안내 · 모달 · 감상이 먼저 받지 않았을 때만 카드만 닫고 막는다(보행 해제로 가지 않게)
   const esc = src.match(/window\.addEventListener\(\s*'keydown',[\s\S]*?\n    true,?\s*\n  \);/);
@@ -333,7 +336,7 @@ test('(o) 부위 표지 가림: 표지 점 → 카메라 광선이 PART_RAY_NEAR
 
 test('(p) 감상 무대 부위 표지: collection.parts(item) → 모델 자식 점(local) · DOM 버튼(.nw-showcase-part, 짧은 이름) 매 프레임 투영 · 가림 .is-behind · 누르면 부위 패널(kicker · title · rows · lore · ‹ 건물 정보) · getState().part', () => {
   const sc = read('showcase.js');
-  assert.match(sc, /import \{[^}]*partLabel[^}]*hitHidesPart[^}]*\} from '\.\/products\.js';/);
+  assert.match(sc, /import \{[^}]*partLabel[^}]*\} from '\.\/products\.js';/);
   assert.match(sc, /typeof list\.parts === 'function' \? list\.parts\(item\)/);
   assert.match(sc, /'nw-showcase-part'/);
   assert.match(sc, /partLabel\(part\.title\)/);
@@ -344,15 +347,10 @@ test('(p) 감상 무대 부위 표지: collection.parts(item) → 모델 자식 
   // 투영: 무대 카메라(setViewOffset 포함) → 캔버스 자리, 화면 밖 · 카메라 뒤는 숨김
   assert.match(sc, /\.project\(camera\)/);
   assert.match(sc, /getBoundingClientRect\(\)/);
-  // 가림: 표지 점 → 카메라 광선(메시 로컬), 삼각형 묶음 경계 상자로 거른 뒤 삼각형 — 맞은 면 법선 · 광선 방향 → hitHidesPart, 하나 찾으면 멈춘다. 흐리게(누를 수 있음)
-  const behind = fnBody(sc, 'function isBehind(p)');
-  assert.match(behind, /localRay\.copy\(worldRay\)\.applyMatrix4\(inv\)/);
-  assert.match(behind, /localRay\.intersectsBox\(geo\.boundingBox\)/);
-  assert.match(behind, /for \(const c of chunksOf\(geo\)\) \{\s*if \(!localRay\.intersectsBox\(c\.box\)\) continue;/);
-  assert.match(behind, /localRay\.intersectTriangle\(va, vb, vc, false, hitP\)/);
-  assert.match(behind, /hitHidesPart\(\{ distance: [^,]+, dot \}, far\)/);
-  assert.match(fnBody(sc, 'function chunksOf(geo)'), /chunkCache\.set\(geo, /);
-  assert.match(sc, /const PART_CHUNK = \d+;/);
+  // 가림: part-occlusion.js(동작은 tests/nowhere-part-occlusion.test.mjs 가 vendored three 로 잰다)에 모델 · 표지 점 · 무대 카메라 자리를 넘긴다. 흐리게(누를 수 있음)
+  assert.match(sc, /import \{ createPartOcclusion \} from '\.\/part-occlusion\.js';/);
+  assert.match(sc, /const occlusion = createPartOcclusion\(THREE\);/);
+  assert.match(fnBody(sc, 'function updateParts()'), /const behind = occlusion\.isBehind\(model, pv, camera\.position\);/);
   assert.match(sc, /classList\.toggle\('is-behind'/);
   // 부위 패널: kicker · title · rows · lore · ‹ 건물 정보, 다시 누르거나 버튼 · 다른 건물이면 건물 정보
   assert.match(sc, /'nw-showcase-lore'/);
@@ -436,4 +434,44 @@ test('(u) 아래 패널 배치(휴대폰 · 세로 태블릿)의 건물 감상: 
   assert.match(view, /camera\.setViewOffset\(fullW, fullH, 2 \* v\.shift, 2 \* lift, w, h\)/);
   assert.match(view, /camera\.fov = lift > 0 \?[^;]*fullH\)? \/ h[^;]*: FOV;/);
   assert.match(sc, /stageFraming\(radius, FOV, applyView\(\)\)/);
+});
+
+test('(v) 자유 시점 클릭 고르기(pickBuilding): 광선 시작점(카메라)이 들어 있는 건물 경계 상자는 건너뛴다 — FaceArch 필로티 아래(face_piloti)에서 HAUS 를 누르면 HAUS 카드', async () => {
+  const { pickBuilding } = await import('../public/src/nowhere/archive.js');
+  const THREE = await import('../public/vendor/three/three.module.js');
+  // 상자 안에서 쏜 광선은 그 상자의 나가는 면(가까이)에 맞는다 — 건너뛰지 않으면 어디를 눌러도 그 건물이 가장 가깝다
+  const box = new THREE.Box3(new THREE.Vector3(-15, 0, -15), new THREE.Vector3(15, 30, 15));
+  const ray = new THREE.Ray(new THREE.Vector3(0, 1.7, 0), new THREE.Vector3(1, 0, 0));
+  assert.ok(box.containsPoint(ray.origin));
+  assert.equal(ray.intersectBox(box, new THREE.Vector3())?.x, 15);
+  const c = (id, o) => ({ id, hasRecord: true, range: 100, inside: false, hit: null, ...o });
+  assert.equal(pickBuilding([c('haus', { hit: 95, range: 130 }), c('facearch', { inside: true, hit: 15, range: 30 })]), 'haus', 'face_piloti → HAUS');
+  assert.equal(pickBuilding([c('haus'), c('facearch', { inside: true, hit: 15 })]), null, '상자 안에서 다른 건물에 맞지 않으면 아무것도');
+  // 밖에서는 지금처럼: 맞은 건물 중 가까운 것, 기록 없음 · CARD_KEEP_RANGE 밖(경계 포함 안) · 안 맞음은 뺀다
+  assert.equal(pickBuilding([c('haus', { hit: 80 }), c('facearch', { hit: 120 })]), 'haus');
+  assert.equal(pickBuilding([c('haus', { hit: 80 }), c('facearch', { hit: 40 })]), 'facearch');
+  assert.equal(pickBuilding([c('haus', { hit: 80, hasRecord: false }), c('facearch', { hit: 120 })]), 'facearch', '기록 없음');
+  assert.equal(pickBuilding([c('haus', { hit: 80, range: CARD_KEEP_RANGE + 1 }), c('facearch', { hit: 120 })]), 'facearch', '카드가 바로 닫힐 거리');
+  assert.equal(pickBuilding([c('haus', { hit: 80, range: CARD_KEEP_RANGE })]), 'haus', '경계는 고른다');
+  assert.equal(pickBuilding([c('haus', { hit: 0 })]), 'haus', '맞은 거리 0 도 맞음');
+  assert.equal(pickBuilding([c('haus'), c('facearch')]), null, '안 맞음');
+  assert.equal(pickBuilding([]), null);
+});
+
+test('(w) 건물 감상 메모리: 건물 목록(release)은 나가거나 못 열면 무대에서 모델 · 표지를 빼고, 이 목록이 무대 로더로 받은 원본을 풀고(geometry · 재질 · 텍스처 dispose, ImageBitmap close) 캐시에서 지운다 — 제품 목록은 그대로', () => {
+  const sc = read('showcase.js');
+  assert.match(fnBody(sc, 'function loadUrl(url, what)'), /listUrls\.add\(url\);/);
+  const rel = fnBody(sc, 'function releaseList()');
+  assert.match(rel, /if \(!list\?\.release\) return;/, '제품 목록(release 없음)은 그대로');
+  assert.match(rel, /if \(model\) stage\.remove\(model\);\s*model = null;/);
+  assert.match(rel, /for \(const m of marks\) m\.anchor\.removeFromParent\(\);\s*marks = \[\];/, '표지 점이 모델(clone)을 쥐고 있지 않게');
+  assert.match(rel, /for \(const url of listUrls\) \{[\s\S]*cache\.delete\(url\);[\s\S]*disposeObject\(/);
+  const dispose = sc.match(/\nfunction disposeObject\(root\) \{[\s\S]*?\n\}\n/);
+  assert.ok(dispose, 'disposeObject 없음');
+  for (const re of [/\.geometry/, /isTexture/, /\.dispose\(\)/, /instanceof ImageBitmap/, /\.close\(\)/]) assert.match(dispose[0], re);
+  // 나가기: 어두운 동안 onClose 뒤 · 열기 실패 경로, 여는 목록마다 받은 주소를 새로 센다
+  assert.match(fnBody(sc, 'async function close()'), /onClose\(\);\s*releaseList\(\);/);
+  const open = fnBody(sc, 'async function open(collection)');
+  assert.match(open, /listUrls\.clear\(\);/);
+  assert.match(open.match(/\} catch \(err\) \{[\s\S]*?\} finally/)[0], /releaseList\(\);/);
 });
