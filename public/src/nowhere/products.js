@@ -150,6 +150,20 @@ export function showcaseKeyGate({ active, busy, blocked, defaultPrevented, key, 
   return resolveShowcaseKey(key) || (passes ? 'pass' : 'swallow');
 }
 
+// 감상 무대 오른쪽 정보 패널(nowhere.css .nw-showcase-panel — 폭 · 오른쪽 여백) + 제품과의 간격.
+// 폭 720 px 이하, 그리고 세로 화면 폭 1024 px 이하(세로 태블릿)는 패널이 아래로 내려간다(휴대폰 배치)
+export const STAGE_PANEL = { width: 300, right: 22, gap: 24, minViewport: 721, portraitMax: 1024 };
+
+/**
+ * 감상 무대 화면(width × height px)에서 제품을 둘 빈 곳. 옆 패널 배치면 패널 왼쪽 빈 폭 freeWidth 와, 투영 가운데를 왼쪽으로 옮길 shift px
+ * (빈 곳 가운데 = 화면 가운데 − shift). 빈 폭은 화면의 절반 아래로 줄이지 않는다. 패널이 아래인 배치(휴대폰 · 세로 태블릿)는 { width, 0 }.
+ */
+export function stageView(width, height) {
+  if (width < STAGE_PANEL.minViewport || (height > width && width <= STAGE_PANEL.portraitMax)) return { freeWidth: width, shift: 0 };
+  const freeWidth = Math.max(width / 2, width - (STAGE_PANEL.width + STAGE_PANEL.right + STAGE_PANEL.gap));
+  return { freeWidth, shift: (width - freeWidth) / 2 };
+}
+
 /**
  * 감상 무대 카메라 거리(제품 경계 구 반지름 radius m, 세로 시야각 fovDeg, 화면 가로 / 세로 aspect).
  * distance = 구가 화면 높이 · 폭(세로 화면은 폭이 좁다) 모두에 여유 있게 들어오는 거리, min = 표면 가까이(확대), max = 맞춘 거리의 2.5 배

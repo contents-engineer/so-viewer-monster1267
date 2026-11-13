@@ -221,7 +221,7 @@ test('(i) 감상 모드 모듈 · 화면: 스튜디오 무대(RoomEnvironment ·
   assert.match(src, /new OrbitControls\(camera, canvas\)/);
   assert.match(src, /controls\.enablePan = false/);
   assert.match(src, /idle >= AUTO_ROTATE_DELAY/);
-  assert.match(src, /stageFraming\(radius, FOV, camera\.aspect\)/);
+  assert.match(src, /stageFraming\(radius, FOV, applyView\(\)\)/);   // 빈 곳(옆 패널 왼쪽) 비율로 맞춘다 — (k)
   assert.match(src, /showcaseKeyGate\(\{/);
   assert.match(src, /stopImmediatePropagation\(\)/);
   assert.match(src, /quality\.device !== 'phone'/);
@@ -297,4 +297,36 @@ test('(l) 휴대폰 · 터치 감상 화면 < BACK · 조작 안내 44 px, 조�
   assert.match(css, /\.nw-help-section\[data-section='common'\] \{[^}]*grid-row: span 2/);
   assert.match(css, /\.nw-help-section\[data-section='showcase'\] \{[^}]*grid-column: span 2/);
   assert.match(readFileSync(new URL('../public/src/nowhere/help.js', import.meta.url), 'utf8'), /sec\.dataset\.section = s\.id/);
+});
+
+test('(k) 감상 무대 화면: 정보 패널이 옆에 있는 배치(721 px 이상)는 패널 왼쪽 빈 곳 가운데에 제품을 둔다 — 1180 × 820 태블릿에서 패널이 Kant 다리를 가리던 것', async () => {
+  const { stageView, STAGE_PANEL } = await import('../public/src/nowhere/products.js');
+  // 휴대폰 배치(패널이 아래): 그대로
+  assert.deepEqual(stageView(390, 844), { freeWidth: 390, shift: 0 });
+  assert.deepEqual(stageView(720, 900), { freeWidth: 720, shift: 0 });
+  // 옆 패널: 빈 폭 = 화면 − (패널 폭 + 오른쪽 여백 + 간격), 투영 가운데를 그 절반만큼 왼쪽으로
+  const side = STAGE_PANEL.width + STAGE_PANEL.right + STAGE_PANEL.gap;
+  const t = stageView(1180, 820);
+  assert.equal(t.freeWidth, 1180 - side);
+  assert.equal(t.shift, side / 2);
+  const d = stageView(1600, 900);
+  assert.equal(d.freeWidth + 2 * d.shift, 1600);
+  // 세로 태블릿(폭 1024 이하)은 패널이 아래 — 그대로. 더 넓은 세로 화면은 옆 배치
+  assert.deepEqual(stageView(820, 1180), { freeWidth: 820, shift: 0 });
+  assert.deepEqual(stageView(1024, 1366), { freeWidth: 1024, shift: 0 });
+  assert.ok(stageView(1080, 1920).shift > 0);
+  // 좁은 옆 배치에서도 빈 폭은 화면의 절반 아래로 줄지 않는다
+  const p = stageView(760, 700);
+  assert.ok(p.freeWidth >= 380 && p.shift === (760 - p.freeWidth) / 2);
+  // 상수는 nowhere.css 의 패널과 같아야 한다(폭 · 오른쪽 여백 · 720 px 에서 아래로)
+  const css = readFileSync(new URL('src/nowhere/nowhere.css', PUB), 'utf8');
+  const panel = css.match(/\n\.nw-showcase-panel \{([^}]*)\}/)[1];
+  assert.match(panel, new RegExp(`right: ${STAGE_PANEL.right}px`));
+  assert.match(panel, new RegExp(`width: min\\(${STAGE_PANEL.width}px`));
+  assert.match(css, new RegExp(`@media \\(max-width: ${STAGE_PANEL.minViewport - 1}px\\), \\(orientation: portrait\\) and \\(max-width: ${STAGE_PANEL.portraitMax}px\\) \\{\\s*\\.nw-showcase-top`));
+  // showcase.js 는 빈 곳 비율로 거리를 맞추고 투영만 옮긴다
+  const sc = readFileSync(new URL('src/nowhere/showcase.js', PUB), 'utf8');
+  assert.match(sc, /stageView\(/);
+  assert.match(sc, /setViewOffset\(/);
+  assert.match(sc, /stageFraming\(radius, FOV, applyView\(\)\)/);
 });

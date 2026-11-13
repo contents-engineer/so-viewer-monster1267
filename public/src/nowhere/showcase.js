@@ -8,7 +8,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { findProduct, floorDisplays, infoRows, breadcrumb, stepProduct, showcaseKeyGate, stageFraming, AUTO_ROTATE_DELAY } from './products.js';
+import { findProduct, floorDisplays, infoRows, breadcrumb, stepProduct, showcaseKeyGate, stageFraming, stageView, AUTO_ROTATE_DELAY } from './products.js';
 
 export const SHOWCASE_FADE_MS = 200;   // 실내 ↔ 감상 무대 화면 전환(어둡게 · 밝게 각각)
 const FOV = 30;
@@ -164,12 +164,26 @@ export function createShowcase({ renderer, canvas, quality, fade, getLite, isBlo
     pager.hidden = ids.length < 2;
   }
 
+  // 화면 크기에 맞춰 투영을 정한다 — 옆 정보 패널 배치면 패널 왼쪽 빈 곳 가운데가 투영 가운데(stageView: 화면은 그대로 두고 더 넓은 가상 화면의
+  // 오른쪽 부분을 그린다). 빈 곳의 가로 / 세로 비율을 돌려준다(제품 거리 맞춤용)
+  let viewKey = '';
+  function applyView() {
+    const w = Math.max(1, canvas.clientWidth);
+    const h = Math.max(1, canvas.clientHeight);
+    const v = stageView(w, h);
+    camera.aspect = (w + 2 * v.shift) / h;
+    if (v.shift > 0) camera.setViewOffset(w + 2 * v.shift, h, 2 * v.shift, 0, w, h);
+    else camera.clearViewOffset();
+    camera.updateProjectionMatrix();
+    viewKey = `${w}x${h}`;
+    return v.freeWidth / h;
+  }
+
   // 제품 경계 상자에 맞춰 카메라 거리 · 확대 한계 · 바닥 원판을 정하고 처음 시선으로
   function frame(box) {
     const size = box.getSize(new THREE.Vector3());
     const radius = size.length() / 2;
-    camera.aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight);
-    const f = stageFraming(radius, FOV, camera.aspect);
+    const f = stageFraming(radius, FOV, applyView());
     camera.near = f.near;
     camera.far = f.far;
     camera.updateProjectionMatrix();
@@ -349,11 +363,7 @@ export function createShowcase({ renderer, canvas, quality, fade, getLite, isBlo
   }
 
   function render() {
-    const aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight);
-    if (Math.abs(camera.aspect - aspect) > 1e-6) {
-      camera.aspect = aspect;
-      camera.updateProjectionMatrix();
-    }
+    if (`${Math.max(1, canvas.clientWidth)}x${Math.max(1, canvas.clientHeight)}` !== viewKey) applyView();   // 창 크기 · 방향이 바뀌면 투영만 다시(거리는 그대로)
     const exposure = renderer.toneMappingExposure;
     renderer.toneMappingExposure = EXPOSURE;
     renderer.setRenderTarget(null);

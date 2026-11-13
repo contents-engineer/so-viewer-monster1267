@@ -1362,7 +1362,8 @@ body.is-choosing .nw-perf {
   color: var(--nw-text-dim);
   white-space: nowrap;
 }
-@media (max-width: 720px) {
+/* 휴대폰 · 세로 태블릿(폭 1024 px 이하): 정보 패널을 아래로 — 옆에 두면 제품 자리가 너무 좁다(products.js STAGE_PANEL) */
+@media (max-width: 720px), (orientation: portrait) and (max-width: 1024px) {
   .nw-showcase-top {
     top: 8px;
     left: 8px;
