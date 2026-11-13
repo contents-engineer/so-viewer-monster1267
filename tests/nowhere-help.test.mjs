@@ -122,3 +122,26 @@ test('(g) 시작 흐름 · 방식 안내: 투어 시작 · 건물 이동 버튼 
   assert.match(descs, /인트로 건너뛰기/);
   assert.match(descs, /새로 고침/);
 });
+
+test('(h) 자유 시점 마우스 · 터치 조작이 모두 실려 있다(OrbitControls 기본 배치 그대로 — Shift · Ctrl · ⌘ + 드래그 이동, 가운데 버튼 확대, 두 손가락)', () => {
+  const cam = CONTROL_SECTIONS.find((s) => s.id === 'camera');
+  const byKey = (k) => cam.rows.find((r) => r.keys.includes(k));
+  const pan = byKey('Shift + 드래그');
+  assert.ok(pan, "카메라 시점에 'Shift + 드래그' 행 없음");
+  assert.match(pan.desc, /이동\(팬\)/);
+  assert.match(pan.desc, /Ctrl/);
+  assert.match(pan.desc, /⌘/);
+  assert.match(byKey('우클릭 드래그').desc, /회전/, '우클릭 + 보조 키 회전 설명 없음');
+  assert.match(byKey('가운데 버튼 드래그').desc, /확대 · 축소/);
+  assert.match(byKey('한 손가락').desc, /회전/);
+  assert.match(byKey('두 손가락').desc, /확대 · 축소/);
+  assert.match(byKey('두 손가락').desc, /이동/);
+  // 보행: 터치로 둘러보기, 스팟 걸어가기는 휠로도 멈춘다(camera.js 휠 → 자동 걷기 멈춤)
+  const walk = CONTROL_SECTIONS.find((s) => s.id === 'walk');
+  assert.ok(walk.rows.some((r) => r.keys.includes('한 손가락') && /둘러보기/.test(r.desc)), '보행 시점 터치 둘러보기 행 없음');
+  assert.match(walk.rows.find((r) => /이동 스팟/.test(r.desc)).desc, /휠/);
+  // 안내가 기대는 기본 배치를 코드가 바꾸지 않는다(바꾸면 이 안내도 고쳐야 한다)
+  const camSrc = readFileSync(new URL('../public/src/nowhere/camera.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(camSrc, /mouseButtons|controls\.touches|listenToKeyEvents/);
+  assert.match(camSrc, /canvas\.addEventListener\('wheel', onAutoWalkInterrupt/);
+});
