@@ -1,7 +1,8 @@
 // HAUS NOWHERE — 보행 이동 스팟: 외관 두 건물 주변 스팟 정의 · 실내 층 스팟 생성 · 표시 단계 · 가림 판정(순수, three 없음).
 // 테스트: tests/nowhere-walk-spots.test.mjs. 좌표는 Three.js(x, y 위, z).
-// 스팟 = { id, label, x, z, look: [x, y, z] | null, kind: 'view'|'entrance'|'elevator'|'exit', beacon, caption, building }
+// 스팟 = { id, label, x, z, look: [x, y, z] | null, kind: 'view'|'entrance'|'elevator'|'exit'|'product', beacon, caption, building, product? }
 import { buildingToWorld } from './tour-config.js';
+import { productSpots } from './products.js';
 
 export const SPOT_HERE = 1.5;   // m — 지금 서 있는 스팟은 숨긴다
 export const SPOT_NEAR = 12;    // m — 이 안이면 아이콘 + 이름
@@ -45,8 +46,11 @@ export function spotLabel(caption) {
   return String(caption || '').split(' — ')[0].trim();
 }
 
-/** 실내 한 층의 스팟: 둘러보기 지점(볼거리) + 엘리베이터 + 1F 출구. 엘리베이터 · 출구는 영역 트리거가 질문하므로 look 없음. */
-export function interiorSpots(floor) {
+/**
+ * 실내 한 층의 스팟: 둘러보기 지점(볼거리) + 엘리베이터 + 1F 출구 + 진열 제품(catalog — products.js validateCatalog 결과, 없으면 뺀다).
+ * 엘리베이터 · 출구는 영역 트리거가 질문하므로 look 없음. 제품 스팟은 받침대 앞 1.2 m, 도착하면 감상 모드(main.js arriveAt).
+ */
+export function interiorSpots(floor, catalog = null) {
   if (!floor) return [];
   const out = (floor.tour || []).map((t, i) => ({
     id: `${floor.id}_tour${i}`,
@@ -62,6 +66,7 @@ export function interiorSpots(floor) {
   const area = (a, kind, label) => ({ id: `${floor.id}_${kind}`, label, x: a.pos[0], z: a.pos[2], look: null, kind, beacon: false, caption: null, building: null });
   if (floor.elevator) out.push(area(floor.elevator, 'elevator', '엘리베이터'));
   if (floor.exit) out.push(area(floor.exit, 'exit', '밖으로 나가기'));
+  out.push(...productSpots(catalog, floor.id));
   return out;
 }
 

@@ -5,8 +5,8 @@ import { CONTROL_SECTIONS, createWalkHud, WALK_HINT_DOCK_MS } from '../public/sr
 
 const allKeys = () => CONTROL_SECTIONS.flatMap((s) => s.rows.flatMap((r) => r.keys));
 
-test('(a) 조작 안내는 공통·카메라 시점·보행 시점 세 묶음이고 행마다 키와 설명이 있다', () => {
-  assert.deepEqual(CONTROL_SECTIONS.map((s) => s.id), ['common', 'camera', 'walk']);
+test('(a) 조작 안내는 공통·카메라 시점·보행 시점·제품 감상 네 묶음이고 행마다 키와 설명이 있다', () => {
+  assert.deepEqual(CONTROL_SECTIONS.map((s) => s.id), ['common', 'camera', 'walk', 'showcase']);
   for (const s of CONTROL_SECTIONS) {
     assert.ok(s.title && s.rows.length > 0);
     for (const r of s.rows) assert.ok(r.keys.length > 0 && r.desc, `${s.id} 행에 키·설명 누락`);
@@ -144,4 +144,15 @@ test('(h) 자유 시점 마우스 · 터치 조작이 모두 실려 있다(Orbit
   const camSrc = readFileSync(new URL('../public/src/nowhere/camera.js', import.meta.url), 'utf8');
   assert.doesNotMatch(camSrc, /mouseButtons|controls\.touches|listenToKeyEvents/);
   assert.match(camSrc, /canvas\.addEventListener\('wheel', onAutoWalkInterrupt/);
+});
+
+test('(i) 제품 감상 안내: 고르기(클릭 · 탭 · 조준점 · 이름표 · 제품 스팟) · 회전 · 자동 회전 · 확대 · 이전 · 다음 · 나가기', () => {
+  const sc = CONTROL_SECTIONS.find((s) => s.id === 'showcase');
+  assert.ok(sc, '제품 감상 묶음 없음');
+  assert.equal(sc.title, '제품 감상');
+  const descs = sc.rows.map((r) => r.desc).join('\n');
+  for (const re of [/자세히 보기/, /제품 스팟/, /조준점/, /자동 회전/, /확대 · 축소/, /이전 · 다음/, /< BACK/, /보행 그대로/]) assert.match(descs, re);
+  const keys = new Set(sc.rows.flatMap((r) => r.keys));
+  for (const k of ['클릭', '탭', '드래그', '한 손가락', '휠', '두 손가락', '←', '→', 'Esc']) assert.ok(keys.has(k), `감상 안내에 '${k}' 없음`);
+  assert.match(sc.note, /고해상도/);
 });

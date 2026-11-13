@@ -1,0 +1,45 @@
+{
+  "products": [
+    {
+      "id": "kant",
+      "name": "Kant",
+      "category": "eyewear",
+      "glb": "assets/products/kant.glb",
+      "liteGlb": "assets/products/kant-lite.glb",
+      "sizeMm": { "width": 157, "length": 160, "height": 40 },
+      "materials": ["렌즈", "플라스틱 프레임", "메탈"],
+      "description": "",
+      "collection": "",
+      "color": ""
+    },
+    {
+      "id": "folding-tarx",
+      "name": "Folding Tarx",
+      "category": "eyewear",
+      "glb": "assets/products/folding-tarx.glb",
+      "liteGlb": "assets/products/folding-tarx-lite.glb",
+      "sizeMm": { "width": 154, "length": 139, "height": 35 },
+      "materials": ["렌즈", "실버 메탈", "투명 코받침 · 팁"],
+      "description": "",
+      "collection": "",
+      "color": ""
+    },
+    {
+      "id": "veggie-oat",
+      "name": "Veggie Oat",
+      "category": "eyewear",
+      "glb": "assets/products/veggie-oat.glb",
+      "liteGlb": "assets/products/veggie-oat-lite.glb",
+      "sizeMm": { "width": 147, "length": 145, "height": 33 },
+      "materials": ["렌즈", "실버 메탈", "아이림", "PVC 코받침", "블랙 다리"],
+      "description": "",
+      "collection": "",
+      "color": ""
+    }
+  ],
+  "displays": [
+    { "floor": "1", "product": "kant", "pos": [-4.0, 0, 8.0], "yaw": 0 },
+    { "floor": "1", "product": "folding-tarx", "pos": [-6.5, 0, 8.0], "yaw": 0 },
+    { "floor": "1", "product": "veggie-oat", "pos": [-9.0, 0, 8.0], "yaw": 0 }
+  ]
+}

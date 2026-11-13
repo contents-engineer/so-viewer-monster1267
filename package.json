@@ -18,6 +18,7 @@
     "nowhere:inner:build": "/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python tools/nowhere/blender/inner_build.py",
     "nowhere:inner:optimize": "mkdir -p public/assets/nowhere-inner/mobile && for P in build/nowhere/raw-inner/inner-*.glb; do F=$(basename $P); npx -y @gltf-transform/cli@4.1.1 optimize $P public/assets/nowhere-inner/$F --compress meshopt --texture-compress webp --texture-size 1024 --instance false --join false --flatten false --palette false --simplify false --prune-attributes false && npx -y @gltf-transform/cli@4.1.1 optimize build/nowhere/raw-inner/mobile/$F public/assets/nowhere-inner/mobile/$F --compress meshopt --texture-compress webp --texture-size 512 --instance false --join false --flatten false --palette false --simplify false --prune-attributes false || exit 1; done",
     "nowhere:heroes:mobile": "mkdir -p public/assets/mobile build/nowhere/tmp && for F in gm_building facearch; do npx -y @gltf-transform/cli@4.1.1 resize public/assets/$F.glb build/nowhere/tmp/$F.glb --width 1024 --height 1024 && npx -y @gltf-transform/cli@4.1.1 meshopt build/nowhere/tmp/$F.glb public/assets/mobile/$F.glb --level high --quantize-position 16 --quantize-normal 8 --quantize-texcoord 16 || exit 1; done",
+    "nowhere:products": "node tools/nowhere/products.mjs",
     "test": "node --test \"tests/*.test.mjs\""
   }
 }

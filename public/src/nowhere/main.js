@@ -23,6 +23,8 @@ import { showWorldSelect, SELECT_FADE_MS } from './world-select.js';
 import { createCinema, INTRO_TITLES } from './cinema.js';
 import { showModeMenu } from './mode-menu.js';
 import { createModeController } from './modes.js';
+import { createRetailDisplay } from './retail-display.js';
+import { createShowcase, studioEnvironment } from './showcase.js';
 
 async function boot() {
   const canvas = document.getElementById('nw-canvas');
@@ -216,7 +218,7 @@ async function boot() {
     canvas,
     camCtrl,
     onPick: (spot) => goToSpot(spot),
-    isSuspended: () => spotCutting || modal.isOpen() || help.isOpen() || interior.isBusy() || interior.isTouring(),
+    isSuspended: () => spotCutting || modal.isOpen() || help.isOpen() || interior.isBusy() || interior.isTouring() || showcase.isActive() || showcase.isBusy(),
   });
   markers.setSpots(exteriorSpotList);
 
@@ -227,6 +229,14 @@ async function boot() {
       camCtrl.releasePointer();
       camCtrl.clearInput();
     },
+  });
+  // 리테일 진열(실내 1F — products.json): 받침대 · 덮개 · 제품 lite, 클릭 · 탭 · 조준점 · 4 m 안 이름표 → 감상 모드
+  const retail = createRetailDisplay({
+    camera,
+    canvas,
+    getEnvMap: () => studioEnvironment(renderer),
+    onOpen: (id) => openShowcase(id),
+    isSuspended: () => spotCutting || modal.isOpen() || help.isOpen() || interior.isBusy() || interior.isTouring() || showcase.isActive() || showcase.isBusy(),
   });
   const interior = createInterior({
     renderer,
@@ -240,14 +250,27 @@ async function boot() {
     exteriorScene: scene,
     isHelpOpen: () => help.isOpen(),
     fade,
-    onFloorChange: (def) => markers.setSpots(def ? interiorSpots(def) : exteriorSpotList),
+    retail,
+    onFloorChange: (def) => markers.setSpots(def ? interiorSpots(def, retail.catalog()) : exteriorSpotList),
     onChange: (inside) => {
       if (!inside) modes?.refresh();   // 나오면 보행 여부에 맞춰 직접 걷기 · 이전 방식으로
     },
   });
+  // 제품 감상 모드: 따로 띄운 스튜디오 무대 — 감상 중에는 이 장면만 그린다(animate). 나가면 연 자리 · 시선 · 보행 여부로 되돌린다
+  let showcaseReturn = null;   // { pos, target, walking }
+  const showcase = createShowcase({
+    renderer,
+    canvas,
+    quality,
+    fade,
+    getLite: (product) => retail.liteSource(product),
+    isBlocked: () => help.isOpen() || modal.isOpen(),
+    onHelp: () => help.toggle(),
+    onClose: () => restoreFromShowcase(),
+  });
   // 성능 표시: P 키로 켜고 끈다. 키보드 없는 기기(아이패드 등)는 주소에 ?stats=1
   // 텍스처 추정은 외관 · 실내 장면을 함께 센다(실내에 있어도 외관 텍스처는 GPU 에 남아 있음 — 메모리 한도 판단용)
-  const perf = createPerfHud({ renderer, getScenes: () => [scene, interior.scene], tier: quality.tier });
+  const perf = createPerfHud({ renderer, getScenes: () => [scene, interior.scene, showcase.scene], tier: quality.tier });
   window.addEventListener('keydown', (e) => {
     if ((e.key === 'p' || e.key === 'P') && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat) perf.toggle();
   });
@@ -308,8 +331,45 @@ async function boot() {
       // 영역 안에서 질문을 닫고 다시 도착한 경우 — 다음 프레임 interior.update 가 질문을 다시 띄우도록 장전.
       // 컷 이동 도착은 밝아지는 사이 트리거가 이미 질문을 띄웠으므로(모달 열림) 다시 장전하지 않는다(두 번 묻지 않게)
       interior.rearmPrompt(spot.kind);
+    } else if (spot.kind === 'product' && interior.isActive()) {
+      openShowcase(spot.product);   // 제품 스팟에 도착하면 감상 모드
     } else if (spot.caption && interior.isActive() && !interior.isTouring()) {
       interior.showCaption(spot.caption, 4000);
+    }
+  }
+
+  // ── 제품 감상 모드: 연 자리(위치 · 시선 · 보행 여부)를 적어 두고 보행 · 실내 카메라를 멈춘 뒤 무대를 연다 ──
+  async function openShowcase(productId) {
+    const catalog = retail.catalog();
+    const floorId = interior.currentFloor();
+    if (!catalog || !floorId || showcase.isActive() || showcase.isBusy() || interior.isBusy()) return;   // spotCutting 은 막지 않는다 — 컷 이동 도착(cutToSpot → arriveAt)도 여기로 온다
+    showcaseReturn = { pos: camera.position.toArray(), target: camCtrl.controls.target.toArray(), walking: camCtrl.isWalkMode() };
+    let opened = false;
+    try {
+      camCtrl.cancelWalkTo();
+      camCtrl.clearInput();
+      if (showcaseReturn.walking) camCtrl.setWalkMode(false);   // 보행 키 · 마우스 고정 · 스팟 · 보행 안내를 멈춘다(나올 때 다시 켠다)
+      camCtrl.controls.enabled = false;                          // 무대 드래그 · 휠이 실내 카메라를 돌리지 않게
+      interior.showCaption('');
+      opened = await showcase.open({ catalog, floorId, productId });
+    } catch (err) {
+      console.error('[nowhere] 제품 감상 열기 실패', err);
+    }
+    if (!opened) restoreFromShowcase();   // 못 열었으면(던진 경우 포함) 보행 · 실내 카메라를 연 자리 그대로 되돌린다
+  }
+
+  // 감상 모드를 나온 뒤(화면이 어두운 동안): 연 자리 · 시선 그대로, 보행 중이었으면 보행으로
+  function restoreFromShowcase() {
+    const r = showcaseReturn;
+    showcaseReturn = null;
+    camCtrl.controls.enabled = true;
+    if (!r || !interior.isActive()) return;
+    camCtrl.placeAt(r.pos, r.target);
+    if (r.walking) {
+      camCtrl.setWalkMode(true);
+      // 보행을 켜면 시선이 수평으로 바뀌므로 연 순간의 시선(위 · 아래 포함)을 다시 맞춘다 — 시선 방향으로 멀리 둔 점을 본다
+      const look = r.target.map((v, i) => r.pos[i] + (v - r.pos[i]) * 10);
+      camCtrl.placeWalk(r.pos[0], r.pos[2], look);
     }
   }
 
@@ -519,14 +579,24 @@ async function boot() {
     rain.update();
     updateMoverActors(world.moverActors, elapsed);
     updateLegacyDrones(world.legacyDrones, elapsed);   // DS2(옛 layout.drones)
-    camCtrl.update(dt);
-    if (cinema.isActive() && camCtrl.isIntroActive()) cinema.progress(camCtrl.getIntroProgress());   // 인트로 진행 선(경과 / 12 초) — 끝난 뒤 띠가 빠지는 동안 0 으로 되돌지 않게
-    interior.update(dt);
+    // 감상 중에는 실내 카메라 · 실내 갱신을 멈추고 감상 무대만 그린다(외관 · 실내 · 후처리 없음)
+    const studio = showcase.isActive();
+    if (!studio) {
+      camCtrl.update(dt);
+      if (cinema.isActive() && camCtrl.isIntroActive()) cinema.progress(camCtrl.getIntroProgress());   // 인트로 진행 선(경과 / 12 초) — 끝난 뒤 띠가 빠지는 동안 0 으로 되돌지 않게
+      interior.update(dt);
+    }
     markers.update(dt);
+    retail.update();
 
     renderer.info.reset();
-    world.followSun(camera);
-    post.composer.render();
+    if (studio) {
+      showcase.update(dt);
+      showcase.render();
+    } else {
+      world.followSun(camera);
+      post.composer.render();
+    }
     perf.frame(performance.now());   // 꺼져 있으면 바로 돌아간다
   }
 
@@ -543,6 +613,9 @@ async function boot() {
     help,
     modal,
     markers,
+    retail,
+    showcase,
+    openShowcase,
     cinema,
     interior,
     scenario,
@@ -570,6 +643,7 @@ async function boot() {
         introActive: camCtrl.isIntroActive(),
         interior: interior.isActive(),
         floor: interior.currentFloor(),
+        showcase: showcase.isActive() ? showcase.getState().productId : null,
         scenarioStep: scenario.current(),
         fps: currentFps,
         calls: renderer.info.render.calls,

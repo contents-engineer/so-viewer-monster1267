@@ -37,7 +37,7 @@ function nameChain(n) {
   return s;
 }
 
-export function createInterior({ renderer, camera, camCtrl, post, world, quality, modal, weather = null, exteriorScene, isHelpOpen = () => false, onChange = null, fade = null, onFloorChange = null }) {
+export function createInterior({ renderer, camera, camCtrl, post, world, quality, modal, weather = null, exteriorScene, isHelpOpen = () => false, onChange = null, fade = null, onFloorChange = null, retail = null }) {
   const mobile = quality.tier === 'mobile';
   const scene = new THREE.Scene();
   scene.name = 'NW_Interior';
@@ -172,6 +172,13 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
   async function loadFloor(def, onProgress) {
     if (floorCache.has(def.id)) return floorCache.get(def.id);
     const url = quality.tier === 'mobile' && def.mobileGlb ? def.mobileGlb : def.glb;
+    // 리테일 진열(products.json 의 이 층 — 받침대 · 덮개 · 제품 lite)은 층 GLB 와 함께 받는다. 실패해도 층은 연다(진열만 빠짐)
+    const shelfPromise = retail
+      ? retail.build(def).catch((err) => {
+        console.error('[nowhere] 진열 불러오기 실패', err);
+        return null;
+      })
+      : Promise.resolve(null);
     const gltf = await loader.loadAsync(url, (e) => {
       if (e.total) onProgress(e.loaded / e.total);
     });
@@ -192,12 +199,18 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
         m.depthWrite = true;
       }
     });
+    // 진열은 층 장면에 붙여 층과 함께 보이고 사라진다(showFloor). 받침대 · 덮개는 아래 점유 격자에 보행 장애물로 더한다
+    const shelf = await shelfPromise;
+    if (shelf) {
+      root.add(shelf.group);
+      shelf.group.updateMatrixWorld(true);
+    }
     const [x0, z0, x1, z1] = def.bounds;
     const grid = createHeightGrid({ x0: x0 - 1, z0: z0 - 1, x1: x1 + 1, z1: z1 + 1, cell: 0.5 });
     rasterizeMeshes(floors, () => [grid]);
     const groundAt = createGroundQuery([grid], 0);
     const occ = createOccupancyGrid({ x0: x0 - 1, z0: z0 - 1, x1: x1 + 1, z1: z1 + 1, cell: 0.25 });
-    markObstacleMeshes(occ, solids, groundAt);
+    markObstacleMeshes(occ, shelf ? [...solids, ...shelf.obstacles] : solids, groundAt);
     // 층 영역(벽 안쪽) 밖은 막는다 — 1F 정문 열림으로 걸어 나가면 바닥 없는 바깥으로 빠지므로(나가기는 출구 모달 · 버튼으로)
     const insideFloor = (x, z, r) => x >= x0 + r && x <= x1 - r && z >= z0 + r && z <= z1 - r;
     const blocker = {
@@ -297,6 +310,7 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     exitTrigger.reset();
     elevatorTrigger.reset();
     setCaption('');
+    retail?.setFloor(def.id);   // 이 층 진열만 이름표 · 클릭을 받는다
     if (typeof onFloorChange === 'function') onFloorChange(def);   // 보행 이동 스팟을 이 층 것으로
   }
 
@@ -417,6 +431,7 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
       document.body.classList.remove('is-interior');
       hud.hidden = true;
       setCaption('');
+      retail?.setFloor(null);
       if (typeof onFloorChange === 'function') onFloorChange(null);   // 보행 이동 스팟을 외관 것으로
       if (typeof onChange === 'function') onChange(false);
     } finally {

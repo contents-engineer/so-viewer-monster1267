@@ -54,6 +54,19 @@ export const CONTROL_SECTIONS = [
     ],
     note: '건물 · 바위 등 장애물과 50° 넘는 비탈은 지나갈 수 없습니다.',
   },
+  {
+    id: 'showcase',
+    title: '제품 감상',
+    kicker: 'PRODUCT VIEW',
+    rows: [
+      { keys: ['클릭', '탭'], desc: '실내 1F 제품 진열(받침대 · 유리 덮개) — 제품 · 받침대를 클릭 · 탭(마우스 고정 중에는 조준점을 맞추고 클릭), 4 m 안 이름표 「자세히 보기」, ◇ 제품 스팟에 도착하면 감상 모드' },
+      { keys: ['드래그', '한 손가락'], desc: '감상 모드: 제품 돌려 보기 — 4 초 동안 입력이 없으면 천천히 자동 회전' },
+      { keys: ['휠', '두 손가락'], desc: '감상 모드: 확대 · 축소(제품 크기에 맞춘 가장 가까이 · 가장 멀리)' },
+      { keys: ['←', '→'], desc: '감상 모드: 같은 층 진열 순서로 이전 · 다음 제품(화면의 ‹ 이전 · 다음 › 버튼과 같음)' },
+      { keys: ['Esc'], desc: '감상 모드 나가기(< BACK 과 같음) — 연 자리 · 시선 · 보행 그대로 실내로' },
+    ],
+    note: '이름 · 실측 크기 · 재질만 보여 줍니다. 데스크톱 · 태블릿은 고해상도 모델로 바꿔 보여 주고, 휴대폰은 가벼운 모델만 씁니다.',
+  },
 ];
 
 function el(tag, cls, text) {
@@ -86,6 +99,7 @@ export function createHelpOverlay({ onOpen = null } = {}) {
   const grid = el('div', 'nw-help-grid');
   for (const s of CONTROL_SECTIONS) {
     const sec = el('section', 'nw-help-section');
+    sec.dataset.section = s.id;   // 배치(CSS): 공통은 두 줄, 제품 감상은 카메라 · 보행 아래 두 칸
     sec.append(el('div', 'nw-help-section-kicker', s.kicker), el('h3', 'nw-help-section-title', s.title));
     const list = el('dl', 'nw-help-list');
     for (const r of s.rows) {

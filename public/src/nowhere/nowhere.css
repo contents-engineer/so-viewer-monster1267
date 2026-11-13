@@ -538,7 +538,7 @@ body[data-mode="walk"] .nw-dock-camera {
   display: none;
 }
 .nw-help-panel {
-  width: min(1040px, 100%);
+  width: min(1280px, 100%);   /* 네 묶음 — 넓을수록 긴 공통 묶음이 짧아져 1600 × 900 에서 넷 모두 첫 화면에 보인다 */
   max-height: calc(100vh - 32px);
   overflow-y: auto;
   padding: 20px 22px 22px;
@@ -571,6 +571,13 @@ body[data-mode="walk"] .nw-dock-camera {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
+}
+/* 넷째 묶음(제품 감상)이 가장 긴 공통 아래로 밀려 화면 밖에 나가지 않게: 공통은 왼쪽 한 칸을 두 줄로, 제품 감상은 카메라 · 보행 아래 두 칸 */
+.nw-help-section[data-section='common'] {
+  grid-row: span 2;
+}
+.nw-help-section[data-section='showcase'] {
+  grid-column: span 2;
 }
 .nw-help-section {
   padding: 12px 14px 14px;
@@ -630,6 +637,10 @@ body[data-mode="walk"] .nw-dock-camera {
 @media (max-width: 860px) {
   .nw-help-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .nw-help-section[data-section] {
+    grid-row: auto;
+    grid-column: auto;
   }
 }
 
@@ -1222,4 +1233,238 @@ body.is-choosing .nw-perf {
   .nw-mode-menu-title {
     font-size: 17px;
   }
+}
+
+/* ── 제품 감상 모드(showcase.js): 스튜디오 무대 위 — 왼쪽 위 < BACK · 경로, 오른쪽 위 조작 안내, 오른쪽 정보 패널, 아래 이전 · 다음 · 조작 안내 한 줄 ── */
+.nw-showcase {
+  position: fixed;
+  inset: 0;
+  z-index: 32;
+  pointer-events: none;
+}
+.nw-showcase[hidden],
+.nw-showcase-status[hidden],
+.nw-showcase-pager[hidden] {
+  display: none;
+}
+.nw-showcase-top {
+  position: absolute;
+  top: 18px;
+  left: 22px;
+  right: 22px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.nw-showcase-top > *,
+.nw-showcase-panel,
+.nw-showcase-pager {
+  pointer-events: auto;
+}
+.nw-showcase-back {
+  min-height: 36px;
+  font-family: var(--nw-font-mono);
+  letter-spacing: 0.06em;
+  color: var(--nw-text);
+}
+.nw-showcase-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--nw-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--nw-text-dim);
+}
+.nw-showcase-crumb.is-current {
+  color: var(--nw-text);
+}
+.nw-showcase-sep {
+  color: var(--nw-line-strong);
+}
+.nw-showcase-help {
+  margin-left: auto;
+}
+.nw-showcase-panel {
+  position: absolute;
+  top: 50%;
+  right: 22px;
+  transform: translateY(-50%);
+  width: min(300px, calc(100vw - 44px));
+  padding: 16px 18px;
+  background: var(--nw-bg-panel);
+  border: 1px solid var(--nw-line-struct);
+  border-top: 2px solid var(--nw-accent);
+  border-radius: 3px;
+  backdrop-filter: blur(8px);
+}
+.nw-showcase-kicker {
+  font-family: var(--nw-font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  color: var(--nw-accent);
+}
+.nw-showcase-name {
+  margin: 4px 0 12px;
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--nw-text);
+}
+.nw-showcase-info {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.nw-showcase-info dt {
+  color: var(--nw-text-dim);
+}
+.nw-showcase-info dd {
+  margin: 0;
+  color: var(--nw-text);
+  word-break: keep-all;
+}
+.nw-showcase-status {
+  margin-top: 10px;
+  font-family: var(--nw-font-mono);
+  font-size: 10.5px;
+  color: var(--nw-text-dim);
+}
+.nw-showcase-pager {
+  position: absolute;
+  left: 50%;
+  bottom: 52px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.nw-showcase-pager .nw-btn {
+  min-width: 44px;
+  min-height: 44px;
+}
+.nw-showcase-count {
+  min-width: 44px;
+  text-align: center;
+  font-family: var(--nw-font-mono);
+  font-size: 12px;
+  color: var(--nw-text-dim);
+}
+.nw-showcase-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  font-size: 11.5px;
+  color: var(--nw-text-dim);
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .nw-showcase-top {
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+  }
+  .nw-showcase-crumbs {
+    order: 2;
+    flex: 1 0 100%;
+    font-size: 9.5px;
+  }
+  .nw-showcase-panel {
+    top: auto;
+    right: 8px;
+    bottom: 104px;
+    left: 8px;
+    width: auto;
+    transform: none;
+    padding: 10px 12px;
+  }
+  .nw-showcase-name {
+    margin: 2px 0 6px;
+    font-size: 17px;
+  }
+  .nw-showcase-pager {
+    bottom: 40px;
+  }
+  .nw-showcase-hint {
+    bottom: 10px;
+    width: calc(100vw - 16px);
+    white-space: normal;
+    text-align: center;
+    font-size: 10.5px;
+  }
+}
+/* 휴대폰 · 터치 화면: < BACK · 조작 안내도 손가락 크기(44 px) — 데스크톱 모습은 그대로 */
+@media (max-width: 720px), (pointer: coarse) {
+  .nw-showcase-back,
+  .nw-showcase-help {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+/* 감상 중에는 외관 · 실내 UI(상단 바 · 하단 독 · 실내 HUD · 자막 · 보행 안내 · 이동 스팟 · 이름표)를 숨긴다 — 조작 안내 · 모달 · 성능 표시는 그대로 */
+body.is-showcase .nw-topbar,
+body.is-showcase .nw-dock,
+body.is-showcase .nw-interior-hud,
+body.is-showcase .nw-interior-caption,
+body.is-showcase .nw-walk-hud,
+body.is-showcase .nw-spots,
+body.is-showcase .nw-retail-tags {
+  display: none;
+}
+
+/* ── 리테일 진열 이름표(retail-display.js): 진열 4 m 안 덮개 위 — 제품 이름 + 자세히 보기(누르면 감상 모드) ── */
+.nw-retail-tags {
+  position: fixed;
+  inset: 0;
+  z-index: 17;
+  overflow: hidden;
+  pointer-events: none;
+}
+.nw-retail-tags[hidden],
+.nw-retail-tag[hidden] {
+  display: none;
+}
+.nw-retail-tag {
+  position: absolute;
+  left: 0;
+  top: 0;
+  translate: -50% -100%;   /* transform translate(x, y) 가 가리키는 점 = 이름표 아래 가운데 */
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 12px;
+  background: var(--nw-bg-panel-strong);
+  border: 1px solid var(--nw-line-struct);
+  border-top: 2px solid var(--nw-accent);
+  border-radius: 2px;
+  color: var(--nw-text);
+  font-family: var(--nw-font-sans);
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+  animation: nw-spot-in 0.2s ease;
+}
+.nw-retail-tag:hover {
+  border-color: var(--nw-accent);
+}
+.nw-retail-tag-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.nw-retail-tag-more {
+  font-family: var(--nw-font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--nw-accent);
 }
