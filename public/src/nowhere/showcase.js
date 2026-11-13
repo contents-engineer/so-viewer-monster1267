@@ -1,5 +1,5 @@
-// HAUS NOWHERE — 감상 모드(제품 · 건물): 실내 · 외관 대신 따로 띄운 스튜디오 무대(어두운 청회색 배경 · 그라데이션 바닥 원판 · RoomEnvironment 반사 ·
-// 키 · 필 · 림 조명 3개)에 감상 목록(collection — products.js productCollection · archive.js buildingCollection)의 항목 하나를 원점에 세우고
+// HAUS NOWHERE — 감상 모드(제품 · 건물 · 전시물): 실내 · 외관 대신 따로 띄운 스튜디오 무대(어두운 청회색 배경 · 그라데이션 바닥 원판 · RoomEnvironment 반사 ·
+// 키 · 필 · 림 조명 3개)에 감상 목록(collection — products.js productCollection · archive.js buildingCollection · exhibits.js exhibitCollection)의 항목 하나를 원점에 세우고
 // 돌려 보고 확대한다. 감상 중에는 main.js 가 외관 · 실내 · 후처리 대신 render() 만 부른다.
 // 조작: 드래그 · 한 손가락 회전, 휠 · 두 손가락 확대(항목 크기 기준 최소 · 최대 거리), 4 초 동안 입력이 없으면 천천히 자동 회전,
 // ← / → · 이전 · 다음 버튼 = 목록 순서, Esc · < BACK = 나가기(onClose — main.js 가 연 자리 · 시선 · 보행 여부를 되돌린다).
@@ -29,6 +29,7 @@ const PART_CHECK_MS = 120;            // ms — 부위 표지 가림을 이만�
 const KINDS = {
   product: { label: '제품 감상', noun: '제품' },
   building: { label: '건물 감상', noun: '건물' },
+  exhibit: { label: '전시물 감상', noun: '전시물' },
 };
 
 function el(tag, cls, text) {
@@ -92,7 +93,7 @@ function disposeObject(root) {
 }
 
 /**
- * open(collection) — collection = { kind: 'product' | 'building', items: [{ id, name, kicker, crumbs, rows: [{ label, value }], note, liteUrl?, hiUrl? }],
+ * open(collection) — collection = { kind: 'product' | 'building' | 'exhibit', items: [{ id, name, kicker, crumbs, rows: [{ label, value }], note, liteUrl?, hiUrl? }],
  *   startId, loadLite?(item) → Promise<Object3D | null>(원본 — clone 해서 쓴다. 없으면 무대 로더가 item.liteUrl 을 받는다), hint,
  *   parts?(item) → [{ id, title, local: [x, y, z](모델 루트 좌표), kicker, rows, lore }],
  *   release?: true → 나가거나 못 열면 이 목록이 무대 로더로 받은 원본을 풀고 캐시에서 지운다(다시 열면 다시 받는다) }.
@@ -350,7 +351,7 @@ export function createShowcase({ renderer, canvas, quality, fade, isBlocked = ()
 
   // 목록이 release 면(건물) 나갈 때(화면이 어두운 동안) · 못 열었을 때: 무대에서 모델 · 부위 표지를 빼고, 이 목록이 무대 로더로 받은 원본을 풀고 캐시에서 지운다.
   // 받는 중인 원본은 도착하면 푼다. 감상 중 항목 사이 이동은 캐시 그대로(두 건물을 오가도 다시 받지 않는다). 제품 목록은 그대로 둔다(진열 lite 는 진열 몫,
-  // 고해상도는 다음에 다시 쓴다)
+  // 고해상도는 다음에 다시 쓴다). 전시물 목록도 그대로 둔다(층 노드 복제 — geometry · 재질이 층 것)
   function releaseList() {
     if (!list?.release) return;
     if (model) stage.remove(model);

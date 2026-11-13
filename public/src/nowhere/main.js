@@ -28,6 +28,7 @@ import { createShowcase, studioEnvironment } from './showcase.js';
 import { productCollection } from './products.js';
 import { buildingCollection, buildingParts, cardBuildingForSpot } from './archive.js';
 import { createArchiveCard } from './archive-card.js';
+import { exhibitCollection, cloneExhibit } from './exhibits.js';
 
 async function boot() {
   const canvas = document.getElementById('nw-canvas');
@@ -260,7 +261,7 @@ async function boot() {
       else modes?.refresh();           // 나오면 보행 여부에 맞춰 직접 걷기 · 이전 방식으로
     },
   });
-  // 감상 모드(제품 · 건물): 따로 띄운 스튜디오 무대 — 감상 중에는 이 장면만 그린다(animate). 나가면 연 자리 · 시선 · 보행 여부로 되돌린다(실내 · 외관)
+  // 감상 모드(제품 · 건물 · 전시물): 따로 띄운 스튜디오 무대 — 감상 중에는 이 장면만 그린다(animate). 나가면 연 자리 · 시선 · 보행 여부로 되돌린다(실내 · 외관)
   let showcaseReturn = null;   // { pos, target, walking } — 감상을 여닫는 동안만 있다
   const showcase = createShowcase({
     renderer,
@@ -355,7 +356,7 @@ async function boot() {
     }
   }
 
-  // ── 감상 모드 열기(제품 · 건물 공통): 연 자리(위치 · 시선 · 보행 여부)를 적어 두고 보행 · 카메라를 멈춘 뒤 무대를 연다 ──
+  // ── 감상 모드 열기(제품 · 건물 · 전시물 공통): 연 자리(위치 · 시선 · 보행 여부)를 적어 두고 보행 · 카메라를 멈춘 뒤 무대를 연다 ──
   async function openStage(collection) {
     showcaseReturn = { pos: camera.position.toArray(), target: camCtrl.controls.target.toArray(), walking: camCtrl.isWalkMode() };
     let opened = false;
@@ -394,6 +395,20 @@ async function boot() {
     await openStage({
       ...collection,
       parts: (item) => buildingParts(world.layout, item.id, item.name),
+    });
+  }
+
+  // 전시물 감상: 지금 층 전시물 목록(inner-layout exhibits 순서). 모델은 층 루트의 EX_* 노드를 층 좌표째 복제한 묶음 — 다시 받지 않고
+  // geometry · 재질을 층과 같이 쓴다(1F 화면 캔버스 그대로). 그래서 목록에 release 를 두지 않는다(닫아도 무대가 풀지 않는다)
+  async function openExhibit(id) {
+    const def = interior.currentFloorDef();
+    const root = interior.currentRoot();
+    if (!def || !root || showcase.isActive() || showcase.isBusy() || interior.isBusy()) return;
+    const collection = exhibitCollection(def, id);
+    if (!collection.items.some((it) => it.id === id)) return;
+    await openStage({
+      ...collection,
+      loadLite: async (item) => cloneExhibit(THREE, root, item.id),
     });
   }
 
@@ -660,6 +675,7 @@ async function boot() {
     openShowcase,
     archive,
     openArchive,
+    openExhibit,
     cinema,
     interior,
     scenario,

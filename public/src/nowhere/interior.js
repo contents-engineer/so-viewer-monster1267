@@ -496,6 +496,9 @@ export function createInterior({ renderer, camera, camCtrl, post, world, quality
     update,
     isActive: () => active,
     currentFloor: () => (active ? floorDef?.id ?? null : null),
+    // 전시물 감상(main.js openExhibit): 활성 층 정의(inner-layout 층 — exhibits · label) · 층 루트(EX_* 노드를 복제해 무대에) — 실내가 아니면 null
+    currentFloorDef: () => (active ? floorDef : null),
+    currentRoot: () => (active ? floorRoot : null),
     isTouring: () => tour.isPlaying(),
     isBusy: () => busy,
     showCaption,
