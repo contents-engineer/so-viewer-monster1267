@@ -133,3 +133,10 @@ test('(g) 법선 0 채우기: 같은 자리 면 중 45° 안만 넓이 가중 �
   assert.deepEqual(n(6), [Math.round(Math.sin(h) * 1e4) / 1e4, 0, Math.round(Math.cos(h) * 1e4) / 1e4], '30° 는 두 면 평균(15°)');
   assert.deepEqual([...nrm.subarray(18, 21)], [...nrm.subarray(27, 30)], '같은 자리 쪼개진 꼭짓점 6 · 9 는 비트까지 같은 값(다시 용접된다)');
 });
+
+test('법선 가중 단순화도 다 사라진 프리미티브 · 빈 메시를 지운다(gltf-transform simplify 와 같게)', () => {
+  const src = readFileSync(new URL('../tools/nowhere/products.mjs', import.meta.url), 'utf8');
+  const body = src.slice(src.indexOf('function simplifyStep'), src.indexOf('function optimizeTransforms'));
+  assert.match(body, /if \(dst\.length === 0\) \{[^}]*prim\.dispose\(\);[^}]*continue;\s*\}/);
+  assert.match(body, /if \(mesh\.listPrimitives\(\)\.length === 0\) mesh\.dispose\(\);/);
+});

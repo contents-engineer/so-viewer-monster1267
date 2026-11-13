@@ -254,11 +254,18 @@ function simplifyStep(tk, { error, lockBorder, normalWeight }) {
         }
         const w = normalWeight;
         const [dst] = MeshoptSimplifier.simplifyWithAttributes(new Uint32Array(src.getArray()), pos, 3, nrm, 3, [w, w, w], null, 0, error, lockBorder ? ['LockBorder'] : []);
+        if (dst.length === 0) {   // 다 사라진 프리미티브는 지운다(gltf-transform simplify 의 deepDisposePrimitive 와 같다)
+          const attrs = prim.listAttributes();
+          prim.dispose();
+          for (const a of [src, ...attrs]) if (a.listParents().length === 1) a.dispose();
+          continue;
+        }
         prim.setIndices(doc.createAccessor().setType('SCALAR').setArray(dst).setBuffer(src.getBuffer()));
         if (src.listParents().length === 1) src.dispose();
         fn.compactPrimitive(prim);
         if (prim.getAttribute('POSITION').getCount() <= 65534) prim.getIndices().setArray(new Uint16Array(prim.getIndices().getArray()));
       }
+      if (mesh.listPrimitives().length === 0) mesh.dispose();   // 빈 메시도(노드에서 떨어진다)
     }
   });
 }
